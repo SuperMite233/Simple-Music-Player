@@ -138,6 +138,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var notificationEnabled: Boolean = false
     private var lockscreenNotificationEnabled: Boolean = false
     private var floatingLyricsEnabled: Boolean = false
+    private var floatingLyricsHideInApp: Boolean = false
     private var backgroundImageUri: String = ""
     private var backgroundAlpha: Float = 0.35f
     private var skipNoMediaFolders: Boolean = false
@@ -168,6 +169,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var playlistCategory: PlaylistCategory = PlaylistCategory.COMMON
     private var floatingLyricsView: StrokeTextView? = null
     private var floatingLyricsAdded: Boolean = false
+    private var appInForeground: Boolean = false
     private var equalizerPreset: String = "默认"
     private var equalizerLevels: MutableList<Int> = MutableList(5) { 0 }
     private val equalizerPresets = mutableMapOf("默认" to List(5) { 0 })
@@ -215,6 +217,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        appInForeground = true
         store = LibraryStore(this)
         scanner = MusicScanner(this)
         player = MusicPlayer(this).apply { listener = this@MainActivity }
@@ -260,8 +263,15 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     override fun onResume() {
         super.onResume()
+        appInForeground = true
         updateFloatingLyrics()
         if (page == Page.SETTINGS && ::content.isInitialized) render(Page.SETTINGS)
+    }
+
+    override fun onPause() {
+        appInForeground = false
+        updateFloatingLyrics()
+        super.onPause()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -800,11 +810,6 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun renderPlaylistsPage() {
         if (openedPlaylist != null) {
             content.addView(sectionTitle(openedPlaylist!!.name))
-            content.addView(actionButton("返回播放列表") {
-                openedPlaylist = null
-                clearSelection()
-                render(Page.PLAYLISTS)
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)))
             content.addView(playlistDetails(openedPlaylist!!))
             val tracks = openedPlaylist!!.trackIds.distinct().mapNotNull { id -> allTracks.firstOrNull { it.id == id } }
             visibleTracks = tracks
@@ -1203,7 +1208,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             scaleType = ImageView.ScaleType.CENTER_CROP
             background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
         }
-        attachConsumingHorizontalSwipe(art, onLeft = { playNextOrFirst() }, onRight = { playPreviousOrFirst() })
+        attachArtworkSwipe(
+            art,
+            onLeft = { playNextOrFirst() },
+            onRight = { playPreviousOrFirst() },
+            onUp = { showCurrentQueueDialog() },
+            onDown = { showTrackDetailsDialog(track) }
+        )
         loadArtwork(track, art)
         box.addView(art, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(320)))
         box.addView(TextView(this).apply {
@@ -1212,11 +1223,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             gravity = Gravity.CENTER
             setPadding(0, dp(14), 0, dp(4))
         })
-        box.addView(TextView(this).apply {
-            text = listOf(track.displayArtist, track.displayAlbum).joinToString(" · ")
-            bodyStyle(14f)
+        val metaRow = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-        })
+        }
+        metaRow.addView(nowPlayingMetaText(track.displayArtist) { jumpToLibrary(query = track.displayArtist) })
+        metaRow.addView(nowPlayingMetaText(track.displayAlbum) { jumpToLibrary(query = track.displayAlbum) })
+        box.addView(metaRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         nowPageSeek = buildSeekBar()
         nowPageTime = TextView(this).apply {
@@ -1595,14 +1608,17 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun showFloatingLyricsSettingsDialog() {
-        val labels = arrayOf("开启悬浮歌词")
-        val checked = booleanArrayOf(floatingLyricsEnabled)
+        val labels = arrayOf("开启悬浮歌词", "在软件中隐藏悬浮歌词")
+        val checked = booleanArrayOf(floatingLyricsEnabled, floatingLyricsHideInApp)
         AlertDialog.Builder(this)
             .setTitle("悬浮歌词")
-            .setMultiChoiceItems(labels, checked) { _, _, isChecked ->
-                floatingLyricsEnabled = isChecked
+            .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
+                when (which) {
+                    0 -> floatingLyricsEnabled = isChecked
+                    1 -> floatingLyricsHideInApp = isChecked
+                }
                 saveSettings()
-                if (isChecked && !hasOverlayPermission()) openOverlaySettings()
+                if (which == 0 && isChecked && !hasOverlayPermission()) openOverlaySettings()
                 updateFloatingLyrics()
             }
             .setPositiveButton("完成") { _, _ -> render(Page.SETTINGS) }
@@ -1642,7 +1658,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         })
         box.addView(settingCard(
             "悬浮歌词",
-            "开关：${if (floatingLyricsEnabled) "开启" else "关闭"}；悬浮窗权限：${if (hasOverlayPermission()) "已授权" else "未授权"}。开启后会在屏幕顶部显示歌名、歌手或当前歌词。"
+            "开关：${if (floatingLyricsEnabled) "开启" else "关闭"}；软件内隐藏：${if (floatingLyricsHideInApp) "开启" else "关闭"}；悬浮窗权限：${if (hasOverlayPermission()) "已授权" else "未授权"}。开启后会在屏幕顶部显示歌名、歌手或当前歌词。"
         ) {
             showFloatingLyricsSettingsDialog()
         })
@@ -2621,6 +2637,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(detailRow("播放次数", "${store.playCount(track.id)} 次") {
             jumpToLibrary(query = displayTitle(track))
         })
+        if (track.date.isNotBlank()) box.addView(detailRow("时间戳", track.date, null))
+        if (track.composer.isNotBlank()) box.addView(detailRow("作曲家", track.composer, null))
         box.addView(detailRow("格式", track.mimeType.ifBlank { "未知" }, null))
         box.addView(detailRow("时长", formatDuration(track.durationMs), null))
         AlertDialog.Builder(this)
@@ -2678,6 +2696,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun jumpToLibrary(query: String = "", tag: String = "") {
         libraryQuery = query
         selectedTag = tag
+        libraryFiltersExpanded = true
         openedPlaylist = null
         render(Page.LIBRARY)
     }
@@ -2883,7 +2902,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun updateFloatingLyrics() {
-        if (!floatingLyricsEnabled || !hasOverlayPermission()) {
+        if (!floatingLyricsEnabled || !hasOverlayPermission() || (floatingLyricsHideInApp && appInForeground)) {
             removeFloatingLyrics()
             return
         }
@@ -2976,6 +2995,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         notificationEnabled = prefs.getBoolean("notificationEnabled", false)
         lockscreenNotificationEnabled = prefs.getBoolean("lockscreenNotificationEnabled", false)
         floatingLyricsEnabled = prefs.getBoolean("floatingLyricsEnabled", false)
+        floatingLyricsHideInApp = prefs.getBoolean("floatingLyricsHideInApp", false)
         backgroundImageUri = prefs.getString("backgroundImageUri", "") ?: ""
         backgroundAlpha = prefs.getFloat("backgroundAlpha", 0.35f).coerceIn(0f, 1f)
         skipNoMediaFolders = prefs.getBoolean("skipNoMediaFolders", false)
@@ -3008,6 +3028,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .putBoolean("notificationEnabled", notificationEnabled)
             .putBoolean("lockscreenNotificationEnabled", lockscreenNotificationEnabled)
             .putBoolean("floatingLyricsEnabled", floatingLyricsEnabled)
+            .putBoolean("floatingLyricsHideInApp", floatingLyricsHideInApp)
             .putString("backgroundImageUri", backgroundImageUri)
             .putFloat("backgroundAlpha", backgroundAlpha)
             .putBoolean("skipNoMediaFolders", skipNoMediaFolders)
@@ -3086,6 +3107,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .put("notificationEnabled", notificationEnabled)
             .put("lockscreenNotificationEnabled", lockscreenNotificationEnabled)
             .put("floatingLyricsEnabled", floatingLyricsEnabled)
+            .put("floatingLyricsHideInApp", floatingLyricsHideInApp)
             .put("backgroundImageUri", backgroundImageUri)
             .put("backgroundAlpha", backgroundAlpha)
             .put("skipNoMediaFolders", skipNoMediaFolders)
@@ -3120,6 +3142,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         notificationEnabled = settings.optBoolean("notificationEnabled", notificationEnabled)
         lockscreenNotificationEnabled = settings.optBoolean("lockscreenNotificationEnabled", lockscreenNotificationEnabled)
         floatingLyricsEnabled = settings.optBoolean("floatingLyricsEnabled", floatingLyricsEnabled)
+        floatingLyricsHideInApp = settings.optBoolean("floatingLyricsHideInApp", floatingLyricsHideInApp)
         backgroundImageUri = settings.optString("backgroundImageUri", backgroundImageUri)
         backgroundAlpha = settings.optDouble("backgroundAlpha", backgroundAlpha.toDouble()).toFloat().coerceIn(0f, 1f)
         skipNoMediaFolders = settings.optBoolean("skipNoMediaFolders", skipNoMediaFolders)
@@ -3912,6 +3935,16 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
     }
 
+    private fun nowPlayingMetaText(text: String, onClick: () -> Unit): TextView {
+        return TextView(this).apply {
+            this.text = text
+            bodyStyle(14f, Palette.ACCENT)
+            gravity = Gravity.CENTER
+            setPadding(dp(4), dp(6), dp(4), dp(6))
+            setOnClickListener { onClick() }
+        }
+    }
+
     private fun attachPlaylistCategorySwipe(view: View) {
         attachPassiveHorizontalSwipe(
             view,
@@ -3947,6 +3980,26 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
     }
 
+    private fun attachArtworkSwipe(view: View, onLeft: () -> Unit, onRight: () -> Unit, onUp: () -> Unit, onDown: () -> Unit) {
+        var startX = 0f
+        var startY = 0f
+        view.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    startX = event.x
+                    startY = event.y
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    handleFourWaySwipe(startX, startY, event.x, event.y, onLeft, onRight, onUp, onDown)
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> true
+                else -> true
+            }
+        }
+    }
+
     private fun attachPassiveHorizontalSwipe(view: View, onLeft: () -> Unit, onRight: () -> Unit) {
         var startX = 0f
         var startY = 0f
@@ -3969,6 +4022,32 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         if (kotlin.math.abs(dx) < dp(72) || kotlin.math.abs(dx) < kotlin.math.abs(dy) * 1.4f) return false
         if (dx < 0) onLeft() else onRight()
         return true
+    }
+
+    private fun handleFourWaySwipe(
+        startX: Float,
+        startY: Float,
+        endX: Float,
+        endY: Float,
+        onLeft: () -> Unit,
+        onRight: () -> Unit,
+        onUp: () -> Unit,
+        onDown: () -> Unit
+    ): Boolean {
+        val dx = endX - startX
+        val dy = endY - startY
+        val absX = kotlin.math.abs(dx)
+        val absY = kotlin.math.abs(dy)
+        if (maxOf(absX, absY) < dp(72)) return false
+        if (absX > absY * 1.25f) {
+            if (dx < 0) onLeft() else onRight()
+            return true
+        }
+        if (absY > absX * 1.25f) {
+            if (dy < 0) onUp() else onDown()
+            return true
+        }
+        return false
     }
 
     private fun scanAction(title: String, subtitle: String, onClick: () -> Unit): View {

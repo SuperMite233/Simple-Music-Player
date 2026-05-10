@@ -9,6 +9,8 @@ data class Track(
     val durationMs: Long,
     val trackNumber: Int = 0,
     val year: Int = 0,
+    val date: String = "",
+    val composer: String = "",
     val mimeType: String = "",
     val sourcePath: String = "",
     val lyricsUri: String = "",

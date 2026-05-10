@@ -97,6 +97,8 @@ class MusicScanner(private val context: Context) {
                     durationMs = cursor.getLong(durationIndex).coerceAtLeast(metadata.durationMs),
                     trackNumber = normalizeTrackNumber(cursor.getInt(trackIndex)).takeIf { it > 0 } ?: metadata.trackNumber,
                     year = cursor.getInt(yearIndex).takeIf { it > 0 } ?: metadata.year,
+                    date = metadata.date,
+                    composer = metadata.composer,
                     mimeType = cursor.getString(mimeIndex).orEmpty(),
                     sourcePath = displayName,
                     lyricsUri = lyricsByBaseName[baseName(displayName)].orEmpty(),
@@ -189,6 +191,8 @@ class MusicScanner(private val context: Context) {
             durationMs = metadata.durationMs,
             trackNumber = metadata.trackNumber,
             year = metadata.year,
+            date = metadata.date,
+            composer = metadata.composer,
             mimeType = item.mimeType,
             sourcePath = listOf(item.relativePath, item.name).filter { it.isNotBlank() }.joinToString("/"),
             lyricsUri = lyricsByBaseName[baseName(item.name)].orEmpty(),
@@ -230,6 +234,8 @@ class MusicScanner(private val context: Context) {
                 album = source.album,
                 durationMs = if (end > cueTrack.startMs) end - cueTrack.startMs else source.durationMs,
                 trackNumber = cueTrack.number,
+                date = source.date,
+                composer = source.composer,
                 cueSheet = cue.uri.toString(),
                 cueIndex = cueTrack.number,
                 cueStartMs = cueTrack.startMs,
@@ -289,6 +295,8 @@ class MusicScanner(private val context: Context) {
                 durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L,
                 trackNumber = parseTrackNumber(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)),
                 year = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)?.take(4)?.toIntOrNull() ?: 0,
+                date = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DATE).orEmpty(),
+                composer = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_COMPOSER).orEmpty(),
                 artworkPath = artworkPath
             )
         }.getOrDefault(Metadata()).also {
@@ -319,6 +327,8 @@ class MusicScanner(private val context: Context) {
         val durationMs: Long = 0L,
         val trackNumber: Int = 0,
         val year: Int = 0,
+        val date: String = "",
+        val composer: String = "",
         val artworkPath: String = ""
     )
 

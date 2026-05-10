@@ -460,6 +460,8 @@ private fun Track.toJson(): JSONObject {
         .put("durationMs", durationMs)
         .put("trackNumber", trackNumber)
         .put("year", year)
+        .put("date", date)
+        .put("composer", composer)
         .put("mimeType", mimeType)
         .put("sourcePath", sourcePath)
         .put("lyricsUri", lyricsUri)
@@ -480,6 +482,8 @@ private fun JSONObject.toTrack(): Track {
         durationMs = optLong("durationMs"),
         trackNumber = optInt("trackNumber"),
         year = optInt("year"),
+        date = optString("date"),
+        composer = optString("composer"),
         mimeType = optString("mimeType"),
         sourcePath = optString("sourcePath"),
         lyricsUri = optString("lyricsUri"),
