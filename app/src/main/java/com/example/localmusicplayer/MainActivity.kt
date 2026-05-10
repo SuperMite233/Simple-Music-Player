@@ -79,6 +79,7 @@ import com.supermite.smp.ui.titleStyle
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -170,6 +171,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var floatingLyricsView: StrokeTextView? = null
     private var floatingLyricsAdded: Boolean = false
     private var appInForeground: Boolean = false
+    private var updateCheckStarted: Boolean = false
     private var equalizerPreset: String = "默认"
     private var equalizerLevels: MutableList<Int> = MutableList(5) { 0 }
     private val equalizerPresets = mutableMapOf("默认" to List(5) { 0 })
@@ -254,6 +256,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         restorePlaybackState()
         showFirstLaunchDialogIfNeeded()
         updateFloatingLyrics()
+        checkForUpdates(silent = true)
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -484,18 +487,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         if (granted) {
             player.setVolume(1.0f)
         } else {
-            showAudioFocusDeniedDialog()
+            Log.w(TAG, "Audio focus request denied; continuing playback without focus.")
+            player.setVolume(1.0f)
         }
-        return granted
-    }
-
-    private fun showAudioFocusDeniedDialog() {
-        if (isFinishing || isDestroyed) return
-        AlertDialog.Builder(this)
-            .setTitle("无法获取音频焦点")
-            .setMessage("系统没有授予 SMP 音频焦点，可能有其他应用正在独占音频。当前播放状态已保持不变。")
-            .setPositiveButton("知道了", null)
-            .show()
+        return true
     }
 
     private fun abandonPlaybackFocus() {
@@ -1315,11 +1310,18 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(8), dp(18), dp(8))
         }
-        box.addView(settingCard("版本号", "1.4.2"))
+        box.addView(settingCard("版本号", APP_VERSION) {
+            checkForUpdates(silent = false)
+        })
         box.addView(settingCard("软件作者", "SuperMite"))
         box.addView(settingCard("构建提醒", "本软件使用 ChatGPT 辅助构建；音乐格式转换功能的 NCM 解密核心参考并移植自 MIT 许可项目 NCMConverter4a（https://github.com/cdb96/NCMConverter4a）。"))
         box.addView(settingCard("软件介绍", readBundledReadme()))
-        box.addView(settingCard("GitHub 仓库", "暂未构建仓库"))
+        box.addView(settingCard("GitHub 仓库", REPO_URL) {
+            openExternalUrl(REPO_URL)
+        })
+        box.addView(settingCard("问题反馈", ISSUES_URL) {
+            openExternalUrl(ISSUES_URL)
+        })
         scroll.addView(box)
         AlertDialog.Builder(this)
             .setTitle("软件详情")
@@ -3174,6 +3176,76 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         saveSettings()
     }
 
+    private fun checkForUpdates(silent: Boolean) {
+        if (silent && updateCheckStarted) return
+        if (silent) updateCheckStarted = true
+        Thread {
+            val result = runCatching { fetchLatestRelease() }
+            runOnUiThread {
+                result.onSuccess { release ->
+                    if (isNewerVersion(release.version, APP_VERSION)) {
+                        showUpdateDialog(release)
+                    } else if (!silent) {
+                        Toast.makeText(this, "当前已是最新版本：$APP_VERSION", Toast.LENGTH_SHORT).show()
+                    }
+                }.onFailure { error ->
+                    Log.w(TAG, "Update check failed", error)
+                    if (!silent) Toast.makeText(this, "检查更新失败，请稍后再试", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun fetchLatestRelease(): ReleaseInfo {
+        val connection = (URL(LATEST_RELEASE_API).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 10_000
+            readTimeout = 10_000
+            setRequestProperty("Accept", "application/vnd.github+json")
+            setRequestProperty("User-Agent", "SMP/$APP_VERSION")
+        }
+        val text = connection.inputStream.bufferedReader().use { it.readText() }
+        val root = JSONObject(text)
+        val tag = root.optString("tag_name").ifBlank { root.optString("name") }
+        return ReleaseInfo(
+            version = tag.removePrefix("v").trim(),
+            url = root.optString("html_url").ifBlank { RELEASES_URL }
+        )
+    }
+
+    private fun showUpdateDialog(release: ReleaseInfo) {
+        if (isFinishing || isDestroyed) return
+        AlertDialog.Builder(this)
+            .setTitle("发现新版本 ${release.version}")
+            .setMessage("当前版本：$APP_VERSION\n是否打开 GitHub Release 页面下载更新？")
+            .setPositiveButton("打开") { _, _ -> openExternalUrl(release.url) }
+            .setNegativeButton("稍后", null)
+            .show()
+    }
+
+    private fun isNewerVersion(latest: String, current: String): Boolean {
+        val latestParts = versionParts(latest)
+        val currentParts = versionParts(current)
+        val count = maxOf(latestParts.size, currentParts.size)
+        for (index in 0 until count) {
+            val left = latestParts.getOrElse(index) { 0 }
+            val right = currentParts.getOrElse(index) { 0 }
+            if (left != right) return left > right
+        }
+        return false
+    }
+
+    private fun versionParts(value: String): List<Int> {
+        return Regex("""\d+""").findAll(value).mapNotNull { it.value.toIntOrNull() }.toList()
+    }
+
+    private fun openExternalUrl(url: String) {
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }.onFailure {
+            Toast.makeText(this, "无法打开浏览器", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun readBundledReadme(): String {
         return runCatching {
             assets.open("readme.md").bufferedReader().use { it.readText() }
@@ -3181,30 +3253,30 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun createNotificationChannel() {
-        notificationManager.createNotificationChannel(
-            NotificationChannel(NOTIFICATION_CHANNEL_ID, "播放控制", NotificationManager.IMPORTANCE_LOW)
-        )
+        val playbackChannel = NotificationChannel(NOTIFICATION_CHANNEL_ID, "播放控制", NotificationManager.IMPORTANCE_LOW).apply {
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        }
+        notificationManager.createNotificationChannel(playbackChannel)
         notificationManager.createNotificationChannel(
             NotificationChannel(DOWNLOAD_CHANNEL_ID, "下载进度", NotificationManager.IMPORTANCE_LOW)
         )
     }
 
     private fun updatePlaybackNotification() {
-        if (!notificationEnabled) {
+        if (!notificationEnabled && !lockscreenNotificationEnabled) {
             notificationManager.cancel(NOTIFICATION_ID)
             return
         }
         val track = player.currentTrack ?: return
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
-        val artwork = track.artworkPath.takeIf { it.isNotBlank() }?.let { File(it) }?.takeIf { it.exists() }?.let {
-            BitmapFactory.decodeFile(it.absolutePath)
-        }
+        val artwork = decodeArtworkPath(resolvedArtworkPath(track))
         val playPause = if (player.isPlaying()) "暂停" else "播放"
         val notification = Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_music_disc)
             .setContentTitle(displayTitle(track))
             .setContentText(listOf(track.displayArtist, track.displayAlbum).filter { it.isNotBlank() }.joinToString(" · "))
             .setLargeIcon(artwork)
+            .setCategory(Notification.CATEGORY_TRANSPORT)
             .setOngoing(player.isPlaying())
             .setShowWhen(false)
             .setVisibility(if (lockscreenNotificationEnabled) Notification.VISIBILITY_PUBLIC else Notification.VISIBILITY_PRIVATE)
@@ -3215,6 +3287,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_next_track), "下一首", playbackPendingIntent(ACTION_NEXT)).build())
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_previous_track), "-10s", playbackPendingIntent(ACTION_REWIND)).build())
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_next_track), "+10s", playbackPendingIntent(ACTION_FORWARD)).build())
+            .setStyle(Notification.MediaStyle().setMediaSession(mediaSession.sessionToken).setShowActionsInCompactView(0, 1, 2))
             .build()
         notificationManager.notify(NOTIFICATION_ID, notification)
     }
@@ -4151,6 +4224,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private data class LyricLine(val timeMs: Long, val text: String)
 
+    private data class ReleaseInfo(val version: String, val url: String)
+
     private enum class Page {
         SCAN,
         LIBRARY,
@@ -4193,6 +4268,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val NOTIFICATION_ID = 11
         private const val DOWNLOAD_NOTIFICATION_ID = 21
         private const val TAG = "SMP"
+        private const val APP_VERSION = "1.4.3"
+        private const val REPO_URL = "https://github.com/SuperMite233/Simple-Music-Player"
+        private const val ISSUES_URL = "$REPO_URL/issues"
+        private const val RELEASES_URL = "$REPO_URL/releases"
+        private const val LATEST_RELEASE_API = "https://api.github.com/repos/SuperMite233/Simple-Music-Player/releases/latest"
         private const val DIZZYLAB_LOGIN_URL = "https://www.dizzylab.net/albums/login/"
         private const val ACTION_OPEN = "com.supermite.smp.OPEN"
         private const val ACTION_PREV = "com.supermite.smp.PREV"
