@@ -23,14 +23,14 @@
     <style name="AppTheme.Dialog.Light" parent="android:style/Theme.Material.Light.Dialog.Alert">
         <item name="android:fontFamily">sans</item>
         <item name="android:colorAccent">#35C2A1</item>
-        <item name="android:windowBackground">#FFFFFFFF</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:textColorPrimary">#111820</item>
         <item name="android:textColorSecondary">#5D6975</item>
     </style>
     <style name="AppTheme.Dialog.Dark" parent="android:style/Theme.Material.Dialog.Alert">
         <item name="android:fontFamily">sans</item>
         <item name="android:colorAccent">#35C2A1</item>
-        <item name="android:windowBackground">#FF1A2027</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:textColorPrimary">#F4F7F8</item>
         <item name="android:textColorSecondary">#AAB5BD</item>
     </style>

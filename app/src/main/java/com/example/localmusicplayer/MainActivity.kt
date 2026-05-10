@@ -102,6 +102,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private lateinit var audioManager: AudioManager
     private lateinit var notificationManager: NotificationManager
     private lateinit var mediaSession: MediaSession
+    private var rootLayout: LinearLayout? = null
+    private var headerPanel: LinearLayout? = null
     private lateinit var headerTitle: TextView
     private lateinit var statusText: TextView
     private lateinit var content: LinearLayout
@@ -116,7 +118,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var nowPagePlayButton: Button? = null
     private var nowPageSeek: SeekBar? = null
     private var nowPageTime: TextView? = null
-    private val navButtons = mutableMapOf<Page, Button>()
+    private val navButtons = mutableMapOf<Page, TextView>()
+    private var bottomNavigationPanel: LinearLayout? = null
 
     private var allTracks: List<Track> = emptyList()
     private var visibleTracks: List<Track> = emptyList()
@@ -149,6 +152,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var floatingLyricsEnabled: Boolean = false
     private var floatingLyricsHideInApp: Boolean = false
     private var floatingLyricsAlpha: Float = 1.0f
+    private var floatingLyricsTextSizeSp: Float = 15.0f
+    private var floatingLyricsStrokeEnabled: Boolean = true
     private var floatingLyricsPosition: FloatingLyricsPosition = FloatingLyricsPosition.TOP
     private var backgroundImageUri: String = ""
     private var backgroundAlpha: Float = 0.35f
@@ -545,6 +550,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             setPadding(dp(14), dp(12), dp(14), dp(10))
             setBackgroundColor(contentOverlayColor())
         }
+        rootLayout = root
         root.addView(buildHeader())
         content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -584,6 +590,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 headerGradientColors()
             ).apply { cornerRadius = dp(8).toFloat() }
         }
+        headerPanel = header
         val titleRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -663,18 +670,21 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
+            setPadding(dp(8), dp(6), dp(8), dp(6))
+            background = roundedStrokeDrawable(Palette.PANEL, Palette.PANEL_ALT, 10)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = dp(8)
             }
         }
+        bottomNavigationPanel = row
         listOf(
-            Page.NOW_PLAYING to "正在播放",
-            Page.PLAYLISTS to "音乐列表",
-            Page.SETTINGS to "设置"
-        ).forEach { (target, label) ->
-            val button = actionButton(label) { render(target) }
+            Triple(Page.NOW_PLAYING, "正在播放", R.drawable.ic_music_disc),
+            Triple(Page.PLAYLISTS, "音乐列表", R.drawable.ic_musiclist),
+            Triple(Page.SETTINGS, "设置", R.drawable.ic_menu)
+        ).forEach { (target, label, iconRes) ->
+            val button = navButton(label, iconRes) { render(target) }
             navButtons[target] = button
-            row.addView(button, LinearLayout.LayoutParams(0, dp(44), 1f).apply {
+            row.addView(button, LinearLayout.LayoutParams(0, dp(58), 1f).apply {
                 leftMargin = dp(3)
                 rightMargin = dp(3)
             })
@@ -695,6 +705,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         navButtons.forEach { (navPage, button) ->
             button.background = ColorDrawable(Color.TRANSPARENT)
             button.setTextColor(if (navPage == target) Palette.TEXT else Palette.MUTED)
+            tintTextViewDrawables(button, if (navPage == target) Palette.TEXT else Palette.MUTED)
         }
         when (target) {
             Page.SCAN -> renderScanPage()
@@ -1223,7 +1234,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             onLeft = { playNextOrFirst() },
             onRight = { playPreviousOrFirst() },
             onUp = { showCurrentQueueDialog() },
-            onDown = { showTrackDetailsDialog(track) }
+            onDown = { showTrackDetailsDialog(track) },
+            onDoubleTap = { toggleFavoriteFromArtwork(track) }
         )
         loadArtwork(track, art)
         box.addView(art, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(320)))
@@ -1298,17 +1310,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(settingCard("播放设置", "启动恢复：${if (restorePlaybackOnLaunch) "继续播放" else "保持暂停"}；其他音乐：${audioFocusBehavior.label}") {
             showPlaybackSettingsDialog()
         })
-        box.addView(settingCard("扫描设置", "含 .nomedia 的文件夹：${if (skipNoMediaFolders) "跳过" else "扫描"}") {
-            showScanSettingsDialog()
-        })
         box.addView(settingCard("配置文件", "将当前设置、用户歌单和我喜欢的音乐导出为 JSON，或从 JSON 导入。") {
             showConfigDialog()
         })
-        box.addView(settingCard("串流选项", "预加载：$streamPreloadCount 首；下载目录：${streamFolderLabel(streamDownloadFolderUri, "应用默认目录")}；缓存上限：${"%.1f".format(streamCacheLimitGb)} GB") {
-            showStreamingSettingsDialog()
-        })
-        box.addView(settingCard("音乐格式转换", "选择 NCM 文件并转换为 MP3/FLAC。转换核心移植自 NCMConverter4a。") {
-            openNcmConvertPicker()
+        box.addView(settingCard("存储设置", "扫描、串流下载/缓存和音乐格式转换") {
+            showStorageSettingsDialog()
         })
         box.addView(settingCard("软件详情", "版本号、作者、构建说明、软件介绍和 GitHub 仓库") {
             showSoftwareDetailsDialog()
@@ -1535,6 +1541,32 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .show()
     }
 
+    private fun showStorageSettingsDialog() {
+        val scroll = ScrollView(this)
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+        }
+        box.addView(settingCard("扫描设置", "含 .nomedia 的文件夹：${if (skipNoMediaFolders) "跳过" else "扫描"}") {
+            showScanSettingsDialog()
+        })
+        box.addView(settingCard(
+            "串流选项",
+            "预加载：$streamPreloadCount 首；下载目录：${streamFolderLabel(streamDownloadFolderUri, "应用默认目录")}；缓存上限：${"%.1f".format(streamCacheLimitGb)} GB"
+        ) {
+            showStreamingSettingsDialog()
+        })
+        box.addView(settingCard("音乐格式转换", "选择 NCM 文件并转换为 MP3/FLAC。转换核心移植自 NCMConverter4a。") {
+            openNcmConvertPicker()
+        })
+        scroll.addView(box)
+        dialogBuilder()
+            .setTitle("存储设置")
+            .setView(scroll)
+            .setPositiveButton("关闭", null)
+            .show()
+    }
+
     private fun showAppearanceSettingsDialog() {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1562,9 +1594,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .setTitle("深色模式")
             .setSingleChoiceItems(labels, darkMode.ordinal) { dialog, which ->
                 darkMode = DarkMode.entries[which]
+                applyAppPalette()
                 saveSettings()
                 dialog.dismiss()
-                recreate()
+                render(Page.SETTINGS)
+                updateFloatingLyrics()
             }
             .show()
     }
@@ -1684,6 +1718,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             setTextColor(Palette.TEXT)
             isChecked = floatingLyricsHideInApp
         }
+        val strokeBox = CheckBox(this).apply {
+            text = "开启文字描边"
+            setTextColor(Palette.TEXT)
+            isChecked = floatingLyricsStrokeEnabled
+        }
         val alphaLabel = TextView(this).apply {
             text = "文本透明度：${(floatingLyricsAlpha * 100).toInt()}%"
             bodyStyle(13f)
@@ -1691,14 +1730,44 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val alphaSlider = SeekBar(this).apply {
             max = 100
             progress = (floatingLyricsAlpha * 100).toInt().coerceIn(20, 100)
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                    alphaLabel.text = "文本透明度：${progress.coerceIn(20, 100)}%"
-                }
-                override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
-                override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
-            })
         }
+        val sizeLabel = TextView(this).apply {
+            text = "字号大小：${floatingLyricsTextSizeSp.toInt()}sp"
+            bodyStyle(13f)
+        }
+        val sizeSlider = SeekBar(this).apply {
+            max = 20
+            progress = (floatingLyricsTextSizeSp.toInt() - 12).coerceIn(0, 20)
+        }
+        val preview = StrokeTextView(this).apply {
+            text = "SMP 悬浮歌词预览"
+            gravity = Gravity.CENTER
+            textSize = floatingLyricsTextSizeSp
+            strokeEnabled = floatingLyricsStrokeEnabled
+            setTextColor(applyAlpha(themeColor, floatingLyricsAlpha))
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+        }
+        fun updatePreview() {
+            val alpha = alphaSlider.progress.coerceIn(20, 100) / 100f
+            val size = (12 + sizeSlider.progress.coerceIn(0, 20)).toFloat()
+            preview.textSize = size
+            preview.strokeEnabled = strokeBox.isChecked
+            preview.setTextColor(applyAlpha(themeColor, alpha))
+            alphaLabel.text = "文本透明度：${(alpha * 100).toInt()}%"
+            sizeLabel.text = "字号大小：${size.toInt()}sp"
+        }
+        alphaSlider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) = updatePreview()
+            override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+            override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+        })
+        sizeSlider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) = updatePreview()
+            override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+            override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+        })
+        strokeBox.setOnCheckedChangeListener { _, _ -> updatePreview() }
         val positionLabels = FloatingLyricsPosition.entries.map { it.label }.toTypedArray()
         val positionSpinner = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_item, positionLabels).also {
@@ -1709,8 +1778,14 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         box.addView(enabledBox)
         box.addView(hideBox)
+        box.addView(strokeBox)
+        box.addView(preview, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = dp(10)
+        })
         box.addView(alphaLabel)
         box.addView(alphaSlider)
+        box.addView(sizeLabel)
+        box.addView(sizeSlider)
         box.addView(TextView(this).apply {
             text = "歌词位置"
             bodyStyle(13f)
@@ -1724,6 +1799,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 floatingLyricsEnabled = enabledBox.isChecked
                 floatingLyricsHideInApp = hideBox.isChecked
                 floatingLyricsAlpha = (alphaSlider.progress.coerceIn(20, 100) / 100f).coerceIn(0.2f, 1f)
+                floatingLyricsTextSizeSp = (12 + sizeSlider.progress.coerceIn(0, 20)).toFloat()
+                floatingLyricsStrokeEnabled = strokeBox.isChecked
                 floatingLyricsPosition = FloatingLyricsPosition.entries.getOrElse(positionSpinner.selectedItemPosition) { FloatingLyricsPosition.TOP }
                 saveSettings()
                 if (floatingLyricsEnabled && !hasOverlayPermission()) openOverlaySettings()
@@ -1862,7 +1939,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         box.addView(focusSpinner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)))
         box.addView(actionButton(
-            "悬浮歌词：${if (floatingLyricsEnabled) "开启" else "关闭"} / ${floatingLyricsPosition.label} / ${(floatingLyricsAlpha * 100).toInt()}%"
+            "悬浮歌词：${if (floatingLyricsEnabled) "开启" else "关闭"} / ${floatingLyricsPosition.label} / ${(floatingLyricsAlpha * 100).toInt()}% / ${floatingLyricsTextSizeSp.toInt()}sp"
         ) { showFloatingLyricsSettingsDialog() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
             topMargin = dp(12)
         })
@@ -2538,6 +2615,18 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .show()
     }
 
+    private fun toggleFavoriteFromArtwork(track: Track) {
+        if (track.id.startsWith("stream:")) {
+            Toast.makeText(this, "串流音乐请先下载后再收藏到本地歌单", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val next = !store.isFavorite(track.id)
+        store.setFavorite(track.id, next)
+        Toast.makeText(this, if (next) "已加入我喜欢的音乐" else "已从我喜欢的音乐移除", Toast.LENGTH_SHORT).show()
+        setStatus(if (next) "已收藏：${displayTitle(track)}" else "已取消收藏：${displayTitle(track)}")
+        renderIfPlaylistChanged()
+    }
+
     private fun renderIfPlaylistChanged() {
         if (page == Page.PLAYLISTS) render(Page.PLAYLISTS)
     }
@@ -2667,11 +2756,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun showCreatePlaylistDialog(onCreated: ((Playlist) -> Unit)? = null) {
-        val input = EditText(this).apply {
-            hint = "播放列表名称"
-            setSingleLine(true)
-            imeOptions = EditorInfo.IME_ACTION_DONE
-        }
+        val input = dialogInput("播放列表名称", "").apply { imeOptions = EditorInfo.IME_ACTION_DONE }
         dialogBuilder()
             .setTitle("新建播放列表")
             .setView(input)
@@ -2701,7 +2786,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             setPadding(dp(18), dp(8), dp(18), dp(8))
         }
         items.forEach { item ->
-            box.addView(menuItem(item) {
+            box.addView(menuItem(item, nowPlayingMenuIcon(item)) {
                 dialog.dismiss()
                 when (item) {
                     "编辑音乐信息" -> showEditDialog(track)
@@ -2718,23 +2803,48 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         dialog.show()
     }
 
+    private fun nowPlayingMenuIcon(item: String): Int {
+        return when (item) {
+            "播放模式" -> playbackModeIcon(playbackMode)
+            "音量调节" -> R.drawable.ic_volume
+            "正在播放列表" -> R.drawable.ic_musiclist
+            "收藏到歌单" -> R.drawable.ic_collection
+            "编辑音乐信息", "歌曲详细信息" -> R.drawable.ic_menu
+            "播放倍速" -> R.drawable.ic_loop
+            else -> R.drawable.ic_menu
+        }
+    }
+
     private fun showPlaybackModeDialog() {
-        val labels = PlaybackMode.entries.map { it.label }.toTypedArray()
-        val checked = playbackMode.ordinal
-        dialogBuilder()
-            .setTitle("播放模式")
-            .setSingleChoiceItems(labels, checked) { dialog, which ->
-                playbackMode = PlaybackMode.entries[which]
+        val dialog = dialogBuilder().setTitle("播放模式").create()
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(8), dp(18), dp(8))
+        }
+        PlaybackMode.entries.forEach { mode ->
+            val text = if (mode == playbackMode) "${mode.label}  ✓" else mode.label
+            box.addView(menuItem(text, playbackModeIcon(mode)) {
+                playbackMode = mode
                 if (playbackMode == PlaybackMode.PSEUDO_RANDOM) {
                     applyPseudoShuffleToCurrentQueue()
                 } else {
                     clearPseudoShuffleState()
                 }
                 savePlaybackState()
-                setStatus("播放模式：${labels[which]}")
+                setStatus("播放模式：${mode.label}")
                 dialog.dismiss()
-            }
-            .show()
+            })
+        }
+        dialog.setView(box)
+        dialog.show()
+    }
+
+    private fun playbackModeIcon(mode: PlaybackMode): Int {
+        return when (mode) {
+            PlaybackMode.SEQUENTIAL -> R.drawable.ic_loop
+            PlaybackMode.TRUE_RANDOM, PlaybackMode.PSEUDO_RANDOM -> R.drawable.ic_random
+            PlaybackMode.REPEAT_ONE -> R.drawable.ic_singlecycle
+        }
     }
 
     private fun showSpeedDialog() {
@@ -2876,10 +2986,14 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
     }
 
-    private fun menuItem(text: String, onClick: () -> Unit): View {
+    private fun menuItem(text: String, iconRes: Int? = null, onClick: () -> Unit): View {
         return TextView(this).apply {
             this.text = text
             titleStyle(15f)
+            iconRes?.let {
+                setCompoundDrawables(tintedDrawable(it, Palette.TEXT, 20), null, null, null)
+                compoundDrawablePadding = dp(10)
+            }
             setPadding(dp(14), dp(12), dp(14), dp(12))
             background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
             setOnClickListener { onClick() }
@@ -3128,11 +3242,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             return
         }
         val view = floatingLyricsView ?: StrokeTextView(this).apply {
-            textSize = 15f
             gravity = Gravity.CENTER
             setPadding(dp(12), dp(6), dp(12), dp(6))
             floatingLyricsView = this
         }
+        view.textSize = floatingLyricsTextSizeSp
+        view.strokeEnabled = floatingLyricsStrokeEnabled
         view.text = floatingLyricText(track)
         view.setTextColor(applyAlpha(themeColor, floatingLyricsAlpha))
         val params = floatingLyricsLayoutParams()
@@ -3197,7 +3312,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val from = (current - 1).coerceAtLeast(0)
         val to = (current + 1).coerceAtMost(lines.lastIndex)
         return (from..to).joinToString("\n") { index ->
-            if (index == current) "? ${lines[index].text}" else lines[index].text
+            if (index == current) "> ${lines[index].text}" else lines[index].text
         }
     }
 
@@ -3237,6 +3352,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         floatingLyricsEnabled = prefs.getBoolean("floatingLyricsEnabled", false)
         floatingLyricsHideInApp = prefs.getBoolean("floatingLyricsHideInApp", false)
         floatingLyricsAlpha = prefs.getFloat("floatingLyricsAlpha", 1.0f).coerceIn(0.2f, 1.0f)
+        floatingLyricsTextSizeSp = prefs.getFloat("floatingLyricsTextSizeSp", 15.0f).coerceIn(12.0f, 32.0f)
+        floatingLyricsStrokeEnabled = prefs.getBoolean("floatingLyricsStrokeEnabled", true)
         floatingLyricsPosition = FloatingLyricsPosition.entries.getOrElse(prefs.getInt("floatingLyricsPosition", FloatingLyricsPosition.TOP.ordinal)) { FloatingLyricsPosition.TOP }
         backgroundImageUri = prefs.getString("backgroundImageUri", "") ?: ""
         backgroundAlpha = prefs.getFloat("backgroundAlpha", 0.35f).coerceIn(0f, 1f)
@@ -3275,6 +3392,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .putBoolean("floatingLyricsEnabled", floatingLyricsEnabled)
             .putBoolean("floatingLyricsHideInApp", floatingLyricsHideInApp)
             .putFloat("floatingLyricsAlpha", floatingLyricsAlpha.coerceIn(0.2f, 1.0f))
+            .putFloat("floatingLyricsTextSizeSp", floatingLyricsTextSizeSp.coerceIn(12.0f, 32.0f))
+            .putBoolean("floatingLyricsStrokeEnabled", floatingLyricsStrokeEnabled)
             .putInt("floatingLyricsPosition", floatingLyricsPosition.ordinal)
             .putString("backgroundImageUri", backgroundImageUri)
             .putFloat("backgroundAlpha", backgroundAlpha)
@@ -3358,6 +3477,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .put("floatingLyricsEnabled", floatingLyricsEnabled)
             .put("floatingLyricsHideInApp", floatingLyricsHideInApp)
             .put("floatingLyricsAlpha", floatingLyricsAlpha)
+            .put("floatingLyricsTextSizeSp", floatingLyricsTextSizeSp)
+            .put("floatingLyricsStrokeEnabled", floatingLyricsStrokeEnabled)
             .put("floatingLyricsPosition", floatingLyricsPosition.ordinal)
             .put("backgroundImageUri", backgroundImageUri)
             .put("backgroundAlpha", backgroundAlpha)
@@ -3397,6 +3518,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         floatingLyricsEnabled = settings.optBoolean("floatingLyricsEnabled", floatingLyricsEnabled)
         floatingLyricsHideInApp = settings.optBoolean("floatingLyricsHideInApp", floatingLyricsHideInApp)
         floatingLyricsAlpha = settings.optDouble("floatingLyricsAlpha", floatingLyricsAlpha.toDouble()).toFloat().coerceIn(0.2f, 1.0f)
+        floatingLyricsTextSizeSp = settings.optDouble("floatingLyricsTextSizeSp", floatingLyricsTextSizeSp.toDouble()).toFloat().coerceIn(12.0f, 32.0f)
+        floatingLyricsStrokeEnabled = settings.optBoolean("floatingLyricsStrokeEnabled", floatingLyricsStrokeEnabled)
         floatingLyricsPosition = FloatingLyricsPosition.entries.getOrElse(settings.optInt("floatingLyricsPosition", floatingLyricsPosition.ordinal)) { FloatingLyricsPosition.TOP }
         backgroundImageUri = settings.optString("backgroundImageUri", backgroundImageUri)
         backgroundAlpha = settings.optDouble("backgroundAlpha", backgroundAlpha.toDouble()).toFloat().coerceIn(0f, 1f)
@@ -3444,11 +3567,67 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         if (Build.VERSION.SDK_INT >= 23) {
             window.decorView.systemUiVisibility = if (isDarkModeActive(darkMode)) 0 else View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         }
+        refreshShellColors()
+    }
+
+    private fun refreshShellColors() {
+        rootLayout?.setBackgroundColor(contentOverlayColor())
+        headerPanel?.background = GradientDrawable(
+            GradientDrawable.Orientation.LEFT_RIGHT,
+            headerGradientColors()
+        ).apply { cornerRadius = dp(8).toFloat() }
+        if (::headerTitle.isInitialized) headerTitle.setTextColor(Palette.TEXT)
+        if (::statusText.isInitialized) statusText.setTextColor(Palette.MUTED)
+        if (::miniPlayerPanel.isInitialized) miniPlayerPanel.background = panelDrawable(Palette.PANEL, 8, this)
+        if (::miniTitle.isInitialized) miniTitle.setTextColor(Palette.TEXT)
+        if (::miniMeta.isInitialized) miniMeta.setTextColor(Palette.MUTED)
+        if (::miniThumb.isInitialized) miniThumb.background = panelDrawable(Palette.PANEL_ALT, 8, this)
+        bottomNavigationPanel?.background = roundedStrokeDrawable(Palette.PANEL, Palette.PANEL_ALT, 10)
+        refreshThemedViews(rootLayout)
+        navButtons.forEach { (navPage, button) ->
+            button.setTextColor(if (navPage == page) Palette.TEXT else Palette.MUTED)
+            tintTextViewDrawables(button, if (navPage == page) Palette.TEXT else Palette.MUTED)
+        }
+    }
+
+    private fun refreshThemedViews(view: View?) {
+        when (view) {
+            is Button -> if (view.tag == "accentButton") {
+                view.setTextColor(contrastTextColor(themeColor))
+                view.background = panelDrawable(themeColor, 8, this)
+                tintButtonDrawables(view, view.currentTextColor)
+            }
+            is ViewGroup -> {
+                for (index in 0 until view.childCount) refreshThemedViews(view.getChildAt(index))
+            }
+        }
     }
 
     private fun dialogBuilder(): AlertDialog.Builder {
         val style = if (isDarkModeActive(darkMode)) R.style.AppTheme_Dialog_Dark else R.style.AppTheme_Dialog_Light
-        return AlertDialog.Builder(this, style)
+        return RoundedDialogBuilder(style)
+    }
+
+    private inner class RoundedDialogBuilder(style: Int) : AlertDialog.Builder(this@MainActivity, style) {
+        override fun show(): AlertDialog {
+            val dialog = super.show()
+            styleNativeDialog(dialog)
+            return dialog
+        }
+
+        override fun create(): AlertDialog {
+            val dialog = super.create()
+            dialog.setOnShowListener { styleNativeDialog(dialog) }
+            return dialog
+        }
+    }
+
+    private fun styleNativeDialog(dialog: AlertDialog) {
+        dialog.window?.setBackgroundDrawable(panelDrawable(Palette.PANEL, 14, this))
+        dialog.window?.decorView?.setPadding(0, 0, 0, 0)
+        listOf(AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_NEUTRAL).forEach { which ->
+            dialog.getButton(which)?.setTextColor(themeColor)
+        }
     }
 
     private fun isDarkModeActive(mode: DarkMode): Boolean {
@@ -4274,15 +4453,16 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun headerGradientColors(): IntArray {
         return intArrayOf(
-            mixColor(Palette.BG, themeColor, 0.28f),
-            mixColor(Palette.PANEL_ALT, themeColor, 0.22f),
-            mixColor(Palette.PANEL_ALT, themeColor, 0.38f)
+            mixColor(Palette.PANEL, themeColor, 0.68f),
+            mixColor(Palette.PANEL_ALT, themeColor, 0.58f),
+            mixColor(Palette.PANEL, themeColor, 0.78f)
         )
     }
 
     private fun contentOverlayColor(): Int {
         if (backgroundImageUri.isBlank()) return Palette.BG
-        return Color.argb(210, Color.red(Palette.BG), Color.green(Palette.BG), Color.blue(Palette.BG))
+        val overlayAlpha = (226 - (backgroundAlpha.coerceIn(0f, 1f) * 156)).toInt().coerceIn(70, 226)
+        return Color.argb(overlayAlpha, Color.red(Palette.BG), Color.green(Palette.BG), Color.blue(Palette.BG))
     }
 
     private fun mixColor(start: Int, end: Int, ratio: Float): Int {
@@ -4402,9 +4582,17 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
     }
 
-    private fun attachArtworkSwipe(view: View, onLeft: () -> Unit, onRight: () -> Unit, onUp: () -> Unit, onDown: () -> Unit) {
+    private fun attachArtworkSwipe(
+        view: View,
+        onLeft: () -> Unit,
+        onRight: () -> Unit,
+        onUp: () -> Unit,
+        onDown: () -> Unit,
+        onDoubleTap: () -> Unit
+    ) {
         var startX = 0f
         var startY = 0f
+        var lastTapAt = 0L
         view.setOnTouchListener { _, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -4413,7 +4601,17 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    handleFourWaySwipe(startX, startY, event.x, event.y, onLeft, onRight, onUp, onDown)
+                    val dx = event.x - startX
+                    val dy = event.y - startY
+                    val isTap = kotlin.math.abs(dx) < dp(18) && kotlin.math.abs(dy) < dp(18)
+                    val now = System.currentTimeMillis()
+                    if (isTap && now - lastTapAt <= 320L) {
+                        lastTapAt = 0L
+                        onDoubleTap()
+                    } else {
+                        if (isTap) lastTapAt = now
+                        handleFourWaySwipe(startX, startY, event.x, event.y, onLeft, onRight, onUp, onDown)
+                    }
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> true
@@ -4516,12 +4714,17 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             hint = hintText
             setText(value)
             setSingleLine(true)
+            setTextColor(Palette.TEXT)
+            setHintTextColor(Palette.MUTED)
             textSize = 15f
+            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+            setPadding(dp(12), 0, dp(12), 0)
         }
     }
 
     private fun actionButton(text: String, onClick: () -> Unit): Button {
         return Button(this).apply {
+            tag = "accentButton"
             this.text = text
             isAllCaps = false
             setTextColor(contrastTextColor(themeColor))
@@ -4534,6 +4737,20 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
     }
 
+    private fun navButton(text: String, iconRes: Int, onClick: () -> Unit): TextView {
+        return TextView(this).apply {
+            this.text = text
+            gravity = Gravity.CENTER
+            textSize = 12.5f
+            includeFontPadding = false
+            setPadding(0, dp(4), 0, dp(3))
+            setCompoundDrawables(null, tintedDrawable(iconRes, Palette.MUTED, 22), null, null)
+            compoundDrawablePadding = dp(3)
+            setTextColor(Palette.MUTED)
+            setOnClickListener { onClick() }
+        }
+    }
+
     private fun iconActionButton(text: String, iconRes: Int, onClick: () -> Unit): Button {
         return actionButton(text, onClick).apply {
             setButtonIcon(this, iconRes)
@@ -4542,11 +4759,39 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun setButtonIcon(button: Button, iconRes: Int) {
-        val icon: Drawable = getDrawable(iconRes) ?: return
-        val size = dp(18)
-        icon.setBounds(0, 0, size, size)
-        icon.setTint(button.currentTextColor)
-        button.setCompoundDrawables(icon, null, null, null)
+        val icon = tintedDrawable(iconRes, button.currentTextColor, 18) ?: return
+        if (button.text.isNullOrBlank()) {
+            button.gravity = Gravity.CENTER
+            button.setPadding(0, 0, 0, 0)
+            button.setCompoundDrawables(null, icon, null, null)
+        } else {
+            button.gravity = Gravity.CENTER
+            button.setCompoundDrawables(icon, null, null, null)
+        }
+    }
+
+    private fun tintedDrawable(iconRes: Int, color: Int, sizeDp: Int): Drawable? {
+        return getDrawable(iconRes)?.mutate()?.apply {
+            val size = dp(sizeDp)
+            setBounds(0, 0, size, size)
+            setTint(color)
+        }
+    }
+
+    private fun tintButtonDrawables(button: Button, color: Int) {
+        button.compoundDrawables.forEach { it?.setTint(color) }
+    }
+
+    private fun tintTextViewDrawables(textView: TextView, color: Int) {
+        textView.compoundDrawables.forEach { it?.setTint(color) }
+    }
+
+    private fun roundedStrokeDrawable(fill: Int, stroke: Int, radiusDp: Int): GradientDrawable {
+        return GradientDrawable().apply {
+            setColor(fill)
+            cornerRadius = dp(radiusDp).toFloat()
+            setStroke(dp(1), stroke)
+        }
     }
 
     private fun weightedParams(): LinearLayout.LayoutParams {
@@ -4631,7 +4876,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val DOWNLOAD_NOTIFICATION_ID = 21
         private const val LYRICS_NOTIFICATION_ID = 31
         private const val TAG = "SMP"
-        private const val APP_VERSION = "beta1.0.1"
+        private const val APP_VERSION = "beta1.0.2"
         private const val REPO_URL = "https://github.com/SuperMite233/Simple-Music-Player"
         private const val ISSUES_URL = "$REPO_URL/issues"
         private const val AUTHOR_URL = "https://space.bilibili.com/287415007"
@@ -4647,12 +4892,18 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 }
 private class StrokeTextView(context: android.content.Context) : TextView(context) {
+    var strokeEnabled: Boolean = true
+
     init {
         setTextColor(Color.WHITE)
         paint.isFakeBoldText = true
     }
 
     override fun onDraw(canvas: Canvas) {
+        if (!strokeEnabled) {
+            super.onDraw(canvas)
+            return
+        }
         val originalColor = currentTextColor
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 5f
