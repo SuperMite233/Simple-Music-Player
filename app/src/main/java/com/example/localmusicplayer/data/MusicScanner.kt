@@ -8,6 +8,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import org.json.JSONObject
 import java.io.File
 import java.text.Collator
 import java.util.Locale
@@ -158,6 +159,8 @@ class MusicScanner(private val context: Context) {
 
     private fun buildTracksFromDocuments(documents: List<DocumentItem>): List<Track> {
         val lyricsByBaseName = documents.filter { it.isLyrics }.associate { baseName(it.name) to it.uri.toString() }
+        val documentsByPath = documents.associateBy { listOf(it.relativePath, it.name).filter { part -> part.isNotBlank() }.joinToString("/").lowercase(Locale.ROOT) }
+        val albumIndexes = documents.filter { it.isAlbumIndex }.mapNotNull { parseAlbumIndex(it, documentsByPath) }.associateBy { it.relativePath }
         val artworkByFolder = documents.filter { it.isImage }
             .groupBy { it.relativePath }
             .mapValues { (_, images) -> preferredArtwork(images)?.uri?.toString().orEmpty() }
@@ -165,7 +168,12 @@ class MusicScanner(private val context: Context) {
         val tracks = documents
             .filter { it.isAudio }
             .map { item ->
-                buildTrackFromDocument(item, lyricsByBaseName, artworkByFolder[item.relativePath].orEmpty()).also { track ->
+                val albumIndex = albumIndexes[item.relativePath]
+                val indexedTrack = albumIndex?.trackFor(item)
+                val artwork = indexedTrack?.coverUri.orEmpty()
+                    .ifBlank { albumIndex?.coverUri.orEmpty() }
+                    .ifBlank { artworkByFolder[item.relativePath].orEmpty() }
+                buildTrackFromDocument(item, lyricsByBaseName, artwork, albumIndex, indexedTrack).also { track ->
                     audioByFileName[item.name.lowercase(Locale.ROOT)] = track
                 }
             }
@@ -178,25 +186,71 @@ class MusicScanner(private val context: Context) {
         return tracks.distinctBy { it.id }.sortedWith(trackComparator)
     }
 
-    private fun buildTrackFromDocument(item: DocumentItem, lyricsByBaseName: Map<String, String>, folderArtworkUri: String): Track {
+    private fun buildTrackFromDocument(
+        item: DocumentItem,
+        lyricsByBaseName: Map<String, String>,
+        folderArtworkUri: String,
+        albumIndex: AlbumIndex? = null,
+        indexedTrack: IndexedTrack? = null
+    ): Track {
         val id = "doc:${item.uri}"
         val metadata = readMetadata(item.uri, id)
         val fallbackTitle = item.name.substringBeforeLast('.')
         return Track(
             id = id,
             uri = item.uri.toString(),
-            title = metadata.title.ifBlank { fallbackTitle },
-            artist = splitArtists(metadata.artist),
-            album = metadata.album,
-            durationMs = metadata.durationMs,
-            trackNumber = metadata.trackNumber,
+            title = indexedTrack?.title.orEmpty().ifBlank { metadata.title }.ifBlank { fallbackTitle },
+            artist = splitArtists(indexedTrack?.artist.orEmpty().ifBlank { metadata.artist }.ifBlank { albumIndex?.circle.orEmpty() }),
+            album = indexedTrack?.album.orEmpty().ifBlank { albumIndex?.albumTitle.orEmpty() }.ifBlank { metadata.album },
+            durationMs = (indexedTrack?.durationMs ?: 0L).takeIf { it > 0 } ?: metadata.durationMs,
+            trackNumber = (indexedTrack?.trackNumber ?: 0).takeIf { it > 0 } ?: metadata.trackNumber,
             year = metadata.year,
-            date = metadata.date,
-            composer = metadata.composer,
+            date = indexedTrack?.date.orEmpty().ifBlank { albumIndex?.releaseDate.orEmpty() }.ifBlank { metadata.date },
+            composer = indexedTrack?.composer.orEmpty().ifBlank { metadata.composer },
             mimeType = item.mimeType,
             sourcePath = listOf(item.relativePath, item.name).filter { it.isNotBlank() }.joinToString("/"),
             lyricsUri = lyricsByBaseName[baseName(item.name)].orEmpty(),
             artworkPath = metadata.artworkPath.ifBlank { folderArtworkUri }
+        )
+    }
+
+    private fun parseAlbumIndex(item: DocumentItem, documentsByPath: Map<String, DocumentItem>): AlbumIndex? {
+        val text = readText(item.uri.toString()) ?: return null
+        val root = runCatching { JSONObject(text) }.getOrNull() ?: return null
+        val relativePath = item.relativePath
+        fun resolveSibling(path: String): String {
+            if (path.isBlank() || path.startsWith("content://") || path.startsWith("file://") || path.startsWith("http://") || path.startsWith("https://")) return path
+            val normalized = path.replace('\\', '/').substringAfterLast('/')
+            val key = listOf(relativePath, normalized).filter { it.isNotBlank() }.joinToString("/").lowercase(Locale.ROOT)
+            return documentsByPath[key]?.uri?.toString().orEmpty()
+        }
+        val tracks = mutableListOf<IndexedTrack>()
+        val array = root.optJSONArray("tracks")
+        if (array != null) {
+            for (index in 0 until array.length()) {
+                val track = array.optJSONObject(index) ?: continue
+                val file = track.optString("file")
+                tracks += IndexedTrack(
+                    file = file,
+                    title = track.optString("title"),
+                    artist = track.optString("artist"),
+                    album = track.optString("album"),
+                    trackNumber = track.optInt("trackNumber", index + 1),
+                    durationMs = track.optLong("durationMs", 0L),
+                    date = track.optString("date"),
+                    composer = track.optString("composer"),
+                    coverUri = resolveSibling(track.optString("cover"))
+                )
+            }
+        }
+        return AlbumIndex(
+            relativePath = relativePath,
+            albumTitle = root.optString("albumTitle"),
+            circle = root.optString("circle"),
+            releaseDate = root.optString("releaseDate"),
+            coverUri = resolveSibling(root.optString("cover")),
+            trackCount = root.optInt("trackCount", tracks.size),
+            tracks = tracks
         )
     }
 
@@ -341,9 +395,41 @@ class MusicScanner(private val context: Context) {
         val extension: String = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
         val isCue: Boolean = extension == "cue"
         val isLyrics: Boolean = extension == "lrc"
+        val isAlbumIndex: Boolean = name.equals("album.json", ignoreCase = true)
         val isImage: Boolean = extension in setOf("jpg", "jpeg", "png", "webp")
         val isAudio: Boolean = mimeType.startsWith("audio/") || extension in audioExtensions
     }
+
+    private data class AlbumIndex(
+        val relativePath: String,
+        val albumTitle: String,
+        val circle: String,
+        val releaseDate: String,
+        val coverUri: String,
+        val trackCount: Int,
+        val tracks: List<IndexedTrack>
+    ) {
+        fun trackFor(item: DocumentItem): IndexedTrack? {
+            val itemName = item.name.lowercase(Locale.ROOT)
+            val itemBase = item.name.substringBeforeLast('.').lowercase(Locale.ROOT)
+            return tracks.firstOrNull { track ->
+                val fileName = track.file.replace('\\', '/').substringAfterLast('/').lowercase(Locale.ROOT)
+                fileName == itemName || fileName.substringBeforeLast('.') == itemBase
+            }
+        }
+    }
+
+    private data class IndexedTrack(
+        val file: String,
+        val title: String,
+        val artist: String,
+        val album: String,
+        val trackNumber: Int,
+        val durationMs: Long,
+        val date: String,
+        val composer: String,
+        val coverUri: String
+    )
 
     companion object {
         private val audioExtensions = setOf(

@@ -46,6 +46,7 @@ import android.webkit.WebViewClient
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -147,6 +148,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var lockscreenNotificationEnabled: Boolean = false
     private var floatingLyricsEnabled: Boolean = false
     private var floatingLyricsHideInApp: Boolean = false
+    private var floatingLyricsAlpha: Float = 1.0f
+    private var floatingLyricsPosition: FloatingLyricsPosition = FloatingLyricsPosition.TOP
     private var backgroundImageUri: String = ""
     private var backgroundAlpha: Float = 0.35f
     private var skipNoMediaFolders: Boolean = false
@@ -880,7 +883,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 if (playlist.isLocked) {
                     Toast.makeText(this@MainActivity, "该歌单不可删除", Toast.LENGTH_SHORT).show()
                 } else {
-                    AlertDialog.Builder(this@MainActivity)
+                    dialogBuilder()
                         .setTitle(playlist.name)
                         .setItems(arrayOf("删除播放列表")) { _, _ ->
                             store.deletePlaylist(playlist.id)
@@ -971,7 +974,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val tags = dialogInput("歌单标签，用逗号分隔", playlist.tags.joinToString(", "))
         box.addView(description)
         box.addView(tags)
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("编辑歌单详情")
             .setView(box)
             .setPositiveButton("保存") { _, _ ->
@@ -1324,13 +1327,17 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(settingCard("版本号", APP_VERSION) {
             checkForUpdates(silent = false)
         })
+        var dialog: AlertDialog? = null
         box.addView(settingCard("下载测试版", if (includeBetaUpdates) "开启：只检查包含 beta 字段的 release" else "关闭：只检查不含 beta 字段的 release") {
             includeBetaUpdates = !includeBetaUpdates
             saveSettings()
             Toast.makeText(this, "下载测试版：${if (includeBetaUpdates) "开启" else "关闭"}", Toast.LENGTH_SHORT).show()
+            dialog?.dismiss()
             showSoftwareDetailsDialog()
         })
-        box.addView(settingCard("软件作者", "SuperMite"))
+        box.addView(settingCard("软件作者", "SuperMite") {
+            openExternalUrl(AUTHOR_URL)
+        })
         box.addView(settingCard("构建提醒", "本软件使用 ChatGPT 辅助构建；音乐格式转换功能的 NCM 解密核心参考并移植自 MIT 许可项目 NCMConverter4a（https://github.com/cdb96/NCMConverter4a）。"))
         box.addView(settingCard("软件介绍", readBundledReadme()))
         box.addView(settingCard("GitHub 仓库", REPO_URL) {
@@ -1340,7 +1347,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             openExternalUrl(ISSUES_URL)
         })
         scroll.addView(box)
-        AlertDialog.Builder(this)
+        dialog = dialogBuilder()
             .setTitle("软件详情")
             .setView(scroll)
             .setPositiveButton("关闭", null)
@@ -1388,7 +1395,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun showAccountDialog() {
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("用户帐号")
             .setItems(arrayOf("本地账号", "流媒体账号凭证")) { _, which ->
                 if (which == 0) showLocalProfileDialog() else showStreamingAccountsDialog()
@@ -1406,7 +1413,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(actionButton("更改头像") { openAvatarPicker() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply {
             topMargin = dp(8)
         })
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("本地账号")
             .setView(box)
             .setPositiveButton("保存") { _, _ ->
@@ -1438,7 +1445,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             Toast.makeText(this, "DAV 暂待后续更新", Toast.LENGTH_SHORT).show()
         })
         scroll.addView(box)
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("流媒体账号凭证")
             .setView(scroll)
             .setPositiveButton("关闭", null)
@@ -1446,7 +1453,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun confirmClearDizzylabCookie() {
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("清除 DizzyLab 登录状态")
             .setMessage("确定要清除已保存的 DizzyLab Cookie 吗？清除后需要重新登录。")
             .setPositiveButton("清除") { _, _ ->
@@ -1506,7 +1513,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             setPadding(0, dp(4), 0, dp(8))
         })
         box.addView(cacheLimitInput)
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("串流选项")
             .setView(box)
             .setPositiveButton("保存") { _, _ ->
@@ -1542,7 +1549,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(settingCard("背景图片", "透明度：${(backgroundAlpha * 100).toInt()}%；当前：${if (backgroundImageUri.isBlank()) "未设置" else "已设置"}") {
             showBackgroundSettingsDialog()
         })
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("外观设置")
             .setView(box)
             .setPositiveButton("关闭", null)
@@ -1551,7 +1558,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun showDarkModeDialog() {
         val labels = DarkMode.entries.map { it.label }.toTypedArray()
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("深色模式")
             .setSingleChoiceItems(labels, darkMode.ordinal) { dialog, which ->
                 darkMode = DarkMode.entries[which]
@@ -1632,13 +1639,14 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(colorSlider("R", red) { red = it })
         box.addView(colorSlider("G", green) { green = it })
         box.addView(colorSlider("B", blue) { blue = it })
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("软件配色")
             .setView(box)
             .setPositiveButton("保存") { _, _ ->
                 applyAppPalette()
                 saveSettings()
-                rebuildShell(Page.SETTINGS)
+                render(Page.SETTINGS)
+                updateFloatingLyrics()
             }
             .setNegativeButton("取消", null)
             .show()
@@ -1647,7 +1655,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun showNotificationSettingsDialog() {
         val labels = arrayOf("状态栏播放开关", "锁屏显示播放控件")
         val checked = booleanArrayOf(notificationEnabled, lockscreenNotificationEnabled)
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("通知")
             .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
                 if (which == 0) notificationEnabled = isChecked else lockscreenNotificationEnabled = isChecked
@@ -1662,20 +1670,67 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun showFloatingLyricsSettingsDialog() {
-        val labels = arrayOf("开启悬浮歌词", "在软件中隐藏悬浮歌词")
-        val checked = booleanArrayOf(floatingLyricsEnabled, floatingLyricsHideInApp)
-        AlertDialog.Builder(this)
-            .setTitle("悬浮歌词")
-            .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
-                when (which) {
-                    0 -> floatingLyricsEnabled = isChecked
-                    1 -> floatingLyricsHideInApp = isChecked
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(8), dp(18), dp(2))
+        }
+        val enabledBox = CheckBox(this).apply {
+            text = "开启悬浮歌词"
+            setTextColor(Palette.TEXT)
+            isChecked = floatingLyricsEnabled
+        }
+        val hideBox = CheckBox(this).apply {
+            text = "在软件中隐藏悬浮歌词"
+            setTextColor(Palette.TEXT)
+            isChecked = floatingLyricsHideInApp
+        }
+        val alphaLabel = TextView(this).apply {
+            text = "文本透明度：${(floatingLyricsAlpha * 100).toInt()}%"
+            bodyStyle(13f)
+        }
+        val alphaSlider = SeekBar(this).apply {
+            max = 100
+            progress = (floatingLyricsAlpha * 100).toInt().coerceIn(20, 100)
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    alphaLabel.text = "文本透明度：${progress.coerceIn(20, 100)}%"
                 }
-                saveSettings()
-                if (which == 0 && isChecked && !hasOverlayPermission()) openOverlaySettings()
-                updateFloatingLyrics()
+                override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+            })
+        }
+        val positionLabels = FloatingLyricsPosition.entries.map { it.label }.toTypedArray()
+        val positionSpinner = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_item, positionLabels).also {
+                it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             }
-            .setPositiveButton("完成") { _, _ -> render(Page.SETTINGS) }
+            setSelection(floatingLyricsPosition.ordinal)
+            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+        }
+        box.addView(enabledBox)
+        box.addView(hideBox)
+        box.addView(alphaLabel)
+        box.addView(alphaSlider)
+        box.addView(TextView(this).apply {
+            text = "歌词位置"
+            bodyStyle(13f)
+            setPadding(0, dp(10), 0, dp(6))
+        })
+        box.addView(positionSpinner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)))
+        dialogBuilder()
+            .setTitle("悬浮歌词")
+            .setView(box)
+            .setPositiveButton("保存") { _, _ ->
+                floatingLyricsEnabled = enabledBox.isChecked
+                floatingLyricsHideInApp = hideBox.isChecked
+                floatingLyricsAlpha = (alphaSlider.progress.coerceIn(20, 100) / 100f).coerceIn(0.2f, 1f)
+                floatingLyricsPosition = FloatingLyricsPosition.entries.getOrElse(positionSpinner.selectedItemPosition) { FloatingLyricsPosition.TOP }
+                saveSettings()
+                if (floatingLyricsEnabled && !hasOverlayPermission()) openOverlaySettings()
+                updateFloatingLyrics()
+                render(Page.SETTINGS)
+            }
+            .setNegativeButton("取消", null)
             .show()
     }
 
@@ -1683,7 +1738,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         return listOf(
             "媒体：${if (hasAudioPermission()) "已授权" else "未授权"}",
             "通知：${if (notificationEnabled && hasNotificationPermission()) "开启" else "关闭或未授权"}",
-            "悬浮歌词：${if (floatingLyricsEnabled && hasOverlayPermission()) "开启" else "关闭或未授权"}",
+            "悬浮窗权限：${if (hasOverlayPermission()) "已授权" else "未授权"}",
             "文件管理：${if (hasAllFilesAccess()) "已开启" else "未开启"}"
         ).joinToString("；")
     }
@@ -1711,10 +1766,14 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             showNotificationSettingsDialog()
         })
         box.addView(settingCard(
-            "悬浮歌词",
-            "开关：${if (floatingLyricsEnabled) "开启" else "关闭"}；软件内隐藏：${if (floatingLyricsHideInApp) "开启" else "关闭"}；悬浮窗权限：${if (hasOverlayPermission()) "已授权" else "未授权"}。开启后会在屏幕顶部显示歌名、歌手或当前歌词。"
+            "悬浮窗权限",
+            "当前：${if (hasOverlayPermission()) "已授权" else "未授权"}。悬浮歌词的开关、透明度和位置已移动到播放设置。"
         ) {
-            showFloatingLyricsSettingsDialog()
+            if (hasOverlayPermission()) {
+                Toast.makeText(this, "悬浮窗权限已授权", Toast.LENGTH_SHORT).show()
+            } else {
+                openOverlaySettings()
+            }
         })
         box.addView(settingCard(
             "下载文件夹权限",
@@ -1733,7 +1792,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             showAllFilesAccessDialog()
         })
         scroll.addView(box)
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("软件权限")
             .setView(scroll)
             .setPositiveButton("关闭") { _, _ -> render(Page.SETTINGS) }
@@ -1745,7 +1804,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             Toast.makeText(this, "当前 Android 版本不需要单独开启所有文件访问权限。", Toast.LENGTH_SHORT).show()
             return
         }
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("文件管理权限")
             .setMessage("SMP 默认使用音乐媒体专用权限。开启所有文件访问权限后，下载与删除源文件的授权更稳定，但该权限范围更大，请只在需要时开启。")
             .setPositiveButton(if (hasAllFilesAccess()) "查看系统设置" else "前往开启") { _, _ ->
@@ -1802,10 +1861,15 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             }
         }
         box.addView(focusSpinner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)))
+        box.addView(actionButton(
+            "悬浮歌词：${if (floatingLyricsEnabled) "开启" else "关闭"} / ${floatingLyricsPosition.label} / ${(floatingLyricsAlpha * 100).toInt()}%"
+        ) { showFloatingLyricsSettingsDialog() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
+            topMargin = dp(12)
+        })
         box.addView(actionButton("音效调整器：$equalizerPreset") { showEqualizerDialog() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
             topMargin = dp(12)
         })
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("播放设置")
             .setView(box)
             .setPositiveButton("保存") { _, _ ->
@@ -1870,7 +1934,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             }
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
         }
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("音效调整器")
             .setView(box)
             .setPositiveButton("保存") { _, _ ->
@@ -1891,7 +1955,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun showSaveEqualizerPresetDialog(levels: List<Int>) {
         val input = dialogInput("预设名称", "自定义预设")
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("保存音效预设")
             .setView(input)
             .setPositiveButton("保存") { _, _ ->
@@ -1913,7 +1977,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun showScanSettingsDialog() {
         val labels = arrayOf("扫描时跳过含 .nomedia 的文件夹")
         val checked = booleanArrayOf(skipNoMediaFolders)
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("扫描设置")
             .setMultiChoiceItems(labels, checked) { _, _, isChecked ->
                 skipNoMediaFolders = isChecked
@@ -1925,7 +1989,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun showConfigDialog() {
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("配置文件")
             .setItems(arrayOf("导出 JSON 配置", "导入 JSON 配置")) { _, which ->
                 if (which == 0) openConfigExport() else openConfigImport()
@@ -1960,7 +2024,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         })
         box.addView(label)
         box.addView(slider)
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("背景图片")
             .setView(box)
             .setPositiveButton("选择图片") { _, _ ->
@@ -1994,7 +2058,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val prefs = getSharedPreferences("settings", MODE_PRIVATE)
         if (prefs.getBoolean("firstLaunchPromptDone", false)) return
         prefs.edit().putBoolean("firstLaunchPromptDone", true).apply()
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("初始化 SMP")
             .setMessage("首次打开可以立即扫描本地音乐，并开启状态栏播放控件。之后可在“音乐列表 > 本地音乐 > 搜索筛选右侧的扫描”进入扫描界面。")
             .setPositiveButton("扫描并开启通知") { _, _ ->
@@ -2239,7 +2303,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .filter { it.id != LibraryStore.HISTORY_ID && it.id != LibraryStore.LOCAL_ID }
             .filter { selectionFromLibrary || it.id != selectionPlaylist?.id }
         val names = playlists.map { it.name }.toTypedArray()
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle(if (selectionFromLibrary) "加入播放列表" else "移动到播放列表")
             .setItems(names) { _, which ->
                 val playlist = playlists[which]
@@ -2269,7 +2333,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         } else {
             "将从当前歌单移除 $count 首音乐，不会删除源文件。是否继续？"
         }
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("确认删除")
             .setMessage(message)
             .setPositiveButton("删除") { _, _ -> deleteSelectedTracks() }
@@ -2432,7 +2496,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun showTrackActions(track: Track) {
         if (track.id.startsWith("stream:dizzylab:")) {
-            AlertDialog.Builder(this)
+            dialogBuilder()
                 .setTitle(displayTitle(track))
                 .setItems(arrayOf("播放", "下载", "歌曲详细信息")) { _, which ->
                     when (which) {
@@ -2448,7 +2512,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val favoriteText = if (store.isFavorite(track.id)) "取消喜欢" else "加入我喜欢的音乐"
         val actions = mutableListOf("播放", favoriteText, "加入播放列表", "匹配歌词", "编辑音乐信息")
         if (playlist != null && !playlist.isLocked) actions.add("从当前播放列表移除")
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle(displayTitle(track))
             .setItems(actions.toTypedArray()) { _, which ->
                 when (actions[which]) {
@@ -2585,7 +2649,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun showAddToPlaylistDialog(track: Track) {
         val playlists = store.visiblePlaylists(store.history.map { it.trackId }).filter { it.id != LibraryStore.HISTORY_ID }
         val names = playlists.map { it.name }.toTypedArray()
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("加入播放列表")
             .setItems(names) { _, which ->
                 val playlist = playlists[which]
@@ -2608,7 +2672,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             setSingleLine(true)
             imeOptions = EditorInfo.IME_ACTION_DONE
         }
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("新建播放列表")
             .setView(input)
             .setPositiveButton("保存") { _, _ ->
@@ -2631,7 +2695,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             "音量调节",
             "歌曲详细信息"
         )
-        val dialog = AlertDialog.Builder(this).setTitle("播放菜单").create()
+        val dialog = dialogBuilder().setTitle("播放菜单").create()
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(8), dp(18), dp(8))
@@ -2657,7 +2721,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun showPlaybackModeDialog() {
         val labels = PlaybackMode.entries.map { it.label }.toTypedArray()
         val checked = playbackMode.ordinal
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("播放模式")
             .setSingleChoiceItems(labels, checked) { dialog, which ->
                 playbackMode = PlaybackMode.entries[which]
@@ -2706,7 +2770,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(label)
         box.addView(valueLabel)
         box.addView(slider)
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("播放倍速")
             .setView(box)
             .setPositiveButton("完成", null)
@@ -2722,7 +2786,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             val prefix = if (index == currentIndex) "? " else ""
             prefix + displayTitle(track)
         }.toTypedArray()
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("正在播放列表")
             .setItems(names) { _, which ->
                 playTrack(currentQueue[which], currentQueue)
@@ -2763,7 +2827,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(label)
         box.addView(valueLabel)
         box.addView(slider)
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("音量调节")
             .setView(box)
             .setPositiveButton("完成", null)
@@ -2796,7 +2860,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         if (track.composer.isNotBlank()) box.addView(detailRow("作曲家", track.composer, null))
         box.addView(detailRow("格式", track.mimeType.ifBlank { "未知" }, null))
         box.addView(detailRow("时长", formatDuration(track.durationMs), null))
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle(displayTitle(track))
             .setView(box)
             .setPositiveButton("关闭", null)
@@ -2891,7 +2955,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(ratingLabel)
         box.addView(rating)
 
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle(track.displayTitle)
             .setView(box)
             .setPositiveButton("保存") { _, _ ->
@@ -3070,21 +3134,42 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             floatingLyricsView = this
         }
         view.text = floatingLyricText(track)
+        view.setTextColor(applyAlpha(themeColor, floatingLyricsAlpha))
+        val params = floatingLyricsLayoutParams()
         if (!floatingLyricsAdded) {
-            val type = if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
-            val params = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                type,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT
-            ).apply {
-                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                y = 0
-            }
             getSystemService(WindowManager::class.java).addView(view, params)
             floatingLyricsAdded = true
+        } else {
+            runCatching { getSystemService(WindowManager::class.java).updateViewLayout(view, params) }
         }
+    }
+
+    private fun floatingLyricsLayoutParams(): WindowManager.LayoutParams {
+        val type = if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
+        val height = resources.displayMetrics.heightPixels
+        return WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            type,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            y = when (floatingLyricsPosition) {
+                FloatingLyricsPosition.TOP -> 0
+                FloatingLyricsPosition.LOWER -> (height * 0.75f).toInt()
+                FloatingLyricsPosition.BOTTOM -> (height - dp(96)).coerceAtLeast(0)
+            }
+        }
+    }
+
+    private fun applyAlpha(color: Int, alpha: Float): Int {
+        return Color.argb(
+            (255 * alpha.coerceIn(0f, 1f)).toInt(),
+            Color.red(color),
+            Color.green(color),
+            Color.blue(color)
+        )
     }
 
     private fun removeFloatingLyrics() {
@@ -3151,6 +3236,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         lockscreenNotificationEnabled = prefs.getBoolean("lockscreenNotificationEnabled", false)
         floatingLyricsEnabled = prefs.getBoolean("floatingLyricsEnabled", false)
         floatingLyricsHideInApp = prefs.getBoolean("floatingLyricsHideInApp", false)
+        floatingLyricsAlpha = prefs.getFloat("floatingLyricsAlpha", 1.0f).coerceIn(0.2f, 1.0f)
+        floatingLyricsPosition = FloatingLyricsPosition.entries.getOrElse(prefs.getInt("floatingLyricsPosition", FloatingLyricsPosition.TOP.ordinal)) { FloatingLyricsPosition.TOP }
         backgroundImageUri = prefs.getString("backgroundImageUri", "") ?: ""
         backgroundAlpha = prefs.getFloat("backgroundAlpha", 0.35f).coerceIn(0f, 1f)
         skipNoMediaFolders = prefs.getBoolean("skipNoMediaFolders", false)
@@ -3187,6 +3274,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .putBoolean("lockscreenNotificationEnabled", lockscreenNotificationEnabled)
             .putBoolean("floatingLyricsEnabled", floatingLyricsEnabled)
             .putBoolean("floatingLyricsHideInApp", floatingLyricsHideInApp)
+            .putFloat("floatingLyricsAlpha", floatingLyricsAlpha.coerceIn(0.2f, 1.0f))
+            .putInt("floatingLyricsPosition", floatingLyricsPosition.ordinal)
             .putString("backgroundImageUri", backgroundImageUri)
             .putFloat("backgroundAlpha", backgroundAlpha)
             .putBoolean("skipNoMediaFolders", skipNoMediaFolders)
@@ -3268,6 +3357,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .put("lockscreenNotificationEnabled", lockscreenNotificationEnabled)
             .put("floatingLyricsEnabled", floatingLyricsEnabled)
             .put("floatingLyricsHideInApp", floatingLyricsHideInApp)
+            .put("floatingLyricsAlpha", floatingLyricsAlpha)
+            .put("floatingLyricsPosition", floatingLyricsPosition.ordinal)
             .put("backgroundImageUri", backgroundImageUri)
             .put("backgroundAlpha", backgroundAlpha)
             .put("skipNoMediaFolders", skipNoMediaFolders)
@@ -3305,6 +3396,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         lockscreenNotificationEnabled = settings.optBoolean("lockscreenNotificationEnabled", lockscreenNotificationEnabled)
         floatingLyricsEnabled = settings.optBoolean("floatingLyricsEnabled", floatingLyricsEnabled)
         floatingLyricsHideInApp = settings.optBoolean("floatingLyricsHideInApp", floatingLyricsHideInApp)
+        floatingLyricsAlpha = settings.optDouble("floatingLyricsAlpha", floatingLyricsAlpha.toDouble()).toFloat().coerceIn(0.2f, 1.0f)
+        floatingLyricsPosition = FloatingLyricsPosition.entries.getOrElse(settings.optInt("floatingLyricsPosition", floatingLyricsPosition.ordinal)) { FloatingLyricsPosition.TOP }
         backgroundImageUri = settings.optString("backgroundImageUri", backgroundImageUri)
         backgroundAlpha = settings.optDouble("backgroundAlpha", backgroundAlpha.toDouble()).toFloat().coerceIn(0f, 1f)
         skipNoMediaFolders = settings.optBoolean("skipNoMediaFolders", skipNoMediaFolders)
@@ -3351,6 +3444,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         if (Build.VERSION.SDK_INT >= 23) {
             window.decorView.systemUiVisibility = if (isDarkModeActive(darkMode)) 0 else View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         }
+    }
+
+    private fun dialogBuilder(): AlertDialog.Builder {
+        val style = if (isDarkModeActive(darkMode)) R.style.AppTheme_Dialog_Dark else R.style.AppTheme_Dialog_Light
+        return AlertDialog.Builder(this, style)
     }
 
     private fun isDarkModeActive(mode: DarkMode): Boolean {
@@ -3405,7 +3503,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun showUpdateDialog(release: ReleaseInfo) {
         if (isFinishing || isDestroyed) return
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("发现新版本 ${release.version}")
             .setMessage("当前版本：$APP_VERSION\n是否打开 GitHub Release 页面下载更新？")
             .setPositiveButton("打开") { _, _ -> openExternalUrl(release.url) }
@@ -3667,7 +3765,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             }
             loadUrl(DIZZYLAB_LOGIN_URL)
         }
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("DizzyLab 登录")
             .setView(webView)
             .setPositiveButton("登录完成") { _, _ ->
@@ -3741,7 +3839,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun showDizzylabAlbumMenu(details: StreamAlbumDetails) {
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle(details.album.title)
             .setItems(arrayOf("下载整张专辑")) { _, _ ->
                 downloadStreamAlbum(details)
@@ -3751,7 +3849,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun ensureStreamDownloadFolderReady(onReady: () -> Unit): Boolean {
         if (streamDownloadFolderUri.isBlank() || isStreamDownloadFolderUsable()) return true
-        AlertDialog.Builder(this)
+        dialogBuilder()
             .setTitle("下载文件夹授权失效")
             .setMessage("系统拒绝访问此前选择的下载文件夹。请重新选择文件夹；如果取消或授权仍失败，本次下载将使用默认目录。")
             .setPositiveButton("重新选择") { _, _ ->
@@ -3789,6 +3887,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 downloadStreamTrackSync(track, details, coverPath)?.let { downloaded += it }
                 updateDownloadNotification("下载 ${details.album.title}", index + 1, details.tracks.size)
             }
+            writeStreamAlbumIndex(details, downloaded)
             addDownloadedTracksToLibrary(downloaded, details)
             finishDownloadNotification("下载完成：${details.album.title}", downloaded.size, details.tracks.size)
             runOnUiThread {
@@ -3810,6 +3909,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             updateDownloadNotification("下载 ${displayTitle(track)}", 0, 1)
             val coverPath = downloadStreamCover(details)
             val downloaded = downloadStreamTrackSync(track, details, coverPath)
+            if (downloaded != null) writeStreamAlbumIndex(details, listOf(downloaded))
             if (downloaded != null) addDownloadedTracksToLibrary(listOf(downloaded), details)
             finishDownloadNotification("下载完成：${displayTitle(track)}", if (downloaded == null) 0 else 1, 1)
             runOnUiThread {
@@ -3829,7 +3929,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 uri = uri,
                 album = details.album.title,
                 artist = track.artist.ifBlank { details.circle },
-                sourcePath = uri,
+                sourcePath = fileName,
                 artworkPath = coverPath
             )
         }.onFailure {
@@ -3855,6 +3955,41 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }.onFailure {
             Log.w(TAG, "DizzyLab cover download failed: $url", it)
         }.getOrDefault("")
+    }
+
+    private fun writeStreamAlbumIndex(details: StreamAlbumDetails, downloaded: List<Track>) {
+        if (downloaded.isEmpty()) return
+        runCatching {
+            val coverName = safeFileName("${details.album.title}.jpg")
+            val tracksJson = JSONArray()
+            downloaded.sortedBy { it.trackNumber.takeIf { number -> number > 0 } ?: Int.MAX_VALUE }.forEachIndexed { index, track ->
+                tracksJson.put(
+                    JSONObject()
+                        .put("file", track.sourcePath.substringAfterLast('/').ifBlank { safeFileName("${track.displayTitle}.mp3") })
+                        .put("title", track.displayTitle)
+                        .put("artist", track.artist.ifBlank { details.circle })
+                        .put("album", details.album.title)
+                        .put("trackNumber", track.trackNumber.takeIf { it > 0 } ?: index + 1)
+                        .put("durationMs", track.durationMs)
+                        .put("date", track.date.ifBlank { details.releaseDate })
+                        .put("composer", track.composer)
+                        .put("cover", coverName)
+                )
+            }
+            val root = JSONObject()
+                .put("source", "dizzylab")
+                .put("albumTitle", details.album.title)
+                .put("cover", coverName)
+                .put("trackCount", downloaded.size)
+                .put("circle", details.circle)
+                .put("releaseDate", details.releaseDate)
+                .put("description", details.description)
+                .put("tags", JSONArray(details.tags))
+                .put("tracks", tracksJson)
+            writeStreamDownloadBytes("dizzylab", details.album.title, "album.json", "application/json", root.toString(2).toByteArray(Charsets.UTF_8))
+        }.onFailure {
+            Log.w(TAG, "DizzyLab album index write failed: ${details.album.title}", it)
+        }
     }
 
     private fun writeStreamDownloadBytes(source: String, album: String, fileName: String, mimeType: String, bytes: ByteArray): String {
@@ -4066,7 +4201,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             }
             runOnUiThread {
                 val message = "转换完成：$success / ${uris.size}\n输出目录：${(getExternalFilesDir(null) ?: filesDir).absolutePath}\\ConvertedMusic"
-                AlertDialog.Builder(this)
+                dialogBuilder()
                     .setTitle("音乐格式转换")
                     .setMessage(message + if (results.isNotEmpty()) "\n\n" + results.take(6).joinToString("\n") else "")
                     .setPositiveButton("完成", null)
@@ -4472,6 +4607,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         SYSTEM("跟随系统")
     }
 
+    private enum class FloatingLyricsPosition(val label: String) {
+        TOP("顶部"),
+        LOWER("中下部"),
+        BOTTOM("底部")
+    }
+
     companion object {
         private const val REQUEST_AUDIO = 1001
         private const val REQUEST_TREE = 1002
@@ -4490,9 +4631,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val DOWNLOAD_NOTIFICATION_ID = 21
         private const val LYRICS_NOTIFICATION_ID = 31
         private const val TAG = "SMP"
-        private const val APP_VERSION = "beta1.0.0"
+        private const val APP_VERSION = "beta1.0.1"
         private const val REPO_URL = "https://github.com/SuperMite233/Simple-Music-Player"
         private const val ISSUES_URL = "$REPO_URL/issues"
+        private const val AUTHOR_URL = "https://space.bilibili.com/287415007"
         private const val RELEASES_URL = "$REPO_URL/releases"
         private const val RELEASES_API = "https://api.github.com/repos/SuperMite233/Simple-Music-Player/releases?per_page=20"
         private const val DIZZYLAB_LOGIN_URL = "https://www.dizzylab.net/albums/login/"
@@ -4504,7 +4646,6 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val ACTION_FORWARD = "com.supermite.smp.FORWARD"
     }
 }
-
 private class StrokeTextView(context: android.content.Context) : TextView(context) {
     init {
         setTextColor(Color.WHITE)
@@ -4522,4 +4663,3 @@ private class StrokeTextView(context: android.content.Context) : TextView(contex
         super.onDraw(canvas)
     }
 }
-
