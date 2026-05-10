@@ -57,7 +57,7 @@ data class Playlist(
         get() = systemType.isNotBlank()
 
     val isLocked: Boolean
-        get() = systemType == "favorites" || systemType == "history" || systemType == "local"
+        get() = systemType == "favorites" || systemType == "history" || systemType == "local" || systemType == "ranking"
 }
 
 data class HistoryItem(

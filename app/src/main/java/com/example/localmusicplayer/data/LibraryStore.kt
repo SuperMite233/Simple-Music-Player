@@ -140,32 +140,33 @@ class LibraryStore(context: Context) {
 
     fun createAlbumPlaylistsIfNeeded(tracks: List<Track>) {
         if (tracks.isEmpty()) return
-        val existingNames = playlists.map { it.name }.toMutableSet()
-        tracks
+        val desired = tracks
             .filter { it.album.isNotBlank() }
             .groupBy { it.displayAlbum }
             .toSortedMap(String.CASE_INSENSITIVE_ORDER)
-            .forEach { (album, albumTracks) ->
-                val name = "专辑：$album"
-                val trackIds = albumTracks.map { it.id }.distinct()
-                val existingAlbum = playlists.firstOrNull { it.systemType == "album" && it.name == name }
-                if (existingAlbum != null) {
-                    trackIds.forEach { id ->
-                        if (!existingAlbum.trackIds.contains(id)) existingAlbum.trackIds.add(id)
-                    }
-                    existingAlbum.updatedAt = System.currentTimeMillis()
-                } else if (existingNames.add(name)) {
-                    playlists.add(
-                        Playlist(
-                            id = UUID.randomUUID().toString(),
-                            name = name,
-                            trackIds = trackIds.toMutableList(),
-                            systemType = "album",
-                            updatedAt = System.currentTimeMillis()
-                        )
+            .map { (album, albumTracks) -> "专辑：$album" to albumTracks.map { it.id }.distinct() }
+        val existingByName = playlists.filter { it.systemType == "album" }.groupBy { it.name }
+        existingByName.values.forEach { duplicates ->
+            duplicates.drop(1).forEach { duplicate -> playlists.remove(duplicate) }
+        }
+        desired.forEach { (name, trackIds) ->
+            val existingAlbum = playlists.firstOrNull { it.systemType == "album" && it.name == name }
+            if (existingAlbum != null) {
+                existingAlbum.trackIds.clear()
+                existingAlbum.trackIds.addAll(trackIds)
+                existingAlbum.updatedAt = System.currentTimeMillis()
+            } else {
+                playlists.add(
+                    Playlist(
+                        id = UUID.randomUUID().toString(),
+                        name = name,
+                        trackIds = trackIds.toMutableList(),
+                        systemType = "album",
+                        updatedAt = System.currentTimeMillis()
                     )
-                }
+                )
             }
+        }
         albumPlaylistsCreated = true
         save()
     }
@@ -244,26 +245,69 @@ class LibraryStore(context: Context) {
     }
 
     fun visiblePlaylists(historyTrackIds: List<String>): List<Playlist> {
+        repairPlaylistData()
         val historyPlaylist = Playlist(
             id = HISTORY_ID,
             name = "播放历史",
-            trackIds = historyTrackIds.take(HISTORY_LIMIT).toMutableList(),
+            trackIds = historyTrackIds.distinct().take(HISTORY_LIMIT).toMutableList(),
             systemType = "history",
             updatedAt = history.firstOrNull()?.playedAt ?: 0L
+        )
+        val rankingPlaylist = Playlist(
+            id = RANKING_ID,
+            name = "播放排行",
+            trackIds = playCounts.entries
+                .sortedByDescending { it.value }
+                .map { it.key }
+                .filter { id -> tracks.any { it.id == id } }
+                .take(HISTORY_LIMIT)
+                .toMutableList(),
+            systemType = "ranking",
+            updatedAt = System.currentTimeMillis(),
+            description = "播放次数最多的前 100 首音乐。"
         )
         val localPlaylist = Playlist(
             id = LOCAL_ID,
             name = "本地音乐",
-            trackIds = tracks.map { it.id }.toMutableList(),
+            trackIds = tracks.map { it.id }.distinct().toMutableList(),
             systemType = "local",
             updatedAt = tracks.maxOfOrNull { it.durationMs } ?: 0L,
             description = "已扫描和导入的本地音乐。"
         )
         ensureSystemPlaylists()
-        return listOf(localPlaylist, favoritePlaylist(), historyPlaylist) +
+        return listOf(localPlaylist, favoritePlaylist(), rankingPlaylist, historyPlaylist) +
             playlists.filter { it.id != FAVORITES_ID }.sortedWith(
-                compareByDescending<Playlist> { it.systemType == "album" }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+                compareBy<Playlist> {
+                    when (it.systemType) {
+                        "" -> 0
+                        "cue" -> 1
+                        "album" -> 2
+                        else -> 3
+                    }
+                }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
             )
+    }
+
+    private fun repairPlaylistData() {
+        val existingTrackIds = tracks.map { it.id }.toSet()
+        playlists.forEach { playlist ->
+            val uniqueIds = playlist.trackIds.distinct().filter { it in existingTrackIds || playlist.systemType == "favorites" }
+            playlist.trackIds.clear()
+            playlist.trackIds.addAll(uniqueIds)
+        }
+        playlists.filter { it.systemType == "album" || it.systemType == "cue" }
+            .groupBy { it.systemType to it.name }
+            .values
+            .forEach { duplicates ->
+                val first = duplicates.firstOrNull() ?: return@forEach
+                duplicates.drop(1).forEach { duplicate ->
+                    first.trackIds.addAll(duplicate.trackIds)
+                    playlists.remove(duplicate)
+                }
+                val uniqueIds = first.trackIds.distinct()
+                first.trackIds.clear()
+                first.trackIds.addAll(uniqueIds)
+            }
     }
 
     private fun ensureSystemPlaylists() {
@@ -368,6 +412,7 @@ class LibraryStore(context: Context) {
         const val FAVORITES_ID = "system:favorites"
         const val HISTORY_ID = "system:history"
         const val LOCAL_ID = "system:local"
+        const val RANKING_ID = "system:ranking"
         const val HISTORY_LIMIT = 100
     }
 }

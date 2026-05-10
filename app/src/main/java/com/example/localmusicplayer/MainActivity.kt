@@ -9,8 +9,12 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.PixelFormat
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
@@ -33,6 +37,7 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.webkit.CookieManager
 import android.webkit.WebView
@@ -130,6 +135,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var pseudoShufflePosition = -1
     private var themeColor: Int = Palette.ACCENT
     private var notificationEnabled: Boolean = false
+    private var lockscreenNotificationEnabled: Boolean = false
+    private var floatingLyricsEnabled: Boolean = false
     private var backgroundImageUri: String = ""
     private var backgroundAlpha: Float = 0.35f
     private var skipNoMediaFolders: Boolean = false
@@ -156,6 +163,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var pendingRestoreShouldPlay: Boolean = false
     private var restorePreparingPaused: Boolean = false
     private var pausedByAudioFocus: Boolean = false
+    private var playlistCategory: PlaylistCategory = PlaylistCategory.COMMON
+    private var floatingLyricsView: StrokeTextView? = null
+    private var floatingLyricsAdded: Boolean = false
+    private var equalizerPreset: String = "默认"
+    private var equalizerLevels: MutableList<Int> = MutableList(5) { 0 }
+    private val equalizerPresets = mutableMapOf("默认" to List(5) { 0 })
     private val lyricsCache = mutableMapOf<String, List<LyricLine>>()
     private val imageExecutor = Executors.newFixedThreadPool(3)
     private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { change ->
@@ -226,6 +239,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         loadSettings()
         scanner.skipNoMediaFolders = skipNoMediaFolders
+        player.setEqualizerLevels(equalizerLevels)
         allTracks = store.savedTracks().sortedWith(MusicScanner.trackComparator)
         PlaybackControlBus.handler = { action -> handlePlaybackAction(action) }
         createNotificationChannel()
@@ -234,6 +248,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         render(Page.PLAYLISTS)
         restorePlaybackState()
         showFirstLaunchDialogIfNeeded()
+        updateFloatingLyrics()
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -243,12 +258,20 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     override fun onResume() {
         super.onResume()
+        updateFloatingLyrics()
         if (page == Page.SETTINGS && ::content.isInitialized) render(Page.SETTINGS)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        rebuildShell(page)
+        updateNowPlayingViews(player.currentTrack ?: return)
     }
 
     override fun onDestroy() {
         savePlaybackState()
         abandonPlaybackFocus()
+        removeFloatingLyrics()
         if (::player.isInitialized) player.pause()
         PlaybackControlBus.handler = null
         mediaSession.isActive = false
@@ -399,6 +422,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             pendingRestoreSeekMs = -1L
         }
         updateNowPlayingViews(track)
+        updateFloatingLyrics()
         broadcastPlaybackState("com.android.music.metachanged")
     }
 
@@ -412,6 +436,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         updatePlaybackNotification()
         updateMediaSessionState()
         updateLyricView(player.currentTrack)
+        updateFloatingLyrics()
         savePlaybackState()
     }
 
@@ -428,6 +453,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         abandonPlaybackFocus()
         miniPlayButton.text = ""
         nowPagePlayButton?.text = "播放"
+        updateFloatingLyrics()
         updatePlaybackNotification()
         broadcastPlaybackState("com.android.music.playstatechanged")
     }
@@ -446,9 +472,18 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         if (granted) {
             player.setVolume(1.0f)
         } else {
-            Toast.makeText(this, "无法获取音频焦点，已暂不播放", Toast.LENGTH_SHORT).show()
+            showAudioFocusDeniedDialog()
         }
         return granted
+    }
+
+    private fun showAudioFocusDeniedDialog() {
+        if (isFinishing || isDestroyed) return
+        AlertDialog.Builder(this)
+            .setTitle("无法获取音频焦点")
+            .setMessage("系统没有授予 SMP 音频焦点，可能有其他应用正在独占音频。当前播放状态已保持不变。")
+            .setPositiveButton("知道了", null)
+            .show()
     }
 
     private fun abandonPlaybackFocus() {
@@ -796,6 +831,20 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             render(Page.STREAMING)
         }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { leftMargin = dp(8) })
         content.addView(modeRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+        val categoryRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        PlaylistCategory.entries.forEach { category ->
+            categoryRow.addView(actionButton(category.label) {
+                playlistCategory = category
+                render(Page.PLAYLISTS)
+            }, LinearLayout.LayoutParams(0, dp(40), 1f).apply {
+                leftMargin = dp(3)
+                rightMargin = dp(3)
+            })
+        }
+        content.addView(categoryRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
         val list = ListView(this).apply {
             divider = ColorDrawable(Color.TRANSPARENT)
             dividerHeight = dp(8)
@@ -829,9 +878,18 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 true
             }
         }
-        playlistAdapter.playlists = store.visiblePlaylists(store.history.map { it.trackId }).filter { it.id != LibraryStore.LOCAL_ID }
+        playlistAdapter.playlists = categorizedPlaylists()
         content.addView(list, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(10) })
-        setStatus("播放列表：系统歌单置顶，专辑歌单首次扫描自动创建。")
+        setStatus("播放列表：${playlistCategory.label}")
+    }
+
+    private fun categorizedPlaylists(): List<Playlist> {
+        val playlists = store.visiblePlaylists(store.history.map { it.trackId }).filter { it.id != LibraryStore.LOCAL_ID }
+        return when (playlistCategory) {
+            PlaylistCategory.COMMON -> playlists.filter { it.systemType.isBlank() || it.systemType in setOf("favorites", "history", "ranking") }
+            PlaylistCategory.CUE -> playlists.filter { it.systemType == "cue" }
+            PlaylistCategory.ALBUM -> playlists.filter { it.systemType == "album" }
+        }
     }
 
     private fun playlistDetails(playlist: Playlist): View {
@@ -1511,17 +1569,32 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun showNotificationSettingsDialog() {
-        val labels = arrayOf("状态栏播放开关")
-        val checked = booleanArrayOf(notificationEnabled)
+        val labels = arrayOf("状态栏播放开关", "锁屏显示播放控件")
+        val checked = booleanArrayOf(notificationEnabled, lockscreenNotificationEnabled)
         AlertDialog.Builder(this)
             .setTitle("通知")
-            .setMultiChoiceItems(labels, checked) { _, _, isChecked ->
-                notificationEnabled = isChecked
+            .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
+                if (which == 0) notificationEnabled = isChecked else lockscreenNotificationEnabled = isChecked
                 saveSettings()
-                if (isChecked && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                if ((notificationEnabled || lockscreenNotificationEnabled) && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                     requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
                 }
                 updatePlaybackNotification()
+            }
+            .setPositiveButton("完成") { _, _ -> render(Page.SETTINGS) }
+            .show()
+    }
+
+    private fun showFloatingLyricsSettingsDialog() {
+        val labels = arrayOf("开启悬浮歌词")
+        val checked = booleanArrayOf(floatingLyricsEnabled)
+        AlertDialog.Builder(this)
+            .setTitle("悬浮歌词")
+            .setMultiChoiceItems(labels, checked) { _, _, isChecked ->
+                floatingLyricsEnabled = isChecked
+                saveSettings()
+                if (isChecked && !hasOverlayPermission()) openOverlaySettings()
+                updateFloatingLyrics()
             }
             .setPositiveButton("完成") { _, _ -> render(Page.SETTINGS) }
             .show()
@@ -1531,6 +1604,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         return listOf(
             "媒体：${if (hasAudioPermission()) "已授权" else "未授权"}",
             "通知：${if (notificationEnabled && hasNotificationPermission()) "开启" else "关闭或未授权"}",
+            "悬浮歌词：${if (floatingLyricsEnabled && hasOverlayPermission()) "开启" else "关闭或未授权"}",
             "文件管理：${if (hasAllFilesAccess()) "已开启" else "未开启"}"
         ).joinToString("；")
     }
@@ -1553,9 +1627,15 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         })
         box.addView(settingCard(
             "通知与状态栏播放",
-            "状态栏播放：${if (notificationEnabled) "开启" else "关闭"}；系统通知权限：${if (hasNotificationPermission()) "已授权" else "未授权"}。"
+            "状态栏播放：${if (notificationEnabled) "开启" else "关闭"}；锁屏通知：${if (lockscreenNotificationEnabled) "开启" else "关闭"}；系统通知权限：${if (hasNotificationPermission()) "已授权" else "未授权"}。"
         ) {
             showNotificationSettingsDialog()
+        })
+        box.addView(settingCard(
+            "悬浮歌词",
+            "开关：${if (floatingLyricsEnabled) "开启" else "关闭"}；悬浮窗权限：${if (hasOverlayPermission()) "已授权" else "未授权"}。开启后会在屏幕顶部显示歌名、歌手或当前歌词。"
+        ) {
+            showFloatingLyricsSettingsDialog()
         })
         box.addView(settingCard(
             "下载文件夹权限",
@@ -1643,6 +1723,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             }
         }
         box.addView(focusSpinner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)))
+        box.addView(actionButton("音效调整器：$equalizerPreset") { showEqualizerDialog() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
+            topMargin = dp(12)
+        })
         AlertDialog.Builder(this)
             .setTitle("播放设置")
             .setView(box)
@@ -1652,6 +1735,97 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 if (audioFocusBehavior == AudioFocusBehavior.MIX || !player.isPlaying()) abandonPlaybackFocus()
                 saveSettings()
                 render(Page.SETTINGS)
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun showEqualizerDialog() {
+        val frequencies = listOf("60 Hz", "230 Hz", "910 Hz", "3.6 kHz", "14 kHz")
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(8), dp(18), dp(2))
+        }
+        val names = equalizerPresets.keys.toList()
+        var selectedPreset = names.indexOf(equalizerPreset).takeIf { it >= 0 } ?: 0
+        val working = (equalizerPresets[names[selectedPreset]] ?: List(5) { 0 }).toMutableList()
+        val presetSpinner = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_item, names).also {
+                it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            }
+            setSelection(selectedPreset)
+            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+        }
+        box.addView(presetSpinner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)))
+        val labels = mutableListOf<TextView>()
+        frequencies.forEachIndexed { index, frequency ->
+            val label = TextView(this).apply {
+                text = "$frequency：${working[index]} mB"
+                bodyStyle(13f)
+            }
+            labels += label
+            box.addView(label)
+            box.addView(SeekBar(this).apply {
+                max = 3000
+                progress = working[index] + 1500
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                        working[index] = (progress - 1500).coerceIn(-1500, 1500)
+                        label.text = "$frequency：${working[index]} mB"
+                        player.setEqualizerLevels(working)
+                    }
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+                })
+            })
+        }
+        presetSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                selectedPreset = position
+                val values = equalizerPresets[names[position]] ?: List(5) { 0 }
+                values.forEachIndexed { index, value ->
+                    working[index] = value
+                    labels.getOrNull(index)?.text = "${frequencies[index]}：$value mB"
+                }
+                player.setEqualizerLevels(working)
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+        AlertDialog.Builder(this)
+            .setTitle("音效调整器")
+            .setView(box)
+            .setPositiveButton("保存") { _, _ ->
+                equalizerPreset = names[selectedPreset]
+                if (equalizerPreset != "默认") equalizerPresets[equalizerPreset] = working.toList()
+                equalizerLevels = working
+                player.setEqualizerLevels(equalizerLevels)
+                saveSettings()
+            }
+            .setNeutralButton("保存为预设") { _, _ ->
+                showSaveEqualizerPresetDialog(working)
+            }
+            .setNegativeButton("取消") { _, _ ->
+                player.setEqualizerLevels(equalizerLevels)
+            }
+            .show()
+    }
+
+    private fun showSaveEqualizerPresetDialog(levels: List<Int>) {
+        val input = dialogInput("预设名称", "自定义预设")
+        AlertDialog.Builder(this)
+            .setTitle("保存音效预设")
+            .setView(input)
+            .setPositiveButton("保存") { _, _ ->
+                val name = input.text.toString().trim().ifBlank { "自定义预设" }
+                if (name == "默认") {
+                    Toast.makeText(this, "默认预设不可覆盖", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                equalizerPresets[name] = levels.take(5)
+                equalizerPreset = name
+                equalizerLevels = levels.take(5).toMutableList()
+                player.setEqualizerLevels(equalizerLevels)
+                saveSettings()
             }
             .setNegativeButton("取消", null)
             .show()
@@ -2059,6 +2233,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun playTrack(track: Track, queue: List<Track>, countPlay: Boolean = true) {
+        if (!restorePreparingPaused && !requestPlaybackFocus()) return
         val baseQueue = queue.ifEmpty { listOf(track) }
         val nextQueue = if (playbackMode == PlaybackMode.PSEUDO_RANDOM) {
             if (shouldCreatePseudoQueue(baseQueue)) createPseudoQueue(baseQueue, track.id) else currentQueue
@@ -2070,7 +2245,6 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         currentIndex = currentQueue.indexOfFirst { it.id == track.id }.takeIf { it >= 0 } ?: 0
         if (playbackMode != PlaybackMode.PSEUDO_RANDOM && queueChanged) clearPseudoShuffleState()
         if (countPlay) store.addHistory(track.id)
-        if (!restorePreparingPaused && !requestPlaybackFocus()) return
         pausedByAudioFocus = false
         player.play(track, startWhenReady = !restorePreparingPaused)
         restorePreparingPaused = false
@@ -2516,13 +2690,19 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             text = "星级评分：${stars(edit.rating)}"
             bodyStyle(14f, Color.DKGRAY)
         }
-        val rating = RatingBar(this, null, android.R.attr.ratingBarStyleSmall).apply {
-            numStars = 5
-            stepSize = 1f
-            this.rating = edit.rating.toFloat()
-            setOnRatingBarChangeListener { _, value, _ ->
-                ratingLabel.text = "星级评分：${stars(value.toInt())}"
-            }
+        var selectedRating = edit.rating.coerceIn(0, 5)
+        val rating = SeekBar(this).apply {
+            max = 5
+            progress = selectedRating
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    selectedRating = progress.coerceIn(0, 5)
+                    ratingLabel.text = "星级评分：${stars(selectedRating)}"
+                }
+                override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+            })
+            setPadding(0, dp(4), 0, dp(8))
         }
         box.addView(alias)
         box.addView(comment)
@@ -2540,7 +2720,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                         alias = alias.text.toString().trim(),
                         comment = comment.text.toString().trim(),
                         tags = tags.text.toString().split(',', '，', '#').map { it.trim() }.filter { it.isNotBlank() },
-                        rating = rating.rating.toInt().coerceIn(0, 5)
+                        rating = selectedRating
                     )
                 )
                 trackAdapter.notifyDataSetChanged()
@@ -2656,6 +2836,56 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         nowPageLyrics?.text = lyricTextAt(track, playbackPositionMs)
     }
 
+    private fun updateFloatingLyrics() {
+        if (!floatingLyricsEnabled || !hasOverlayPermission()) {
+            removeFloatingLyrics()
+            return
+        }
+        val track = player.currentTrack ?: run {
+            removeFloatingLyrics()
+            return
+        }
+        val view = floatingLyricsView ?: StrokeTextView(this).apply {
+            textSize = 15f
+            gravity = Gravity.CENTER
+            setPadding(dp(12), dp(6), dp(12), dp(6))
+            floatingLyricsView = this
+        }
+        view.text = floatingLyricText(track)
+        if (!floatingLyricsAdded) {
+            val type = if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                type,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                y = 0
+            }
+            getSystemService(WindowManager::class.java).addView(view, params)
+            floatingLyricsAdded = true
+        }
+    }
+
+    private fun removeFloatingLyrics() {
+        val view = floatingLyricsView ?: return
+        if (floatingLyricsAdded) {
+            runCatching { getSystemService(WindowManager::class.java).removeView(view) }
+        }
+        floatingLyricsAdded = false
+    }
+
+    private fun floatingLyricText(track: Track): String {
+        if (track.hasLyrics) {
+            val lines = timedLyrics(track)
+            val current = lines.indexOfLast { it.timeMs <= playbackPositionMs }
+            if (current >= 0) return lines[current].text
+        }
+        return listOf(displayTitle(track), track.displayArtist).filter { it.isNotBlank() }.joinToString(" - ")
+    }
+
     private fun lyricTextAt(track: Track, positionMs: Long): String {
         if (track.lyricsUri.isBlank()) return "未找到配套歌词文件。"
         val lines = timedLyrics(track)
@@ -2698,6 +2928,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val prefs = getSharedPreferences("settings", MODE_PRIVATE)
         themeColor = prefs.getInt("themeColor", Palette.ACCENT)
         notificationEnabled = prefs.getBoolean("notificationEnabled", false)
+        lockscreenNotificationEnabled = prefs.getBoolean("lockscreenNotificationEnabled", false)
+        floatingLyricsEnabled = prefs.getBoolean("floatingLyricsEnabled", false)
         backgroundImageUri = prefs.getString("backgroundImageUri", "") ?: ""
         backgroundAlpha = prefs.getFloat("backgroundAlpha", 0.35f).coerceIn(0f, 1f)
         skipNoMediaFolders = prefs.getBoolean("skipNoMediaFolders", false)
@@ -2712,6 +2944,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         streamCacheFolderUri = prefs.getString("streamCacheFolderUri", "") ?: ""
         restorePlaybackOnLaunch = prefs.getBoolean("restorePlaybackOnLaunch", false)
         audioFocusBehavior = AudioFocusBehavior.entries.getOrElse(prefs.getInt("audioFocusBehavior", AudioFocusBehavior.PAUSE.ordinal)) { AudioFocusBehavior.PAUSE }
+        equalizerPreset = prefs.getString("equalizerPreset", "默认") ?: "默认"
+        loadEqualizerPresets(prefs.getString("equalizerPresets", "") ?: "")
+        equalizerLevels = equalizerPresets[equalizerPreset]?.toMutableList() ?: MutableList(5) { 0 }
         if (!prefs.getBoolean("localProfileCreated", false)) {
             profileName = "profile"
             prefs.edit()
@@ -2725,6 +2960,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         getSharedPreferences("settings", MODE_PRIVATE).edit()
             .putInt("themeColor", themeColor)
             .putBoolean("notificationEnabled", notificationEnabled)
+            .putBoolean("lockscreenNotificationEnabled", lockscreenNotificationEnabled)
+            .putBoolean("floatingLyricsEnabled", floatingLyricsEnabled)
             .putString("backgroundImageUri", backgroundImageUri)
             .putFloat("backgroundAlpha", backgroundAlpha)
             .putBoolean("skipNoMediaFolders", skipNoMediaFolders)
@@ -2739,8 +2976,29 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .putString("streamCacheFolderUri", streamCacheFolderUri)
             .putBoolean("restorePlaybackOnLaunch", restorePlaybackOnLaunch)
             .putInt("audioFocusBehavior", audioFocusBehavior.ordinal)
+            .putString("equalizerPreset", equalizerPreset)
+            .putString("equalizerPresets", equalizerPresetsJson())
             .putBoolean("localProfileCreated", true)
             .apply()
+    }
+
+    private fun loadEqualizerPresets(raw: String) {
+        equalizerPresets.clear()
+        equalizerPresets["默认"] = List(5) { 0 }
+        val root = runCatching { JSONObject(raw) }.getOrNull() ?: return
+        root.keys().forEach { name ->
+            val values = root.optJSONArray(name)?.let { array ->
+                (0 until minOf(array.length(), 5)).map { index -> array.optInt(index, 0).coerceIn(-1500, 1500) }
+            }.orEmpty()
+            if (values.size == 5) equalizerPresets[name.ifBlank { "未命名" }] = values
+        }
+        equalizerPresets["默认"] = List(5) { 0 }
+    }
+
+    private fun equalizerPresetsJson(): String {
+        val root = JSONObject()
+        equalizerPresets.forEach { (name, values) -> root.put(name, JSONArray(values)) }
+        return root.toString()
     }
 
     private fun savePlaybackState() {
@@ -2780,6 +3038,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         return JSONObject()
             .put("themeColor", themeColor)
             .put("notificationEnabled", notificationEnabled)
+            .put("lockscreenNotificationEnabled", lockscreenNotificationEnabled)
+            .put("floatingLyricsEnabled", floatingLyricsEnabled)
             .put("backgroundImageUri", backgroundImageUri)
             .put("backgroundAlpha", backgroundAlpha)
             .put("skipNoMediaFolders", skipNoMediaFolders)
@@ -2804,12 +3064,16 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .put("streamCacheFolderUri", streamCacheFolderUri)
             .put("restorePlaybackOnLaunch", restorePlaybackOnLaunch)
             .put("audioFocusBehavior", audioFocusBehavior.ordinal)
+            .put("equalizerPreset", equalizerPreset)
+            .put("equalizerPresets", JSONObject(equalizerPresets.mapValues { JSONArray(it.value) }))
     }
 
     private fun applyImportedSettings(settings: JSONObject) {
         if (settings.length() == 0) return
         themeColor = settings.optInt("themeColor", themeColor)
         notificationEnabled = settings.optBoolean("notificationEnabled", notificationEnabled)
+        lockscreenNotificationEnabled = settings.optBoolean("lockscreenNotificationEnabled", lockscreenNotificationEnabled)
+        floatingLyricsEnabled = settings.optBoolean("floatingLyricsEnabled", floatingLyricsEnabled)
         backgroundImageUri = settings.optString("backgroundImageUri", backgroundImageUri)
         backgroundAlpha = settings.optDouble("backgroundAlpha", backgroundAlpha.toDouble()).toFloat().coerceIn(0f, 1f)
         skipNoMediaFolders = settings.optBoolean("skipNoMediaFolders", skipNoMediaFolders)
@@ -2833,6 +3097,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         streamCacheFolderUri = settings.optString("streamCacheFolderUri", streamCacheFolderUri)
         restorePlaybackOnLaunch = settings.optBoolean("restorePlaybackOnLaunch", restorePlaybackOnLaunch)
         audioFocusBehavior = AudioFocusBehavior.entries.getOrElse(settings.optInt("audioFocusBehavior", audioFocusBehavior.ordinal)) { AudioFocusBehavior.PAUSE }
+        settings.optJSONObject("equalizerPresets")?.let { loadEqualizerPresets(it.toString()) }
+        equalizerPreset = settings.optString("equalizerPreset", equalizerPreset)
+        equalizerLevels = equalizerPresets[equalizerPreset]?.toMutableList() ?: MutableList(5) { 0 }
+        player.setEqualizerLevels(equalizerLevels)
         scanner.skipNoMediaFolders = skipNoMediaFolders
         saveSettings()
     }
@@ -2870,6 +3138,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .setLargeIcon(artwork)
             .setOngoing(player.isPlaying())
             .setShowWhen(false)
+            .setVisibility(if (lockscreenNotificationEnabled) Notification.VISIBILITY_PUBLIC else Notification.VISIBILITY_PRIVATE)
             .setProgress(playbackDurationMs.toInt().coerceAtLeast(1), playbackPositionMs.toInt().coerceAtLeast(0), false)
             .setContentIntent(playbackPendingIntent(ACTION_OPEN))
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_previous_track), "上一首", playbackPendingIntent(ACTION_PREV)).build())
@@ -3461,6 +3730,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         return Build.VERSION.SDK_INT < 33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
     }
 
+    private fun hasOverlayPermission(): Boolean {
+        return Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this)
+    }
+
     private fun hasAllFilesAccess(): Boolean {
         return Build.VERSION.SDK_INT < 30 || Environment.isExternalStorageManager()
     }
@@ -3482,6 +3755,15 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 .onFailure { error ->
                     Toast.makeText(this, error.message ?: "无法打开文件管理权限设置", Toast.LENGTH_SHORT).show()
                 }
+        }
+    }
+
+    private fun openOverlaySettings() {
+        if (Build.VERSION.SDK_INT < 23) return
+        runCatching {
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+        }.onFailure {
+            Toast.makeText(this, it.message ?: "无法打开悬浮窗权限设置", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -3664,6 +3946,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         DIZZYLAB
     }
 
+    private enum class PlaylistCategory(val label: String) {
+        COMMON("常用歌单"),
+        CUE("CUE 歌单"),
+        ALBUM("专辑歌单")
+    }
+
     private enum class AudioFocusBehavior(val label: String) {
         MIX("同时播放"),
         DUCK("压低音量"),
@@ -3697,3 +3985,20 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 }
 
+private class StrokeTextView(context: android.content.Context) : TextView(context) {
+    init {
+        setTextColor(Color.WHITE)
+        paint.isFakeBoldText = true
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        val originalColor = currentTextColor
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 5f
+        setTextColor(Color.BLACK)
+        super.onDraw(canvas)
+        paint.style = Paint.Style.FILL
+        setTextColor(originalColor)
+        super.onDraw(canvas)
+    }
+}

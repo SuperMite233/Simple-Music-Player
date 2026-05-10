@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.PlaybackParams
 import android.media.MediaPlayer
+import android.media.audiofx.Equalizer
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -23,6 +24,8 @@ class MusicPlayer(private val context: Context) {
         private set
 
     private var mediaPlayer: MediaPlayer? = null
+    private var equalizer: Equalizer? = null
+    private var equalizerLevels: List<Int> = List(EQ_BAND_COUNT) { 0 }
     private var speed = 1.0f
     private var volume = 1.0f
     private val handler = Handler(Looper.getMainLooper())
@@ -69,6 +72,7 @@ class MusicPlayer(private val context: Context) {
                 if (track.cueStartMs > 0L) it.seekTo(track.cueStartMs.toInt())
                 applySpeed(it)
                 it.setVolume(volume, volume)
+                attachEqualizer(it.audioSessionId)
                 if (startWhenReady) it.start()
                 listener?.onPrepared(track)
                 startProgress()
@@ -119,6 +123,11 @@ class MusicPlayer(private val context: Context) {
 
     fun volume(): Float = volume
 
+    fun setEqualizerLevels(levels: List<Int>) {
+        equalizerLevels = (0 until EQ_BAND_COUNT).map { index -> levels.getOrNull(index)?.coerceIn(EQ_MIN_LEVEL, EQ_MAX_LEVEL) ?: 0 }
+        applyEqualizerLevels()
+    }
+
     fun release() {
         stopProgress()
         releasePlayer()
@@ -142,14 +151,44 @@ class MusicPlayer(private val context: Context) {
     }
 
     private fun releasePlayer() {
+        equalizer?.release()
+        equalizer = null
         mediaPlayer?.release()
         mediaPlayer = null
+    }
+
+    private fun attachEqualizer(audioSessionId: Int) {
+        equalizer?.release()
+        equalizer = runCatching {
+            Equalizer(0, audioSessionId).apply {
+                enabled = true
+            }
+        }.getOrNull()
+        applyEqualizerLevels()
+    }
+
+    private fun applyEqualizerLevels() {
+        val effect = equalizer ?: return
+        runCatching {
+            val min = effect.bandLevelRange[0].toInt()
+            val max = effect.bandLevelRange[1].toInt()
+            val bandCount = effect.numberOfBands.toInt()
+            (0 until minOf(bandCount, equalizerLevels.size)).forEach { index ->
+                effect.setBandLevel(index.toShort(), equalizerLevels[index].coerceIn(min, max).toShort())
+            }
+        }
     }
 
     private fun displayDuration(track: Track, player: MediaPlayer): Long {
         if (track.cueEndMs > track.cueStartMs) return track.cueEndMs - track.cueStartMs
         if (track.durationMs > 0L) return track.durationMs
         return runCatching { player.duration.toLong() }.getOrDefault(0L).coerceAtLeast(0L)
+    }
+
+    companion object {
+        const val EQ_BAND_COUNT = 5
+        const val EQ_MIN_LEVEL = -1500
+        const val EQ_MAX_LEVEL = 1500
     }
 }
 
