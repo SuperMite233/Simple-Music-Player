@@ -71,6 +71,7 @@ import com.supermite.smp.ui.Palette
 import com.supermite.smp.ui.PlaylistAdapter
 import com.supermite.smp.ui.TrackAdapter
 import com.supermite.smp.ui.bodyStyle
+import com.supermite.smp.ui.contrastTextColor
 import com.supermite.smp.ui.dp
 import com.supermite.smp.ui.formatDuration
 import com.supermite.smp.ui.panelDrawable
@@ -85,7 +86,10 @@ import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
 
 class MainActivity : Activity(), MusicPlayer.Listener {
@@ -137,6 +141,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private val pseudoShuffleOrder = mutableListOf<Int>()
     private var pseudoShufflePosition = -1
     private var themeColor: Int = Palette.ACCENT
+    private var darkMode: DarkMode = DarkMode.SYSTEM
+    private var includeBetaUpdates: Boolean = false
     private var notificationEnabled: Boolean = false
     private var lockscreenNotificationEnabled: Boolean = false
     private var floatingLyricsEnabled: Boolean = false
@@ -219,6 +225,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(startupThemeStyle())
         super.onCreate(savedInstanceState)
         appInForeground = true
         store = LibraryStore(this)
@@ -280,6 +287,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        applyAppPalette()
         rebuildShell(page)
         updateNowPlayingViews(player.currentTrack ?: return)
     }
@@ -970,7 +978,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 store.savePlaylistMeta(
                     playlist.id,
                     description.text.toString(),
-                    tags.text.toString().split(',', '，', '#').map { it.trim() }.filter { it.isNotBlank() }
+                    tags.text.toString().split(Regex("[,，#]")).map { it.trim() }.filter { it.isNotBlank() }
                 )
                 openedPlaylist = store.visiblePlaylists(store.history.map { it.trackId }).firstOrNull { it.id == playlist.id }
                 render(Page.PLAYLISTS)
@@ -1278,9 +1286,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         box.addView(profileHeaderCard())
         box.addView(settingCard("用户帐号", "查看或编辑本地账号，管理流媒体账号凭证") { showAccountDialog() })
-        box.addView(settingCard("软件配色", "预设主题色或调色盘自定义颜色") { showThemeSettingsDialog() })
-        box.addView(settingCard("背景图片", "从本地图库选择界面背景，并调整透明度：${(backgroundAlpha * 100).toInt()}%") {
-            showBackgroundSettingsDialog()
+        box.addView(settingCard("外观设置", "配色、深色模式和背景图片") {
+            showAppearanceSettingsDialog()
         })
         box.addView(settingCard("权限", permissionSummary()) {
             showPermissionSettingsDialog()
@@ -1316,6 +1323,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         box.addView(settingCard("版本号", APP_VERSION) {
             checkForUpdates(silent = false)
+        })
+        box.addView(settingCard("下载测试版", if (includeBetaUpdates) "开启：只检查包含 beta 字段的 release" else "关闭：只检查不含 beta 字段的 release") {
+            includeBetaUpdates = !includeBetaUpdates
+            saveSettings()
+            Toast.makeText(this, "下载测试版：${if (includeBetaUpdates) "开启" else "关闭"}", Toast.LENGTH_SHORT).show()
+            showSoftwareDetailsDialog()
         })
         box.addView(settingCard("软件作者", "SuperMite"))
         box.addView(settingCard("构建提醒", "本软件使用 ChatGPT 辅助构建；音乐格式转换功能的 NCM 解密核心参考并移植自 MIT 许可项目 NCMConverter4a（https://github.com/cdb96/NCMConverter4a）。"))
@@ -1457,7 +1470,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         val label = TextView(this).apply {
             text = "预加载音频数量：$streamPreloadCount"
-            bodyStyle(15f, Color.DKGRAY)
+            bodyStyle(15f, Palette.MUTED)
         }
         val valueLabel = TextView(this).apply {
             text = "$streamPreloadCount 首"
@@ -1484,12 +1497,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(slider)
         box.addView(TextView(this).apply {
             text = "下载目录：" + streamFolderLabel(streamDownloadFolderUri, "应用默认目录")
-            bodyStyle(14f, Color.DKGRAY)
+            bodyStyle(14f, Palette.MUTED)
             setPadding(0, dp(8), 0, dp(8))
         })
         box.addView(TextView(this).apply {
             text = "缓存目录：" + streamFolderLabel(streamCacheFolderUri, "Android 数据目录")
-            bodyStyle(14f, Color.DKGRAY)
+            bodyStyle(14f, Palette.MUTED)
             setPadding(0, dp(4), 0, dp(8))
         })
         box.addView(cacheLimitInput)
@@ -1511,6 +1524,40 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 streamCacheLimitGb = cacheLimitInput.text.toString().toFloatOrNull()?.coerceAtLeast(0.1f) ?: streamCacheLimitGb
                 saveSettings()
                 openStreamCacheFolderPicker()
+            }
+            .show()
+    }
+
+    private fun showAppearanceSettingsDialog() {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+        }
+        box.addView(settingCard("软件配色", "预设主题色或调色盘自定义颜色，按钮和重点控件会同步使用主题色。") {
+            showThemeSettingsDialog()
+        })
+        box.addView(settingCard("深色模式", darkMode.label) {
+            showDarkModeDialog()
+        })
+        box.addView(settingCard("背景图片", "透明度：${(backgroundAlpha * 100).toInt()}%；当前：${if (backgroundImageUri.isBlank()) "未设置" else "已设置"}") {
+            showBackgroundSettingsDialog()
+        })
+        AlertDialog.Builder(this)
+            .setTitle("外观设置")
+            .setView(box)
+            .setPositiveButton("关闭", null)
+            .show()
+    }
+
+    private fun showDarkModeDialog() {
+        val labels = DarkMode.entries.map { it.label }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("深色模式")
+            .setSingleChoiceItems(labels, darkMode.ordinal) { dialog, which ->
+                darkMode = DarkMode.entries[which]
+                saveSettings()
+                dialog.dismiss()
+                recreate()
             }
             .show()
     }
@@ -1589,6 +1636,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .setTitle("软件配色")
             .setView(box)
             .setPositiveButton("保存") { _, _ ->
+                applyAppPalette()
                 saveSettings()
                 rebuildShell(Page.SETTINGS)
             }
@@ -1892,7 +1940,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         val label = TextView(this).apply {
             text = "背景透明度：${(backgroundAlpha * 100).toInt()}%"
-            bodyStyle(15f, Color.DKGRAY)
+            bodyStyle(15f, Palette.MUTED)
         }
         val slider = SeekBar(this).apply {
             max = 100
@@ -1908,7 +1956,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         box.addView(TextView(this).apply {
             text = if (backgroundImageUri.isBlank()) "当前未设置背景图片" else "已设置背景图片"
-            bodyStyle(14f, Color.DKGRAY)
+            bodyStyle(14f, Palette.MUTED)
         })
         box.addView(label)
         box.addView(slider)
@@ -2444,34 +2492,49 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         setStatus("$title：0 / ${candidates.size}")
         Thread {
-            val updated = mutableMapOf<String, Track>()
-            var matched = 0
-            updateLyricsNotification(title, 0, candidates.size, matched)
-            candidates.forEachIndexed { index, track ->
-                val syncedLyrics = fetchLrcLibLyrics(track)
-                if (!syncedLyrics.isNullOrBlank()) {
-                    val lyricsUri = saveLrcLibLyrics(track, syncedLyrics)
-                    updated[track.id] = track.copy(lyricsUri = lyricsUri)
-                    matched += 1
+            val processed = AtomicInteger(0)
+            val matched = AtomicInteger(0)
+            val executor = Executors.newFixedThreadPool(5)
+            val latch = CountDownLatch(candidates.size)
+            updateLyricsNotification(title, 0, candidates.size, matched.get())
+            candidates.forEach { track ->
+                executor.execute {
+                    try {
+                        val syncedLyrics = fetchLrcLibLyrics(track)
+                        if (!syncedLyrics.isNullOrBlank()) {
+                            val lyricsUri = saveLrcLibLyrics(track, syncedLyrics)
+                            matched.incrementAndGet()
+                            runOnUiThread { bindLyricsToTrack(track.id, lyricsUri) }
+                        }
+                    } finally {
+                        val done = processed.incrementAndGet()
+                        updateLyricsNotification(title, done, candidates.size, matched.get())
+                        latch.countDown()
+                    }
                 }
-                updateLyricsNotification(title, index + 1, candidates.size, matched)
-                Thread.sleep(250)
             }
+            latch.await(20, TimeUnit.MINUTES)
+            executor.shutdownNow()
             runOnUiThread {
-                if (updated.isNotEmpty()) {
-                    allTracks = allTracks.map { updated[it.id] ?: it }.sortedWith(MusicScanner.trackComparator)
-                    visibleTracks = visibleTracks.map { updated[it.id] ?: it }
-                    currentQueue = currentQueue.map { updated[it.id] ?: it }
-                    store.saveTracks(allTracks)
-                    trackAdapter.tracks = visibleTracks
-                    trackAdapter.notifyDataSetChanged()
-                }
-                finishLyricsNotification("$title 完成", matched, candidates.size)
-                Toast.makeText(this, "歌词匹配完成：$matched / ${candidates.size}", Toast.LENGTH_LONG).show()
-                setStatus("$title 完成：$matched / ${candidates.size}")
+                finishLyricsNotification("$title 完成", matched.get(), candidates.size)
+                Toast.makeText(this, "歌词匹配完成：${matched.get()} / ${candidates.size}", Toast.LENGTH_LONG).show()
+                setStatus("$title 完成：${matched.get()} / ${candidates.size}")
                 renderIfLibraryVisible()
             }
         }.start()
+    }
+
+    private fun bindLyricsToTrack(trackId: String, lyricsUri: String) {
+        val updatedTrack = allTracks.firstOrNull { it.id == trackId }?.copy(lyricsUri = lyricsUri) ?: return
+        allTracks = allTracks.map { if (it.id == trackId) updatedTrack else it }.sortedWith(MusicScanner.trackComparator)
+        visibleTracks = visibleTracks.map { if (it.id == trackId) updatedTrack else it }
+        currentQueue = currentQueue.map { if (it.id == trackId) updatedTrack else it }
+        player.replaceCurrentTrack(updatedTrack)
+        lyricsCache.remove(lyricsUri)
+        store.saveTracks(allTracks)
+        trackAdapter.tracks = visibleTracks
+        trackAdapter.notifyDataSetChanged()
+        if (player.currentTrack?.id == trackId) updateNowPlayingViews(updatedTrack)
     }
 
     private fun canMatchLrcLib(track: Track): Boolean {
@@ -2617,7 +2680,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         val label = TextView(this).apply {
             text = "播放倍速：${"%.2f".format(player.speed())}x"
-            bodyStyle(15f, Color.DKGRAY)
+            bodyStyle(15f, Palette.MUTED)
         }
         val valueLabel = TextView(this).apply {
             text = "${"%.2f".format(player.speed())}x"
@@ -2656,7 +2719,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             return
         }
         val names = currentQueue.mapIndexed { index, track ->
-            val prefix = if (index == currentIndex) "▶ " else ""
+            val prefix = if (index == currentIndex) "? " else ""
             prefix + displayTitle(track)
         }.toTypedArray()
         AlertDialog.Builder(this)
@@ -2674,7 +2737,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         val label = TextView(this).apply {
             text = "系统音量：${audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)} / ${audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)}"
-            bodyStyle(15f, Color.DKGRAY)
+            bodyStyle(15f, Palette.MUTED)
         }
         val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
         val valueLabel = TextView(this).apply {
@@ -2743,7 +2806,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun detailRow(label: String, value: String, onClick: (() -> Unit)?): TextView {
         return TextView(this).apply {
             text = "$label：$value"
-            bodyStyle(15f, if (onClick == null) Color.DKGRAY else Palette.ACCENT)
+            bodyStyle(15f, if (onClick == null) Palette.MUTED else Palette.ACCENT)
             setPadding(0, dp(7), 0, dp(7))
             onClick?.let { setOnClickListener { it() } }
         }
@@ -2808,21 +2871,19 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val tags = dialogInput("标签，用逗号分隔", edit.tags.joinToString(", "))
         val ratingLabel = TextView(this).apply {
             text = "星级评分：${stars(edit.rating)}"
-            bodyStyle(14f, Color.DKGRAY)
+            bodyStyle(14f, Palette.MUTED)
         }
         var selectedRating = edit.rating.coerceIn(0, 5)
-        val rating = SeekBar(this).apply {
-            max = 5
-            progress = selectedRating
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                    selectedRating = progress.coerceIn(0, 5)
-                    ratingLabel.text = "星级评分：${stars(selectedRating)}"
-                }
-                override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
-                override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
-            })
-            setPadding(0, dp(4), 0, dp(8))
+        val rating = RatingBar(this, null, android.R.attr.ratingBarStyleSmall).apply {
+            numStars = 5
+            stepSize = 1f
+            rating = selectedRating.toFloat()
+            setIsIndicator(false)
+            setOnRatingBarChangeListener { _, value, _ ->
+                selectedRating = value.toInt().coerceIn(0, 5)
+                ratingLabel.text = "星级评分：${stars(selectedRating)}"
+            }
+            setPadding(0, dp(8), 0, dp(8))
         }
         box.addView(alias)
         box.addView(comment)
@@ -2839,7 +2900,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                     TrackEdit(
                         alias = alias.text.toString().trim(),
                         comment = comment.text.toString().trim(),
-                        tags = tags.text.toString().split(',', '，', '#').map { it.trim() }.filter { it.isNotBlank() },
+                        tags = tags.text.toString().split(Regex("[,，#]")).map { it.trim() }.filter { it.isNotBlank() },
                         rating = selectedRating
                     )
                 )
@@ -3051,7 +3112,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val from = (current - 1).coerceAtLeast(0)
         val to = (current + 1).coerceAtMost(lines.lastIndex)
         return (from..to).joinToString("\n") { index ->
-            if (index == current) "▶ ${lines[index].text}" else lines[index].text
+            if (index == current) "? ${lines[index].text}" else lines[index].text
         }
     }
 
@@ -3084,6 +3145,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun loadSettings() {
         val prefs = getSharedPreferences("settings", MODE_PRIVATE)
         themeColor = prefs.getInt("themeColor", Palette.ACCENT)
+        darkMode = DarkMode.entries.getOrElse(prefs.getInt("darkMode", DarkMode.SYSTEM.ordinal)) { DarkMode.SYSTEM }
+        includeBetaUpdates = prefs.getBoolean("includeBetaUpdates", false)
         notificationEnabled = prefs.getBoolean("notificationEnabled", false)
         lockscreenNotificationEnabled = prefs.getBoolean("lockscreenNotificationEnabled", false)
         floatingLyricsEnabled = prefs.getBoolean("floatingLyricsEnabled", false)
@@ -3112,11 +3175,14 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 .putString("profileName", profileName)
                 .apply()
         }
+        applyAppPalette()
     }
 
     private fun saveSettings() {
         getSharedPreferences("settings", MODE_PRIVATE).edit()
             .putInt("themeColor", themeColor)
+            .putInt("darkMode", darkMode.ordinal)
+            .putBoolean("includeBetaUpdates", includeBetaUpdates)
             .putBoolean("notificationEnabled", notificationEnabled)
             .putBoolean("lockscreenNotificationEnabled", lockscreenNotificationEnabled)
             .putBoolean("floatingLyricsEnabled", floatingLyricsEnabled)
@@ -3196,6 +3262,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun currentSettingsJson(): JSONObject {
         return JSONObject()
             .put("themeColor", themeColor)
+            .put("darkMode", darkMode.ordinal)
+            .put("includeBetaUpdates", includeBetaUpdates)
             .put("notificationEnabled", notificationEnabled)
             .put("lockscreenNotificationEnabled", lockscreenNotificationEnabled)
             .put("floatingLyricsEnabled", floatingLyricsEnabled)
@@ -3231,6 +3299,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun applyImportedSettings(settings: JSONObject) {
         if (settings.length() == 0) return
         themeColor = settings.optInt("themeColor", themeColor)
+        darkMode = DarkMode.entries.getOrElse(settings.optInt("darkMode", darkMode.ordinal)) { DarkMode.SYSTEM }
+        includeBetaUpdates = settings.optBoolean("includeBetaUpdates", includeBetaUpdates)
         notificationEnabled = settings.optBoolean("notificationEnabled", notificationEnabled)
         lockscreenNotificationEnabled = settings.optBoolean("lockscreenNotificationEnabled", lockscreenNotificationEnabled)
         floatingLyricsEnabled = settings.optBoolean("floatingLyricsEnabled", floatingLyricsEnabled)
@@ -3263,7 +3333,32 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         equalizerLevels = equalizerPresets[equalizerPreset]?.toMutableList() ?: MutableList(5) { 0 }
         player.setEqualizerLevels(equalizerLevels)
         scanner.skipNoMediaFolders = skipNoMediaFolders
+        applyAppPalette()
         saveSettings()
+    }
+
+    private fun startupThemeStyle(): Int {
+        val mode = DarkMode.entries.getOrElse(
+            getSharedPreferences("settings", MODE_PRIVATE).getInt("darkMode", DarkMode.SYSTEM.ordinal)
+        ) { DarkMode.SYSTEM }
+        return if (isDarkModeActive(mode)) R.style.AppTheme_Dark else R.style.AppTheme_Light
+    }
+
+    private fun applyAppPalette() {
+        Palette.apply(isDarkModeActive(darkMode), themeColor)
+        window.statusBarColor = Palette.BG
+        window.navigationBarColor = Palette.BG
+        if (Build.VERSION.SDK_INT >= 23) {
+            window.decorView.systemUiVisibility = if (isDarkModeActive(darkMode)) 0 else View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        }
+    }
+
+    private fun isDarkModeActive(mode: DarkMode): Boolean {
+        return when (mode) {
+            DarkMode.LIGHT -> false
+            DarkMode.DARK -> true
+            DarkMode.SYSTEM -> (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        }
     }
 
     private fun checkForUpdates(silent: Boolean) {
@@ -3287,14 +3382,20 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun fetchLatestRelease(): ReleaseInfo {
-        val connection = (URL(LATEST_RELEASE_API).openConnection() as HttpURLConnection).apply {
+        val connection = (URL(RELEASES_API).openConnection() as HttpURLConnection).apply {
             connectTimeout = 10_000
             readTimeout = 10_000
             setRequestProperty("Accept", "application/vnd.github+json")
             setRequestProperty("User-Agent", "SMP/$APP_VERSION")
         }
         val text = connection.inputStream.bufferedReader().use { it.readText() }
-        val root = JSONObject(text)
+        val releases = JSONArray(text)
+        val root = (0 until releases.length())
+            .mapNotNull { releases.optJSONObject(it) }
+            .firstOrNull { release ->
+                val name = "${release.optString("tag_name")} ${release.optString("name")}".lowercase(Locale.ROOT)
+                if (includeBetaUpdates) name.contains("beta") else !name.contains("beta")
+            } ?: error("没有找到可用的 ${if (includeBetaUpdates) "beta" else "正式"} release")
         val tag = root.optString("tag_name").ifBlank { root.optString("name") }
         return ReleaseInfo(
             version = tag.removePrefix("v").trim(),
@@ -4288,12 +4389,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         return Button(this).apply {
             this.text = text
             isAllCaps = false
-            setTextColor(Palette.TEXT)
+            setTextColor(contrastTextColor(themeColor))
             textSize = 13f
             minHeight = 0
             minimumHeight = 0
             setPadding(dp(6), 0, dp(6), 0)
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+            background = panelDrawable(themeColor, 8, this@MainActivity)
             setOnClickListener { onClick() }
         }
     }
@@ -4309,6 +4410,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val icon: Drawable = getDrawable(iconRes) ?: return
         val size = dp(18)
         icon.setBounds(0, 0, size, size)
+        icon.setTint(button.currentTextColor)
         button.setCompoundDrawables(icon, null, null, null)
     }
 
@@ -4364,6 +4466,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         PAUSE("暂停播放")
     }
 
+    private enum class DarkMode(val label: String) {
+        LIGHT("浅色"),
+        DARK("深色"),
+        SYSTEM("跟随系统")
+    }
+
     companion object {
         private const val REQUEST_AUDIO = 1001
         private const val REQUEST_TREE = 1002
@@ -4382,11 +4490,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val DOWNLOAD_NOTIFICATION_ID = 21
         private const val LYRICS_NOTIFICATION_ID = 31
         private const val TAG = "SMP"
-        private const val APP_VERSION = "1.4.4"
+        private const val APP_VERSION = "beta1.0.0"
         private const val REPO_URL = "https://github.com/SuperMite233/Simple-Music-Player"
         private const val ISSUES_URL = "$REPO_URL/issues"
         private const val RELEASES_URL = "$REPO_URL/releases"
-        private const val LATEST_RELEASE_API = "https://api.github.com/repos/SuperMite233/Simple-Music-Player/releases/latest"
+        private const val RELEASES_API = "https://api.github.com/repos/SuperMite233/Simple-Music-Player/releases?per_page=20"
         private const val DIZZYLAB_LOGIN_URL = "https://www.dizzylab.net/albums/login/"
         private const val ACTION_OPEN = "com.supermite.smp.OPEN"
         private const val ACTION_PREV = "com.supermite.smp.PREV"
@@ -4414,3 +4522,4 @@ private class StrokeTextView(context: android.content.Context) : TextView(contex
         super.onDraw(canvas)
     }
 }
+

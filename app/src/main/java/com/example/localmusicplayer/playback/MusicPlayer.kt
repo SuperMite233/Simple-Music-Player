@@ -116,6 +116,10 @@ class MusicPlayer(private val context: Context) {
 
     fun speed(): Float = speed
 
+    fun replaceCurrentTrack(track: Track) {
+        if (currentTrack?.id == track.id) currentTrack = track
+    }
+
     fun setVolume(value: Float) {
         volume = value.coerceIn(0f, 1f)
         mediaPlayer?.setVolume(volume, volume)

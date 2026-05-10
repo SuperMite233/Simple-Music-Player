@@ -9,14 +9,33 @@ import android.view.ViewGroup
 import android.widget.TextView
 
 object Palette {
-    const val BG = 0xFF101418.toInt()
-    const val PANEL = 0xFF1A2027.toInt()
-    const val PANEL_ALT = 0xFF24303A.toInt()
-    const val ACCENT = 0xFF35C2A1.toInt()
-    const val ACCENT_ALT = 0xFFF2B84B.toInt()
-    const val TEXT = 0xFFF4F7F8.toInt()
-    const val MUTED = 0xFFAAB5BD.toInt()
-    const val DANGER = 0xFFE66A6A.toInt()
+    var BG = 0xFF101418.toInt()
+    var PANEL = 0xFF1A2027.toInt()
+    var PANEL_ALT = 0xFF24303A.toInt()
+    var ACCENT = 0xFF35C2A1.toInt()
+    var ACCENT_ALT = 0xFFF2B84B.toInt()
+    var TEXT = 0xFFF4F7F8.toInt()
+    var MUTED = 0xFFAAB5BD.toInt()
+    var DANGER = 0xFFE66A6A.toInt()
+
+    fun apply(dark: Boolean, accent: Int) {
+        ACCENT = accent
+        ACCENT_ALT = if (dark) 0xFFF2B84B.toInt() else 0xFFB46A00.toInt()
+        DANGER = if (dark) 0xFFE66A6A.toInt() else 0xFFC43D3D.toInt()
+        if (dark) {
+            BG = 0xFF101418.toInt()
+            PANEL = 0xFF1A2027.toInt()
+            PANEL_ALT = 0xFF24303A.toInt()
+            TEXT = 0xFFF4F7F8.toInt()
+            MUTED = 0xFFAAB5BD.toInt()
+        } else {
+            BG = 0xFFF6F8FA.toInt()
+            PANEL = 0xFFFFFFFF.toInt()
+            PANEL_ALT = 0xFFE8EEF2.toInt()
+            TEXT = 0xFF111820.toInt()
+            MUTED = 0xFF5D6975.toInt()
+        }
+    }
 }
 
 fun Context.dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
