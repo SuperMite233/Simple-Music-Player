@@ -35,6 +35,7 @@ import android.text.TextWatcher
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -689,7 +690,6 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun renderScanPage() {
-        content.addView(actionButton("返回音乐库") { render(Page.LIBRARY) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)))
         content.addView(sectionTitle("扫描"))
         content.addView(scanAction("自动扫描系统音乐库", "读取系统媒体库、CUE 文件、同名 LRC 歌词，并提取内嵌封面。") {
             if (hasAudioPermission()) scanMediaStore() else requestAudioPermission()
@@ -708,7 +708,6 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun renderLibraryPage() {
-        content.addView(actionButton("返回音乐列表") { render(Page.PLAYLISTS) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)))
         content.addView(sectionTitle("音乐库"))
         val toolRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -799,8 +798,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun renderPlaylistsPage() {
-        content.addView(sectionTitle(openedPlaylist?.name ?: "播放列表"))
         if (openedPlaylist != null) {
+            content.addView(sectionTitle(openedPlaylist!!.name))
             content.addView(actionButton("返回播放列表") {
                 openedPlaylist = null
                 clearSelection()
@@ -816,7 +815,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             return
         }
 
-        content.addView(actionButton("新建播放列表") { showCreatePlaylistDialog() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)))
+        content.addView(titleActionRow("播放列表", "+") { showCreatePlaylistDialog() })
         val modeRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -837,7 +836,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             gravity = Gravity.CENTER_VERTICAL
         }
         PlaylistCategory.entries.forEach { category ->
-            categoryRow.addView(actionButton(category.label) {
+            categoryRow.addView(textTabButton(category.label, playlistCategory == category) {
                 playlistCategory = category
                 render(Page.PLAYLISTS)
             }, LinearLayout.LayoutParams(0, dp(40), 1f).apply {
@@ -845,6 +844,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 rightMargin = dp(3)
             })
         }
+        attachPlaylistCategorySwipe(categoryRow)
         content.addView(categoryRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
         val list = ListView(this).apply {
             divider = ColorDrawable(Color.TRANSPARENT)
@@ -879,6 +879,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 true
             }
         }
+        attachPlaylistCategorySwipe(list)
         playlistAdapter.playlists = categorizedPlaylists()
         content.addView(list, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(10) })
         setStatus("播放列表：${playlistCategory.label}")
@@ -1202,6 +1203,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             scaleType = ImageView.ScaleType.CENTER_CROP
             background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
         }
+        attachConsumingHorizontalSwipe(art, onLeft = { playNextOrFirst() }, onRight = { playPreviousOrFirst() })
         loadArtwork(track, art)
         box.addView(art, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(320)))
         box.addView(TextView(this).apply {
@@ -1300,7 +1302,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(8), dp(18), dp(8))
         }
-        box.addView(settingCard("版本号", "1.4.1"))
+        box.addView(settingCard("版本号", "1.4.2"))
         box.addView(settingCard("软件作者", "SuperMite"))
         box.addView(settingCard("构建提醒", "本软件使用 ChatGPT 辅助构建；音乐格式转换功能的 NCM 解密核心参考并移植自 MIT 许可项目 NCMConverter4a（https://github.com/cdb96/NCMConverter4a）。"))
         box.addView(settingCard("软件介绍", readBundledReadme()))
@@ -3878,6 +3880,95 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             titleStyle(20f)
             setPadding(0, 0, 0, dp(10))
         }
+    }
+
+    private fun titleActionRow(title: String, actionText: String, onAction: () -> Unit): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, dp(10))
+        }
+        row.addView(TextView(this).apply {
+            text = title
+            titleStyle(20f)
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(TextView(this).apply {
+            text = actionText
+            titleStyle(28f)
+            gravity = Gravity.CENTER
+            setOnClickListener { onAction() }
+        }, LinearLayout.LayoutParams(dp(48), dp(42)))
+        return row
+    }
+
+    private fun textTabButton(text: String, selected: Boolean, onClick: () -> Unit): TextView {
+        return TextView(this).apply {
+            this.text = text
+            gravity = Gravity.CENTER
+            textSize = 14f
+            setTextColor(if (selected) Palette.TEXT else Palette.MUTED)
+            typeface = if (selected) android.graphics.Typeface.DEFAULT_BOLD else android.graphics.Typeface.DEFAULT
+            setOnClickListener { onClick() }
+        }
+    }
+
+    private fun attachPlaylistCategorySwipe(view: View) {
+        attachPassiveHorizontalSwipe(
+            view,
+            onLeft = { switchPlaylistCategory(1) },
+            onRight = { switchPlaylistCategory(-1) }
+        )
+    }
+
+    private fun switchPlaylistCategory(direction: Int) {
+        val entries = PlaylistCategory.entries
+        val current = entries.indexOf(playlistCategory).takeIf { it >= 0 } ?: 0
+        playlistCategory = entries[(current + direction + entries.size) % entries.size]
+        render(Page.PLAYLISTS)
+    }
+
+    private fun attachConsumingHorizontalSwipe(view: View, onLeft: () -> Unit, onRight: () -> Unit) {
+        var startX = 0f
+        var startY = 0f
+        view.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    startX = event.x
+                    startY = event.y
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    handleHorizontalSwipe(startX, startY, event.x, event.y, onLeft, onRight)
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> true
+                else -> true
+            }
+        }
+    }
+
+    private fun attachPassiveHorizontalSwipe(view: View, onLeft: () -> Unit, onRight: () -> Unit) {
+        var startX = 0f
+        var startY = 0f
+        view.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    startX = event.x
+                    startY = event.y
+                    false
+                }
+                MotionEvent.ACTION_UP -> handleHorizontalSwipe(startX, startY, event.x, event.y, onLeft, onRight)
+                else -> false
+            }
+        }
+    }
+
+    private fun handleHorizontalSwipe(startX: Float, startY: Float, endX: Float, endY: Float, onLeft: () -> Unit, onRight: () -> Unit): Boolean {
+        val dx = endX - startX
+        val dy = endY - startY
+        if (kotlin.math.abs(dx) < dp(72) || kotlin.math.abs(dx) < kotlin.math.abs(dy) * 1.4f) return false
+        if (dx < 0) onLeft() else onRight()
+        return true
     }
 
     private fun scanAction(title: String, subtitle: String, onClick: () -> Unit): View {
