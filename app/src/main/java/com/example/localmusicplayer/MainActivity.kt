@@ -80,6 +80,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
+import java.net.URLEncoder
 import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -704,6 +705,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         })
         content.addView(scanAction("手动导入文件", "选择一个或多个音频、CUE 或 LRC 文件，适合补充单曲。") {
             openManualImport()
+        })
+        content.addView(scanAction("尝试通过 LrcLib 获取歌词", "为音乐库中具备曲名、作者和专辑元数据的音乐匹配带时间轴的 LRC 歌词。") {
+            matchLyricsForTracks(allTracks, "全库歌词匹配")
         })
         content.addView(TextView(this).apply {
             text = "当前音乐库：${allTracks.size} 首；已识别歌词：${allTracks.count { it.hasLyrics }} 首。"
@@ -2151,6 +2155,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         bar.addView(selectionCountText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         bar.addView(actionButton("收藏") { favoriteSelectedTracks() }, LinearLayout.LayoutParams(dp(62), dp(38)))
         bar.addView(actionButton(if (selectionFromLibrary) "加入" else "移动") { showAddSelectedToPlaylistDialog() }, LinearLayout.LayoutParams(dp(62), dp(38)).apply { leftMargin = dp(6) })
+        bar.addView(actionButton("歌词") { matchSelectedLyrics() }, LinearLayout.LayoutParams(dp(62), dp(38)).apply { leftMargin = dp(6) })
         bar.addView(actionButton("删除") { confirmDeleteSelectedTracks() }, LinearLayout.LayoutParams(dp(62), dp(38)).apply { leftMargin = dp(6) })
         bar.addView(actionButton("取消") {
             clearSelection()
@@ -2171,6 +2176,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         Toast.makeText(this, "已加入我喜欢的音乐", Toast.LENGTH_SHORT).show()
         clearSelection()
         renderCurrentListPage()
+    }
+
+    private fun matchSelectedLyrics() {
+        val selected = selectedTrackIds.mapNotNull { id -> allTracks.firstOrNull { it.id == id } }
+        clearSelection()
+        renderCurrentListPage()
+        matchLyricsForTracks(selected, "批量歌词匹配")
     }
 
     private fun showAddSelectedToPlaylistDialog() {
@@ -2386,7 +2398,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         val playlist = openedPlaylist
         val favoriteText = if (store.isFavorite(track.id)) "取消喜欢" else "加入我喜欢的音乐"
-        val actions = mutableListOf("播放", favoriteText, "加入播放列表", "编辑音乐信息")
+        val actions = mutableListOf("播放", favoriteText, "加入播放列表", "匹配歌词", "编辑音乐信息")
         if (playlist != null && !playlist.isLocked) actions.add("从当前播放列表移除")
         AlertDialog.Builder(this)
             .setTitle(displayTitle(track))
@@ -2402,6 +2414,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                         renderIfPlaylistChanged()
                     }
                     "加入播放列表" -> showAddToPlaylistDialog(track)
+                    "匹配歌词" -> matchLyricsForTracks(listOf(track), "歌词匹配")
                     "编辑音乐信息" -> showEditDialog(track)
                     "从当前播放列表移除" -> {
                         store.removeFromPlaylist(playlist!!.id, track.id)
@@ -2419,6 +2432,83 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun renderIfLibraryVisible() {
         if (page == Page.LIBRARY || page == Page.PLAYLISTS || page == Page.STREAMING) render(page)
+    }
+
+    private fun matchLyricsForTracks(sourceTracks: List<Track>, title: String) {
+        val candidates = sourceTracks
+            .distinctBy { it.id }
+            .filter { canMatchLrcLib(it) }
+        if (candidates.isEmpty()) {
+            Toast.makeText(this, "没有可匹配的音乐，需要曲名、作者和专辑元数据", Toast.LENGTH_SHORT).show()
+            return
+        }
+        setStatus("$title：0 / ${candidates.size}")
+        Thread {
+            val updated = mutableMapOf<String, Track>()
+            var matched = 0
+            updateLyricsNotification(title, 0, candidates.size, matched)
+            candidates.forEachIndexed { index, track ->
+                val syncedLyrics = fetchLrcLibLyrics(track)
+                if (!syncedLyrics.isNullOrBlank()) {
+                    val lyricsUri = saveLrcLibLyrics(track, syncedLyrics)
+                    updated[track.id] = track.copy(lyricsUri = lyricsUri)
+                    matched += 1
+                }
+                updateLyricsNotification(title, index + 1, candidates.size, matched)
+                Thread.sleep(250)
+            }
+            runOnUiThread {
+                if (updated.isNotEmpty()) {
+                    allTracks = allTracks.map { updated[it.id] ?: it }.sortedWith(MusicScanner.trackComparator)
+                    visibleTracks = visibleTracks.map { updated[it.id] ?: it }
+                    currentQueue = currentQueue.map { updated[it.id] ?: it }
+                    store.saveTracks(allTracks)
+                    trackAdapter.tracks = visibleTracks
+                    trackAdapter.notifyDataSetChanged()
+                }
+                finishLyricsNotification("$title 完成", matched, candidates.size)
+                Toast.makeText(this, "歌词匹配完成：$matched / ${candidates.size}", Toast.LENGTH_LONG).show()
+                setStatus("$title 完成：$matched / ${candidates.size}")
+                renderIfLibraryVisible()
+            }
+        }.start()
+    }
+
+    private fun canMatchLrcLib(track: Track): Boolean {
+        return track.title.isNotBlank() && track.artist.isNotBlank() && track.album.isNotBlank()
+    }
+
+    private fun fetchLrcLibLyrics(track: Track): String? {
+        return runCatching {
+            val params = mutableListOf(
+                "track_name" to track.title,
+                "artist_name" to track.artist,
+                "album_name" to track.album
+            )
+            if (track.durationMs > 0L) params += "duration" to (track.durationMs / 1000L).toString()
+            val query = params.joinToString("&") { (key, value) ->
+                "$key=${URLEncoder.encode(value, "UTF-8")}"
+            }
+            val connection = (URL("https://lrclib.net/api/get?$query").openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000
+                readTimeout = 10_000
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("User-Agent", "SMP/$APP_VERSION")
+            }
+            if (connection.responseCode !in 200..299) return@runCatching null
+            val body = connection.inputStream.bufferedReader().use { it.readText() }
+            JSONObject(body).optString("syncedLyrics")
+                .takeIf { it.isNotBlank() && Regex("""\[\d{1,2}:\d{2}""").containsMatchIn(it) }
+        }.onFailure {
+            Log.w(TAG, "LrcLib match failed: ${track.title}", it)
+        }.getOrNull()
+    }
+
+    private fun saveLrcLibLyrics(track: Track, lyrics: String): String {
+        val dir = File(getExternalFilesDir(null) ?: filesDir, "lrc").apply { mkdirs() }
+        val file = File(dir, safeFileName("${track.artist} - ${track.title}-${track.id.hashCode()}.lrc"))
+        file.writeText(lyrics, Charsets.UTF_8)
+        return Uri.fromFile(file).toString()
     }
 
     private fun queueForCurrentView(): List<Track> {
@@ -3787,6 +3877,29 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         notificationManager.notify(DOWNLOAD_NOTIFICATION_ID, notification)
     }
 
+    private fun updateLyricsNotification(title: String, progress: Int, max: Int, matched: Int) {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val notification = Notification.Builder(this, DOWNLOAD_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_music_disc)
+            .setContentTitle(title)
+            .setContentText("已处理 $progress / $max，匹配 $matched 首")
+            .setProgress(max.coerceAtLeast(1), progress.coerceAtLeast(0), false)
+            .setOngoing(true)
+            .build()
+        notificationManager.notify(LYRICS_NOTIFICATION_ID, notification)
+    }
+
+    private fun finishLyricsNotification(title: String, matched: Int, max: Int) {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val notification = Notification.Builder(this, DOWNLOAD_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_music_disc)
+            .setContentTitle(title)
+            .setContentText("匹配 $matched / $max 首")
+            .setAutoCancel(true)
+            .build()
+        notificationManager.notify(LYRICS_NOTIFICATION_ID, notification)
+    }
+
     private fun openConfigExport() {
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             type = "application/json"
@@ -4267,8 +4380,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val DOWNLOAD_CHANNEL_ID = "downloads"
         private const val NOTIFICATION_ID = 11
         private const val DOWNLOAD_NOTIFICATION_ID = 21
+        private const val LYRICS_NOTIFICATION_ID = 31
         private const val TAG = "SMP"
-        private const val APP_VERSION = "1.4.3"
+        private const val APP_VERSION = "1.4.4"
         private const val REPO_URL = "https://github.com/SuperMite233/Simple-Music-Player"
         private const val ISSUES_URL = "$REPO_URL/issues"
         private const val RELEASES_URL = "$REPO_URL/releases"
