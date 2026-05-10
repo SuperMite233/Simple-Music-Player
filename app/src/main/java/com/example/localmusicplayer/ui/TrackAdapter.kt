@@ -2,6 +2,7 @@
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
@@ -153,14 +154,47 @@ class TrackAdapter(
             }
             return
         }
-        val file = track.artworkPath.takeIf { it.isNotBlank() }?.let { File(it) }
-        val bitmap = file?.takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.absolutePath) }
+        val bitmap = decodeArtworkPath(track.artworkPath) ?: siblingArtworkFile(track)?.let { BitmapFactory.decodeFile(it.absolutePath) }
         if (bitmap != null) {
             imageView.setImageBitmap(bitmap)
         } else {
             imageView.setImageResource(R.drawable.ic_cover_placeholder)
             imageView.setBackgroundColor(Palette.PANEL_ALT)
         }
+    }
+
+    private fun decodeArtworkPath(path: String): android.graphics.Bitmap? {
+        if (path.isBlank() || path.startsWith("http://") || path.startsWith("https://")) return null
+        return runCatching {
+            if (path.startsWith("content://")) {
+                context.contentResolver.openInputStream(Uri.parse(path))?.use { BitmapFactory.decodeStream(it) }
+            } else {
+                File(path).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.absolutePath) }
+            }
+        }.getOrNull()
+    }
+
+    private fun siblingArtworkFile(track: Track): File? {
+        val dir = localTrackFile(track)?.parentFile ?: return null
+        val images = dir.listFiles { file ->
+            file.isFile && file.extension.lowercase() in setOf("jpg", "jpeg", "png", "webp")
+        }?.toList().orEmpty()
+        if (images.isEmpty()) return null
+        val preferredNames = listOf("cover", "folder", "album", "front")
+        return images.minWithOrNull(
+            compareBy<File> { file ->
+                val name = file.nameWithoutExtension.lowercase()
+                preferredNames.indexOfFirst { name.contains(it) }.takeIf { it >= 0 } ?: preferredNames.size
+            }.thenBy { it.name.lowercase() }
+        )
+    }
+
+    private fun localTrackFile(track: Track): File? {
+        val candidates = mutableListOf<String>()
+        if (track.uri.startsWith("file://")) Uri.parse(track.uri).path?.let { candidates += it }
+        if (track.sourcePath.startsWith("file://")) Uri.parse(track.sourcePath).path?.let { candidates += it }
+        if (track.sourcePath.startsWith("/") || track.sourcePath.matches(Regex("""^[A-Za-z]:[\\/].*"""))) candidates += track.sourcePath
+        return candidates.asSequence().map { File(it) }.firstOrNull { it.exists() }
     }
 
     private data class Holder(

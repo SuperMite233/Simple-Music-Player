@@ -154,6 +154,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var streamSource: StreamSource? = null
     private var dizzylabQuery: String = ""
     private var dizzylabVisibleAlbumCount: Int = 40
+    private var pendingStreamScrollY: Int = -1
     private var dizzylabAlbums: List<StreamAlbum> = emptyList()
     private var openedDizzylabAlbum: StreamAlbumDetails? = null
     private var pendingStreamDownloadAfterFolder: (() -> Unit)? = null
@@ -229,7 +230,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             if (selectionMode) toggleSelection(track) else playTrack(track, queueForCurrentView())
         }
         trackAdapter.onTrackLongClick = { track, position -> enterSelectionMode(track, (position - 3).coerceAtLeast(0), 0) }
-        playlistAdapter = PlaylistAdapter(this) { trackId -> allTracks.firstOrNull { it.id == trackId }?.artworkPath }
+        playlistAdapter = PlaylistAdapter(this) { trackId -> allTracks.firstOrNull { it.id == trackId }?.let { resolvedArtworkPath(it) } }
         audioManager = getSystemService(AudioManager::class.java)
         notificationManager = getSystemService(NotificationManager::class.java)
         mediaSession = MediaSession(this, "SMP").apply {
@@ -1017,6 +1018,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             }
             if (filteredAlbums.size > dizzylabVisibleAlbumCount) {
                 box.addView(actionButton("加载更多（${dizzylabVisibleAlbumCount}/${filteredAlbums.size}）") {
+                    pendingStreamScrollY = scroll.scrollY
                     dizzylabVisibleAlbumCount += 40
                     render(Page.STREAMING)
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
@@ -1037,6 +1039,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         scroll.addView(box)
         content.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        if (pendingStreamScrollY >= 0) {
+            val restoreY = pendingStreamScrollY
+            pendingStreamScrollY = -1
+            scroll.post { scroll.scrollTo(0, restoreY) }
+        }
         setStatus("流媒体模式")
     }
 
@@ -1293,7 +1300,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(8), dp(18), dp(8))
         }
-        box.addView(settingCard("版本号", "1.4"))
+        box.addView(settingCard("版本号", "1.4.1"))
         box.addView(settingCard("软件作者", "SuperMite"))
         box.addView(settingCard("构建提醒", "本软件使用 ChatGPT 辅助构建；音乐格式转换功能的 NCM 解密核心参考并移植自 MIT 许可项目 NCMConverter4a（https://github.com/cdb96/NCMConverter4a）。"))
         box.addView(settingCard("软件介绍", readBundledReadme()))
@@ -2743,9 +2750,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun updateMediaSessionMetadata(track: Track) {
         if (!::mediaSession.isInitialized) return
-        val artwork = track.artworkPath.takeIf { it.isNotBlank() }?.let { File(it) }?.takeIf { it.exists() }?.let {
-            BitmapFactory.decodeFile(it.absolutePath)
-        }
+        val artwork = decodeArtworkPath(resolvedArtworkPath(track))
         mediaSession.setMetadata(
             MediaMetadata.Builder()
                 .putString(MediaMetadata.METADATA_KEY_TITLE, displayTitle(track))
@@ -2798,14 +2803,53 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             loadRemoteImage(track.artworkPath, target)
             return
         }
-        val file = track.artworkPath.takeIf { it.isNotBlank() }?.let { File(it) }
-        val bitmap = file?.takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.absolutePath) }
+        val bitmap = decodeArtworkPath(track.artworkPath) ?: siblingArtworkFile(track)?.let { BitmapFactory.decodeFile(it.absolutePath) }
         if (bitmap != null) {
             target.setImageBitmap(bitmap)
         } else {
             target.setImageResource(R.drawable.ic_cover_placeholder)
             target.setBackgroundColor(Palette.PANEL_ALT)
         }
+    }
+
+    private fun resolvedArtworkPath(track: Track): String {
+        val explicit = track.artworkPath.takeIf { it.isNotBlank() }
+        if (explicit != null && (explicit.startsWith("content://") || File(explicit).exists())) return explicit
+        return siblingArtworkFile(track)?.absolutePath.orEmpty()
+    }
+
+    private fun decodeArtworkPath(path: String): android.graphics.Bitmap? {
+        if (path.isBlank() || path.startsWith("http://") || path.startsWith("https://")) return null
+        return runCatching {
+            if (path.startsWith("content://")) {
+                contentResolver.openInputStream(Uri.parse(path))?.use { BitmapFactory.decodeStream(it) }
+            } else {
+                File(path).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.absolutePath) }
+            }
+        }.getOrNull()
+    }
+
+    private fun siblingArtworkFile(track: Track): File? {
+        val dir = localTrackFile(track)?.parentFile ?: return null
+        val images = dir.listFiles { file ->
+            file.isFile && file.extension.lowercase(Locale.ROOT) in setOf("jpg", "jpeg", "png", "webp")
+        }?.toList().orEmpty()
+        if (images.isEmpty()) return null
+        val preferredNames = listOf("cover", "folder", "album", "front")
+        return images.minWithOrNull(
+            compareBy<File> { file ->
+                val name = file.nameWithoutExtension.lowercase(Locale.ROOT)
+                preferredNames.indexOfFirst { name.contains(it) }.takeIf { it >= 0 } ?: preferredNames.size
+            }.thenBy { it.name.lowercase(Locale.ROOT) }
+        )
+    }
+
+    private fun localTrackFile(track: Track): File? {
+        val candidates = mutableListOf<String>()
+        if (track.uri.startsWith("file://")) Uri.parse(track.uri).path?.let { candidates += it }
+        if (track.sourcePath.startsWith("file://")) Uri.parse(track.sourcePath).path?.let { candidates += it }
+        if (track.sourcePath.startsWith("/") || track.sourcePath.matches(Regex("""^[A-Za-z]:[\\/].*"""))) candidates += track.sourcePath
+        return candidates.asSequence().map { File(it) }.firstOrNull { it.exists() }
     }
 
     private fun loadRemoteImage(url: String, target: ImageView) {
@@ -3496,7 +3540,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 uri = uri,
                 album = details.album.title,
                 artist = track.artist.ifBlank { details.circle },
-                sourcePath = fileName,
+                sourcePath = uri,
                 artworkPath = coverPath
             )
         }.onFailure {
@@ -3609,7 +3653,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun addDownloadedTracksToLibrary(downloaded: List<Track>, details: StreamAlbumDetails) {
         if (downloaded.isEmpty()) return
         runOnUiThread {
-            allTracks = (allTracks + downloaded).distinctBy { it.id }.sortedWith(MusicScanner.trackComparator)
+            val albumCoverPath = downloaded.firstOrNull { it.artworkPath.isNotBlank() }?.artworkPath.orEmpty()
+            val normalized = downloaded.map { track ->
+                if (track.artworkPath.isBlank() && albumCoverPath.isNotBlank()) track.copy(artworkPath = albumCoverPath) else track
+            }
+            allTracks = (allTracks + normalized).distinctBy { it.id }.sortedWith(MusicScanner.trackComparator)
             store.saveTracks(allTracks)
             store.createAlbumPlaylistsIfNeeded(allTracks)
             store.saveAlbumPlaylistMeta(details.album.title, details.description, details.tags)

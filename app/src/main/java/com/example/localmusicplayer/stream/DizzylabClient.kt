@@ -43,10 +43,7 @@ class DizzylabClient(private val cookie: String) {
             val start = purchasedHtml.lastIndexOf("<div", match.range.first).takeIf { it >= 0 } ?: match.range.first
             val end = hrefMatches.getOrNull(index + 1)?.range?.first ?: (match.range.first + 5000).coerceAtMost(purchasedHtml.length)
             val block = purchasedHtml.substring(start, end.coerceAtMost(purchasedHtml.length))
-            val title = Regex("""\btitle=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-                .find(block)?.groupValues?.getOrNull(1)?.cleanText()
-                .orEmpty()
-                .ifBlank { albumTitle(block, href) }
+            val title = parsedAlbumTitle(block, href)
             if (!isAlbumTitle(title)) return@mapIndexedNotNull null
             StreamAlbum(
                 id = href,
@@ -71,7 +68,7 @@ class DizzylabClient(private val cookie: String) {
                 }
                 StreamAlbum(
                     id = absoluteUrl(match.groupValues[1]),
-                    title = match.groupValues[3].cleanText(),
+                    title = parsedAlbumTitle(match.value, absoluteUrl(match.groupValues[1])).ifBlank { match.groupValues[3].cleanText() },
                     url = absoluteUrl(match.groupValues[1]),
                     coverUrl = cover
                 )
@@ -87,7 +84,7 @@ class DizzylabClient(private val cookie: String) {
                 val href = absoluteUrl(match.groupValues[2])
                 if (!isAlbumUrl(href)) return@mapNotNull null
                 val block = match.groupValues[4]
-                val title = albumTitle(block, href)
+                val title = parsedAlbumTitle(block, href)
                 if (!isAlbumTitle(title)) return@mapNotNull null
                 val cover = firstImageUrl(block)
                 StreamAlbum(
@@ -301,6 +298,35 @@ class DizzylabClient(private val cookie: String) {
         return blocked.none { path.contains(it) }
     }
 
+    private fun parsedAlbumTitle(block: String, href: String): String {
+        val target = absoluteUrl(href)
+        val candidates = mutableListOf<String>()
+        Regex("""<a\b([^>]*)href=["']([^"']+)["']([^>]*)>(.*?)</a>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+            .findAll(block)
+            .filter { absoluteUrl(it.groupValues[2]) == target }
+            .forEach { link ->
+                attrValue(link.groupValues[1] + " " + link.groupValues[3], "title")?.let { candidates += it }
+                candidates += link.groupValues[4]
+            }
+        candidates += stripTags(block)
+        candidates += Uri.parse(href).lastPathSegment.orEmpty()
+        return candidates
+            .map { albumTitleCandidate(it) }
+            .firstOrNull { isAlbumTitle(it) }
+            .orEmpty()
+    }
+
+    private fun albumTitleCandidate(value: String): String {
+        return stripTags(value)
+            .cleanText()
+            .replace(Regex("""^[▶\s]+"""), "")
+            .substringBefore("购买于")
+            .substringBefore("璐拱浜")
+            .replace(Regex("""@\S+\s*$"""), "")
+            .replace(Regex("""\b\d{4}-\d{1,2}-\d{1,2}\b"""), "")
+            .cleanText()
+    }
+
     private fun albumTitle(block: String, href: String): String {
         val imageTitle = Regex("""<img\b[^>]*(?:alt|title)=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
             .find(block)?.groupValues?.getOrNull(1).orEmpty()
@@ -313,6 +339,9 @@ class DizzylabClient(private val cookie: String) {
 
     private fun isAlbumTitle(title: String): Boolean {
         if (title.isBlank()) return false
+        if (title.contains("这是一张Hi-Res专辑", ignoreCase = true)) return false
+        if (title.contains("Hi-Res专辑", ignoreCase = true) && title.length <= 24) return false
+        if (title.contains("This is a Hi-Res album", ignoreCase = true)) return false
         val blocked = listOf("个人信息", "我的关注", "全部订单", "收件箱", "退出登录", "首页", "社团", "兑换", "设置", "搜索", "repo", "DEF")
         return blocked.none { title.contains(it, ignoreCase = true) }
     }
@@ -434,7 +463,7 @@ class DizzylabClient(private val cookie: String) {
 
     companion object {
         private const val BASE = "https://www.dizzylab.net"
-        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android) SMP/1.4"
+        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android) SMP/1.4.1"
     }
 }
 

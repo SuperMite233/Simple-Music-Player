@@ -2,6 +2,7 @@
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -82,14 +83,25 @@ class PlaylistAdapter(
 
     private fun loadArtwork(playlist: Playlist, imageView: ImageView) {
         val firstTrackId = playlist.trackIds.firstOrNull()
-        val file = firstTrackId?.let(artworkProvider)?.takeIf { it.isNotBlank() }?.let { File(it) }
-        val bitmap = file?.takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.absolutePath) }
+        val path = firstTrackId?.let(artworkProvider).orEmpty()
+        val bitmap = decodeArtworkPath(path)
         if (bitmap != null) {
             imageView.setImageBitmap(bitmap)
         } else {
             imageView.setImageResource(R.drawable.ic_cover_placeholder)
             imageView.setBackgroundColor(Palette.PANEL_ALT)
         }
+    }
+
+    private fun decodeArtworkPath(path: String): android.graphics.Bitmap? {
+        if (path.isBlank()) return null
+        return runCatching {
+            if (path.startsWith("content://")) {
+                context.contentResolver.openInputStream(Uri.parse(path))?.use { BitmapFactory.decodeStream(it) }
+            } else {
+                File(path).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.absolutePath) }
+            }
+        }.getOrNull()
     }
 
     private data class Holder(val thumb: ImageView, val title: TextView, val meta: TextView)

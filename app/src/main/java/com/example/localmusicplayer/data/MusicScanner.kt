@@ -156,11 +156,14 @@ class MusicScanner(private val context: Context) {
 
     private fun buildTracksFromDocuments(documents: List<DocumentItem>): List<Track> {
         val lyricsByBaseName = documents.filter { it.isLyrics }.associate { baseName(it.name) to it.uri.toString() }
+        val artworkByFolder = documents.filter { it.isImage }
+            .groupBy { it.relativePath }
+            .mapValues { (_, images) -> preferredArtwork(images)?.uri?.toString().orEmpty() }
         val audioByFileName = mutableMapOf<String, Track>()
         val tracks = documents
             .filter { it.isAudio }
             .map { item ->
-                buildTrackFromDocument(item, lyricsByBaseName).also { track ->
+                buildTrackFromDocument(item, lyricsByBaseName, artworkByFolder[item.relativePath].orEmpty()).also { track ->
                     audioByFileName[item.name.lowercase(Locale.ROOT)] = track
                 }
             }
@@ -173,7 +176,7 @@ class MusicScanner(private val context: Context) {
         return tracks.distinctBy { it.id }.sortedWith(trackComparator)
     }
 
-    private fun buildTrackFromDocument(item: DocumentItem, lyricsByBaseName: Map<String, String>): Track {
+    private fun buildTrackFromDocument(item: DocumentItem, lyricsByBaseName: Map<String, String>, folderArtworkUri: String): Track {
         val id = "doc:${item.uri}"
         val metadata = readMetadata(item.uri, id)
         val fallbackTitle = item.name.substringBeforeLast('.')
@@ -189,7 +192,18 @@ class MusicScanner(private val context: Context) {
             mimeType = item.mimeType,
             sourcePath = listOf(item.relativePath, item.name).filter { it.isNotBlank() }.joinToString("/"),
             lyricsUri = lyricsByBaseName[baseName(item.name)].orEmpty(),
-            artworkPath = metadata.artworkPath
+            artworkPath = metadata.artworkPath.ifBlank { folderArtworkUri }
+        )
+    }
+
+    private fun preferredArtwork(images: List<DocumentItem>): DocumentItem? {
+        if (images.isEmpty()) return null
+        val preferredNames = listOf("cover", "folder", "album", "front")
+        return images.minWithOrNull(
+            compareBy<DocumentItem> { item ->
+                val name = item.name.substringBeforeLast('.').lowercase(Locale.ROOT)
+                preferredNames.indexOfFirst { name.contains(it) }.takeIf { it >= 0 } ?: preferredNames.size
+            }.thenBy { it.name.lowercase(Locale.ROOT) }
         )
     }
 
@@ -317,6 +331,7 @@ class MusicScanner(private val context: Context) {
         val extension: String = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
         val isCue: Boolean = extension == "cue"
         val isLyrics: Boolean = extension == "lrc"
+        val isImage: Boolean = extension in setOf("jpg", "jpeg", "png", "webp")
         val isAudio: Boolean = mimeType.startsWith("audio/") || extension in audioExtensions
     }
 
