@@ -59,6 +59,8 @@ import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import com.supermite.smp.conversion.AudioMetadataUpdate
+import com.supermite.smp.conversion.AudioMetadataWriter
 import com.supermite.smp.conversion.NcmConverter
 import com.supermite.smp.data.LibraryStore
 import com.supermite.smp.data.MusicScanner
@@ -180,6 +182,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var openedDizzylabAlbum: StreamAlbumDetails? = null
     private var pendingStreamDownloadAfterFolder: (() -> Unit)? = null
     private var nowPageLyrics: TextView? = null
+    private var nowPageLyricsScroll: ScrollView? = null
+    private var nowPageLyricsBox: LinearLayout? = null
+    private var nowPlayingArtworkHidden: Boolean = false
+    private var lastLyricsUserInteractionAt: Long = 0L
     private var pendingRestoreTrackId: String? = null
     private var pendingRestoreSeekMs: Long = -1L
     private var pendingRestoreShouldPlay: Boolean = false
@@ -194,6 +200,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var equalizerLevels: MutableList<Int> = MutableList(5) { 0 }
     private val equalizerPresets = mutableMapOf("默认" to List(5) { 0 })
     private val lyricsCache = mutableMapOf<String, List<LyricLine>>()
+    private var pendingMetadataCoverTrackId: String = ""
+    private var pendingMetadataCoverUri: String = ""
+    private var pendingMetadataCoverLabel: TextView? = null
     private val imageExecutor = Executors.newFixedThreadPool(3)
     private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { change ->
         runOnUiThread { handleAudioFocusChange(change) }
@@ -397,6 +406,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 profileAvatarUri = uri.toString()
                 saveSettings()
                 rebuildShell(Page.SETTINGS)
+            }
+            REQUEST_METADATA_COVER -> data.data?.let { uri ->
+                persistUriPermission(uri, data.flags)
+                pendingMetadataCoverUri = uri.toString()
+                pendingMetadataCoverLabel?.text = "已选择封面：${queryDisplayName(uri)}"
             }
             REQUEST_STREAM_DOWNLOAD_DIR -> data.data?.let { uri ->
                 persistUriPermission(uri, data.flags)
@@ -1235,20 +1249,47 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
         }
-        val art = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
+        val artFrame = FrameLayout(this).apply {
             background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
         }
+        val art = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            visibility = if (nowPlayingArtworkHidden) View.GONE else View.VISIBLE
+        }
         attachArtworkSwipe(
-            art,
+            artFrame,
             onLeft = { playNextOrFirst() },
             onRight = { playPreviousOrFirst() },
             onUp = { showCurrentQueueDialog() },
             onDown = { showTrackDetailsDialog(track) },
-            onDoubleTap = { toggleFavoriteFromArtwork(track) }
+            onSingleTap = {
+                nowPlayingArtworkHidden = !nowPlayingArtworkHidden
+                render(Page.NOW_PLAYING)
+            },
+            onDoubleTap = {
+                if (nowPlayingArtworkHidden) seekToVisibleLyric(track) else toggleFavoriteFromArtwork(track)
+            }
         )
         loadArtwork(track, art)
-        box.addView(art, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(320)))
+        artFrame.addView(art, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        nowPageLyricsScroll = ScrollView(this).apply {
+            visibility = if (nowPlayingArtworkHidden) View.VISIBLE else View.GONE
+            isFillViewport = true
+            setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_DOWN || event.actionMasked == MotionEvent.ACTION_MOVE) {
+                    lastLyricsUserInteractionAt = System.currentTimeMillis()
+                }
+                false
+            }
+        }
+        nowPageLyricsBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(8), dp(14), dp(8), dp(14))
+        }
+        nowPageLyricsScroll?.addView(nowPageLyricsBox, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        artFrame.addView(nowPageLyricsScroll, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        box.addView(artFrame, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(320)))
         box.addView(TextView(this).apply {
             text = displayTitle(track)
             titleStyle(22f)
@@ -1283,22 +1324,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         controls.addView(iconActionButton("菜单", R.drawable.ic_menu) { showNowPlayingMenu(track) }, weightedParams())
         box.addView(controls)
 
-        box.addView(TextView(this).apply {
-            text = "歌词"
-            titleStyle(17f)
-            setPadding(0, dp(18), 0, dp(8))
-        })
-        nowPageLyrics = TextView(this).apply {
-            text = lyricTextAt(track, playbackPositionMs)
-            bodyStyle(15f, Palette.TEXT)
-            gravity = Gravity.CENTER
-            setLineSpacing(dp(4).toFloat(), 1.0f)
-            setPadding(dp(8), dp(12), dp(8), dp(12))
-            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
-        }
-        box.addView(nowPageLyrics, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         scroll.addView(box)
         content.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        updateLyricView(track)
         updateSeek(nowPageSeek, nowPageTime)
         setStatus("正在播放：${displayTitle(track)}")
     }
@@ -2680,7 +2708,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         val playlist = openedPlaylist
         val favoriteText = if (store.isFavorite(track.id)) "取消喜欢" else "加入我喜欢的音乐"
-        val actions = mutableListOf("播放", favoriteText, "加入播放列表", "匹配歌词", "编辑音乐信息")
+        val actions = mutableListOf("播放", favoriteText, "加入播放列表", "匹配歌词", "编辑音乐信息", "编辑音频元数据")
         if (playlist != null && playlist.canManuallyEditTracks()) actions.add("从当前播放列表移除")
         dialogBuilder()
             .setTitle(displayTitle(track))
@@ -2698,6 +2726,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                     "加入播放列表" -> showAddToPlaylistDialog(track)
                     "匹配歌词" -> matchLyricsForTracks(listOf(track), "歌词匹配")
                     "编辑音乐信息" -> showEditDialog(track)
+                    "编辑音频元数据" -> showAudioMetadataEditDialog(track)
                     "从当前播放列表移除" -> {
                         store.removeFromPlaylist(playlist!!.id, track.id)
                         openedPlaylist = store.visiblePlaylists(store.history.map { it.trackId }).firstOrNull { it.id == playlist.id }
@@ -2879,6 +2908,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun showNowPlayingMenu(track: Track) {
         val items = arrayOf(
             "编辑音乐信息",
+            "编辑音频元数据",
             "播放模式",
             "播放倍速",
             "正在播放列表",
@@ -2896,6 +2926,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 dialog.dismiss()
                 when (item) {
                     "编辑音乐信息" -> showEditDialog(track)
+                    "编辑音频元数据" -> showAudioMetadataEditDialog(track)
                     "播放模式" -> showPlaybackModeDialog()
                     "播放倍速" -> showSpeedDialog()
                     "正在播放列表" -> showCurrentQueueDialog()
@@ -2915,7 +2946,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             "音量调节" -> R.drawable.ic_volume
             "正在播放列表" -> R.drawable.ic_musiclist
             "收藏到歌单" -> R.drawable.ic_collection
-            "编辑音乐信息", "歌曲详细信息" -> R.drawable.ic_menu
+            "编辑音乐信息", "编辑音频元数据", "歌曲详细信息" -> R.drawable.ic_menu
             "播放倍速" -> R.drawable.ic_loop
             else -> R.drawable.ic_menu
         }
@@ -3195,6 +3226,107 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .show()
     }
 
+    private fun showAudioMetadataEditDialog(track: Track) {
+        if (track.id.startsWith("stream:") || track.isCueTrack) {
+            Toast.makeText(this, "串流或 CUE 分轨不能直接编辑源文件元数据。", Toast.LENGTH_LONG).show()
+            return
+        }
+        val sourceFile = localTrackFile(track)
+        if (sourceFile == null || !sourceFile.canWrite()) {
+            Toast.makeText(this, "无法直接写入该音频文件，请确认文件路径和文件管理权限。", Toast.LENGTH_LONG).show()
+            return
+        }
+        pendingMetadataCoverTrackId = track.id
+        pendingMetadataCoverUri = ""
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(8), dp(18), dp(2))
+        }
+        val artist = dialogInput("歌手", track.artist)
+        val composer = dialogInput("作曲", track.composer)
+        val year = dialogInput("年份", track.year.takeIf { it > 0 }?.toString().orEmpty())
+        val lyrics = dialogInput("歌词", scanner.readText(track.lyricsUri).orEmpty()).apply {
+            minLines = 3
+            maxLines = 6
+            setSingleLine(false)
+        }
+        val album = dialogInput("专辑", track.album)
+        val coverLabel = TextView(this).apply {
+            text = "封面：${if (track.artworkPath.isBlank()) "未选择" else "保留当前封面"}"
+            bodyStyle(13f, Palette.MUTED)
+            setPadding(0, dp(8), 0, dp(8))
+        }
+        pendingMetadataCoverLabel = coverLabel
+        box.addView(artist)
+        box.addView(composer)
+        box.addView(year)
+        box.addView(lyrics)
+        box.addView(album)
+        box.addView(coverLabel)
+        box.addView(actionButton("选择封面图片") {
+            pendingMetadataCoverTrackId = track.id
+            pendingMetadataCoverLabel = coverLabel
+            openMetadataCoverPicker()
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)))
+        dialogBuilder()
+            .setTitle("编辑音频元数据")
+            .setView(box)
+            .setPositiveButton("写入") { _, _ ->
+                writeAudioMetadata(
+                    track,
+                    sourceFile,
+                    AudioMetadataUpdate(
+                        title = track.displayTitle,
+                        artist = artist.text.toString().trim(),
+                        composer = composer.text.toString().trim(),
+                        year = year.text.toString().trim(),
+                        lyrics = lyrics.text.toString(),
+                        album = album.text.toString().trim(),
+                        coverBytes = pendingMetadataCoverUri.takeIf { pendingMetadataCoverTrackId == track.id && it.isNotBlank() }
+                            ?.let { uri -> contentResolver.openInputStream(Uri.parse(uri))?.use { it.readBytes() } }
+                    )
+                )
+            }
+            .setNegativeButton("取消", null)
+            .setOnDismissListener {
+                pendingMetadataCoverLabel = null
+            }
+            .show()
+    }
+
+    private fun writeAudioMetadata(track: Track, file: File, update: AudioMetadataUpdate) {
+        Thread {
+            val result = AudioMetadataWriter().write(file, update)
+            runOnUiThread {
+                if (result.success) {
+                    val updated = track.copy(
+                        artist = update.artist.ifBlank { track.artist },
+                        composer = update.composer.ifBlank { track.composer },
+                        year = update.year.toIntOrNull() ?: track.year,
+                        album = update.album.ifBlank { track.album }
+                    )
+                    replaceTrackInMemory(updated)
+                    Toast.makeText(this, listOf("元数据已写入", result.warnings.joinToString("；")).filter { it.isNotBlank() }.joinToString("："), Toast.LENGTH_LONG).show()
+                    renderIfLibraryVisible()
+                    if (page == Page.NOW_PLAYING) render(Page.NOW_PLAYING)
+                } else {
+                    Toast.makeText(this, "元数据写入失败：${result.warnings.joinToString("；")}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun replaceTrackInMemory(updated: Track) {
+        allTracks = allTracks.map { if (it.id == updated.id) updated else it }.sortedWith(MusicScanner.trackComparator)
+        visibleTracks = visibleTracks.map { if (it.id == updated.id) updated else it }
+        currentQueue = currentQueue.map { if (it.id == updated.id) updated else it }
+        store.saveTracks(allTracks)
+        if (currentIndex in currentQueue.indices && currentQueue[currentIndex].id == updated.id) {
+            updateMediaSessionMetadata(updated)
+            updatePlaybackNotification()
+        }
+    }
+
     private fun updateNowPlayingViews(track: Track) {
         miniTitle.text = displayTitle(track)
         miniMeta.text = listOf(track.displayArtist, track.displayAlbum, if (track.hasLyrics) "歌词" else "").filter { it.isNotBlank() }.joinToString(" · ")
@@ -3310,6 +3442,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         return candidates.asSequence().map { File(it) }.firstOrNull { it.exists() }
     }
 
+    private fun queryDisplayName(uri: Uri): String {
+        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) return cursor.getString(0).orEmpty()
+        }
+        return uri.lastPathSegment?.substringAfterLast('/') ?: "image"
+    }
+
     private fun loadRemoteImage(url: String, target: ImageView) {
         if (url.isBlank()) return
         val expected = url
@@ -3334,8 +3473,97 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun updateLyricView(track: Track?) {
-        if (track == null || nowPageLyrics == null) return
-        nowPageLyrics?.text = lyricTextAt(track, playbackPositionMs)
+        if (track == null || nowPageLyricsBox == null) return
+        val box = nowPageLyricsBox ?: return
+        val lines = timedLyrics(track)
+        if (box.childCount == 0) {
+            if (track.lyricsUri.isBlank() || lines.isEmpty()) {
+                box.addView(TextView(this).apply {
+                    text = if (track.lyricsUri.isBlank()) "未找到配套歌词文件。" else "未检测到可按时间显示的 LRC 时间轴。"
+                    bodyStyle(16f, Palette.MUTED)
+                    gravity = Gravity.CENTER
+                    setPadding(dp(8), dp(108), dp(8), dp(108))
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            } else {
+                lines.forEachIndexed { index, line ->
+                    box.addView(TextView(this).apply {
+                        text = line.text
+                        tag = index
+                        bodyStyle(16f, Palette.MUTED)
+                        gravity = Gravity.CENTER
+                        setLineSpacing(dp(3).toFloat(), 1.0f)
+                        setPadding(dp(8), dp(7), dp(8), dp(7))
+                        attachLyricLineDoubleTap(this, line.timeMs)
+                    }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                }
+            }
+        }
+        if (lines.isEmpty()) return
+        val current = lines.indexOfLast { it.timeMs <= playbackPositionMs }.coerceAtLeast(0)
+        for (index in 0 until box.childCount) {
+            val child = box.getChildAt(index) as? TextView ?: continue
+            if (index == current) {
+                child.setTextColor(themeColor)
+                child.textSize = 18f
+                child.paint.isFakeBoldText = true
+            } else {
+                child.setTextColor(Palette.MUTED)
+                child.textSize = 16f
+                child.paint.isFakeBoldText = false
+            }
+        }
+        if (nowPlayingArtworkHidden && System.currentTimeMillis() - lastLyricsUserInteractionAt > 5_000L) {
+            scrollLyricsToIndex(current)
+        }
+    }
+
+    private fun attachLyricLineDoubleTap(view: TextView, timeMs: Long) {
+        var lastTapAt = 0L
+        view.setOnTouchListener { _, event ->
+            if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                lastLyricsUserInteractionAt = System.currentTimeMillis()
+            }
+            if (event.actionMasked == MotionEvent.ACTION_UP) {
+                val now = System.currentTimeMillis()
+                if (now - lastTapAt <= 320L) {
+                    player.seekTo(timeMs)
+                    playbackPositionMs = timeMs
+                    lastTapAt = 0L
+                } else {
+                    lastTapAt = now
+                }
+            }
+            true
+        }
+    }
+
+    private fun seekToVisibleLyric(track: Track) {
+        val lines = timedLyrics(track)
+        if (lines.isEmpty()) {
+            nowPlayingArtworkHidden = false
+            render(Page.NOW_PLAYING)
+            return
+        }
+        val scroll = nowPageLyricsScroll ?: return
+        val box = nowPageLyricsBox ?: return
+        val center = scroll.scrollY + scroll.height / 2
+        val best = (0 until box.childCount).minByOrNull { index ->
+            val child = box.getChildAt(index)
+            kotlin.math.abs((child.top + child.bottom) / 2 - center)
+        } ?: return
+        lines.getOrNull(best)?.let {
+            player.seekTo(it.timeMs)
+            playbackPositionMs = it.timeMs
+            lastLyricsUserInteractionAt = System.currentTimeMillis()
+        }
+    }
+
+    private fun scrollLyricsToIndex(index: Int) {
+        val scroll = nowPageLyricsScroll ?: return
+        val box = nowPageLyricsBox ?: return
+        val child = box.getChildAt(index) ?: return
+        val targetY = (child.top - scroll.height / 2 + child.height / 2).coerceAtLeast(0)
+        scroll.smoothScrollTo(0, targetY)
     }
 
     private fun updateFloatingLyrics() {
@@ -3878,6 +4106,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_previous_track), "上一首", playbackPendingIntent(ACTION_PREV)).build())
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, if (player.isPlaying()) R.drawable.ic_pause_circle else R.drawable.ic_play_block), playPause, playbackPendingIntent(ACTION_PLAY_PAUSE)).build())
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_next_track), "下一首", playbackPendingIntent(ACTION_NEXT)).build())
+            .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_musiclist), if (floatingLyricsEnabled) "关闭悬浮歌词" else "开启悬浮歌词", playbackPendingIntent(ACTION_TOGGLE_FLOATING_LYRICS)).build())
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_previous_track), "-10s", playbackPendingIntent(ACTION_REWIND)).build())
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_next_track), "+10s", playbackPendingIntent(ACTION_FORWARD)).build())
             .setStyle(Notification.MediaStyle().setMediaSession(mediaSession.sessionToken).setShowActionsInCompactView(0, 1, 2))
@@ -3910,10 +4139,21 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             ACTION_PREV -> playPreviousOrFirst()
             ACTION_NEXT -> playNextOrFirst()
             ACTION_PLAY_PAUSE -> toggleOrPlayFirst()
+            ACTION_TOGGLE_FLOATING_LYRICS -> toggleFloatingLyricsFromNotification()
             ACTION_REWIND -> player.seekTo((playbackPositionMs - 10_000L).coerceAtLeast(0L))
             ACTION_FORWARD -> player.seekTo((playbackPositionMs + 10_000L).coerceAtMost(playbackDurationMs))
         }
         updatePlaybackNotification()
+    }
+
+    private fun toggleFloatingLyricsFromNotification() {
+        floatingLyricsEnabled = !floatingLyricsEnabled
+        saveSettings()
+        if (floatingLyricsEnabled && !hasOverlayPermission()) {
+            floatingLyricsEnabled = false
+            saveSettings()
+        }
+        updateFloatingLyrics()
     }
 
     private fun handleMediaKey(keyCode: Int): Boolean {
@@ -4021,6 +4261,16 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         }
         startActivityForResult(intent, REQUEST_AVATAR)
+    }
+
+    private fun openMetadataCoverPicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            type = "image/*"
+            addCategory(Intent.CATEGORY_OPENABLE)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+        startActivityForResult(intent, REQUEST_METADATA_COVER)
     }
 
     private fun openStreamDownloadFolderPicker() {
@@ -4746,6 +4996,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         onRight: () -> Unit,
         onUp: () -> Unit,
         onDown: () -> Unit,
+        onSingleTap: () -> Unit,
         onDoubleTap: () -> Unit
     ) {
         var startX = 0f
@@ -4767,8 +5018,17 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                         lastTapAt = 0L
                         onDoubleTap()
                     } else {
-                        if (isTap) lastTapAt = now
-                        handleFourWaySwipe(startX, startY, event.x, event.y, onLeft, onRight, onUp, onDown)
+                        if (isTap) {
+                            lastTapAt = now
+                            view.postDelayed({
+                                if (lastTapAt == now) {
+                                    lastTapAt = 0L
+                                    onSingleTap()
+                                }
+                            }, 330L)
+                        } else {
+                            handleFourWaySwipe(startX, startY, event.x, event.y, onLeft, onRight, onUp, onDown)
+                        }
                     }
                     true
                 }
@@ -5033,6 +5293,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val REQUEST_AVATAR = 1009
         private const val REQUEST_STREAM_DOWNLOAD_DIR = 1010
         private const val REQUEST_STREAM_CACHE_DIR = 1011
+        private const val REQUEST_METADATA_COVER = 1012
         private const val NOTIFICATION_CHANNEL_ID = "playback"
         private const val DOWNLOAD_CHANNEL_ID = "downloads"
         private const val NOTIFICATION_ID = 11
@@ -5050,6 +5311,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val ACTION_PREV = "com.supermite.smp.PREV"
         private const val ACTION_NEXT = "com.supermite.smp.NEXT"
         private const val ACTION_PLAY_PAUSE = "com.supermite.smp.PLAY_PAUSE"
+        private const val ACTION_TOGGLE_FLOATING_LYRICS = "com.supermite.smp.TOGGLE_FLOATING_LYRICS"
         private const val ACTION_REWIND = "com.supermite.smp.REWIND"
         private const val ACTION_FORWARD = "com.supermite.smp.FORWARD"
     }

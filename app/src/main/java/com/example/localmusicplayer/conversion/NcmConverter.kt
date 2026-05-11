@@ -21,7 +21,7 @@ class NcmConverter(private val context: Context) {
             val metadata = readMetadata(stream)
             val format = metadata.optString("format").ifBlank { "mp3" }.lowercase()
             val title = metadata.optString("musicName").ifBlank { "converted_music" }
-            skipCover(stream)
+            val coverBytes = readCover(stream)
 
             val targetDir = (outputDir ?: File(context.getExternalFilesDir(null) ?: context.filesDir, "ConvertedMusic")).apply {
                 mkdirs()
@@ -37,6 +37,20 @@ class NcmConverter(private val context: Context) {
                     out.write(buffer, 0, read)
                 }
             }
+            val artists = metadata.optJSONArray("artist")?.let { array ->
+                (0 until array.length()).mapNotNull { index ->
+                    array.optJSONArray(index)?.optString(0)
+                }.filter { it.isNotBlank() }
+            }.orEmpty()
+            AudioMetadataWriter().write(
+                output,
+                AudioMetadataUpdate(
+                    title = title,
+                    artist = artists.joinToString(" / "),
+                    album = metadata.optString("album"),
+                    coverBytes = coverBytes
+                )
+            )
             return Result(output, title, format)
         }
     }
@@ -60,13 +74,14 @@ class NcmConverter(private val context: Context) {
         return JSONObject(jsonText)
     }
 
-    private fun skipCover(stream: InputStream) {
+    private fun readCover(stream: InputStream): ByteArray? {
         skipFully(stream, 5)
         val coverFrameLength = readLittleEndianInt(stream)
         val imageLength = readLittleEndianInt(stream)
-        skipFully(stream, imageLength)
+        val imageBytes = if (imageLength > 0) readExact(stream, imageLength) else ByteArray(0)
         val remaining = coverFrameLength - imageLength
         if (remaining > 0) skipFully(stream, remaining)
+        return imageBytes.takeIf { it.isNotEmpty() }
     }
 
     private fun aesDecrypt(key: ByteArray, data: ByteArray): ByteArray {
