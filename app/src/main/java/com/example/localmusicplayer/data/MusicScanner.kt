@@ -10,6 +10,7 @@ import android.provider.MediaStore
 import android.provider.OpenableColumns
 import org.json.JSONObject
 import java.io.File
+import java.net.URLConnection
 import java.text.Collator
 import java.util.Locale
 
@@ -44,16 +45,51 @@ class MusicScanner(private val context: Context) {
         return buildTracksFromDocuments(documents)
     }
 
+    fun scanFileDirectory(root: File): List<Track> {
+        if (!root.exists() || !root.isDirectory) return emptyList()
+        val documents = mutableListOf<DocumentItem>()
+        collectFileDocuments(root, root, documents)
+        return buildTracksFromDocuments(documents)
+    }
+
     fun readText(uriText: String): String? {
         val uri = runCatching { Uri.parse(uriText) }.getOrNull() ?: return null
         if (uriText.isBlank()) return null
         val bytes = runCatching {
-            resolver.openInputStream(uri)?.use { it.readBytes() }
+            if (uri.scheme == "file") {
+                uri.path?.let { File(it) }?.takeIf { it.isFile }?.readBytes()
+            } else {
+                resolver.openInputStream(uri)?.use { it.readBytes() }
+            }
         }.getOrNull() ?: return null
         val charsets = listOf(Charsets.UTF_8, charset("GB18030"), Charsets.ISO_8859_1)
         return charsets
             .mapNotNull { charset -> runCatching { String(bytes, charset) }.getOrNull() }
             .minByOrNull { text -> text.count { it == '\uFFFD' } }
+    }
+
+    private fun collectFileDocuments(root: File, current: File, documents: MutableList<DocumentItem>) {
+        if (!current.exists()) return
+        if (current.isDirectory) {
+            if (skipNoMediaFolders && File(current, ".nomedia").exists()) return
+            current.listFiles()?.sortedBy { it.name.lowercase(Locale.ROOT) }?.forEach { child ->
+                collectFileDocuments(root, child, documents)
+            }
+            return
+        }
+        val relativeDir = current.parentFile
+            ?.relativeToOrNull(root)
+            ?.path
+            ?.replace(File.separatorChar, '/')
+            .orEmpty()
+            .takeIf { it != "." }
+            .orEmpty()
+        documents += DocumentItem(
+            name = current.name,
+            uri = Uri.fromFile(current),
+            relativePath = relativeDir,
+            mimeType = URLConnection.guessContentTypeFromName(current.name).orEmpty()
+        )
     }
 
     private fun scanAudioCollection(lyricsByBaseName: Map<String, String>): List<Track> {

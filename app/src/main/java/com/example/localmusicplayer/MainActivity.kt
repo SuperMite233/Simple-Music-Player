@@ -8,6 +8,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
+import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.BitmapFactory
@@ -162,6 +163,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var backgroundImageUri: String = ""
     private var backgroundAlpha: Float = 0.35f
     private var skipNoMediaFolders: Boolean = false
+    private val extraScanFolderUris = mutableListOf<String>()
+    private val skippedScanFolderUris = mutableListOf<String>()
     private var libraryFiltersExpanded: Boolean = false
     private var profileName: String = "profile"
     private var profileAvatarUri: String = ""
@@ -456,6 +459,18 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             REQUEST_CONFIG_IMPORT -> data.data?.let { uri ->
                 persistUriPermission(uri, data.flags)
                 importConfigFrom(uri)
+            }
+            REQUEST_EXTRA_SCAN_DIR -> data.data?.let { uri ->
+                persistUriPermission(uri, data.flags)
+                addUniqueUri(extraScanFolderUris, uri.toString())
+                saveSettings()
+                showScanSettingsDialog()
+            }
+            REQUEST_SKIP_SCAN_DIR -> data.data?.let { uri ->
+                persistUriPermission(uri, data.flags)
+                addUniqueUri(skippedScanFolderUris, uri.toString())
+                saveSettings()
+                showScanSettingsDialog()
             }
         }
     }
@@ -1262,12 +1277,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             artFrame,
             onLeft = { playNextOrFirst() },
             onRight = { playPreviousOrFirst() },
-            onUp = { showCurrentQueueDialog() },
-            onDown = { showTrackDetailsDialog(track) },
-            onSingleTap = {
-                nowPlayingArtworkHidden = !nowPlayingArtworkHidden
-                render(Page.NOW_PLAYING)
-            },
+            onUp = {},
+            onDown = {},
+            onSingleTap = {},
             onDoubleTap = {
                 if (nowPlayingArtworkHidden) seekToVisibleLyric(track) else toggleFavoriteFromArtwork(track)
             }
@@ -1308,12 +1320,14 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         nowPageLyricsScroll?.addView(nowPageLyricsBox, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         artFrame.addView(nowPageLyricsScroll, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         box.addView(artFrame, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(320)))
-        box.addView(TextView(this).apply {
+        val titleView = TextView(this).apply {
             text = displayTitle(track)
             titleStyle(22f)
             gravity = Gravity.CENTER
             setPadding(0, dp(14), 0, dp(4))
-        })
+        }
+        attachNowPlayingBlankGestures(titleView, track)
+        box.addView(titleView)
         val metaRow = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -1321,6 +1335,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         metaRow.addView(nowPlayingMetaText(track.displayArtist) { jumpToLibrary(query = track.displayArtist) })
         metaRow.addView(nowPlayingMetaText(track.displayAlbum) { jumpToLibrary(query = track.displayAlbum) })
         box.addView(metaRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        val blankGestureArea = View(this).apply {
+            background = ColorDrawable(Color.TRANSPARENT)
+        }
+        attachNowPlayingBlankGestures(blankGestureArea, track)
+        box.addView(blankGestureArea, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(28)))
 
         nowPageSeek = buildSeekBar()
         nowPageTime = TextView(this).apply {
@@ -2183,16 +2202,63 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun showScanSettingsDialog() {
-        val labels = arrayOf("扫描时跳过含 .nomedia 的文件夹")
-        val checked = booleanArrayOf(skipNoMediaFolders)
-        dialogBuilder()
-            .setTitle("扫描设置")
-            .setMultiChoiceItems(labels, checked) { _, _, isChecked ->
-                skipNoMediaFolders = isChecked
-                scanner.skipNoMediaFolders = isChecked
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(8), dp(12), dp(4))
+        }
+        val noMedia = CheckBox(this).apply {
+            text = "扫描时跳过含 .nomedia 的文件夹"
+            isChecked = skipNoMediaFolders
+            bodyStyle(15f)
+            setOnCheckedChangeListener { _, checked ->
+                skipNoMediaFolders = checked
+                scanner.skipNoMediaFolders = checked
                 saveSettings()
             }
+        }
+        box.addView(noMedia)
+        box.addView(settingCard("媒体库：额外扫描文件夹", "已添加 ${extraScanFolderUris.size} 个文件夹；自动扫描时会一并扫描。") {
+            showScanFolderManager("额外扫描文件夹", extraScanFolderUris, REQUEST_EXTRA_SCAN_DIR)
+        })
+        box.addView(settingCard("媒体库：跳过文件夹", "已添加 ${skippedScanFolderUris.size} 个文件夹；自动扫描时会跳过。") {
+            showScanFolderManager("跳过文件夹", skippedScanFolderUris, REQUEST_SKIP_SCAN_DIR)
+        })
+        dialogBuilder()
+            .setTitle("扫描设置")
+            .setView(box)
             .setPositiveButton("完成") { _, _ -> render(Page.SETTINGS) }
+            .show()
+    }
+
+    private fun showScanFolderManager(title: String, folders: MutableList<String>, requestCode: Int) {
+        val labels = folders.mapIndexed { index, uri -> "${index + 1}. ${folderDisplayName(uri)}" }.toMutableList()
+        labels += "添加文件夹"
+        dialogBuilder()
+            .setTitle(title)
+            .setItems(labels.toTypedArray()) { _, which ->
+                if (which == folders.size) {
+                    openScanFolderPicker(requestCode)
+                } else {
+                    confirmRemoveScanFolder(title, folders, which)
+                }
+            }
+            .setNegativeButton("返回") { _, _ -> showScanSettingsDialog() }
+            .show()
+    }
+
+    private fun confirmRemoveScanFolder(title: String, folders: MutableList<String>, index: Int) {
+        val uri = folders.getOrNull(index) ?: return
+        dialogBuilder()
+            .setTitle("移除文件夹")
+            .setMessage(folderDisplayName(uri))
+            .setPositiveButton("移除") { _, _ ->
+                folders.removeAt(index)
+                saveSettings()
+                showScanFolderManager(title, folders, if (folders === extraScanFolderUris) REQUEST_EXTRA_SCAN_DIR else REQUEST_SKIP_SCAN_DIR)
+            }
+            .setNegativeButton("取消") { _, _ ->
+                showScanFolderManager(title, folders, if (folders === extraScanFolderUris) REQUEST_EXTRA_SCAN_DIR else REQUEST_SKIP_SCAN_DIR)
+            }
             .show()
     }
 
@@ -2252,14 +2318,57 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun scanMediaStore() {
-        setStatus("正在扫描系统音乐库、CUE、歌词和封面...")
+        setStatus("正在扫描系统音乐库、软件目录、CUE、歌词和封面...")
         Thread {
-            val scanned = runCatching { scanner.scanMediaStore() }.getOrElse {
+            val scanned = runCatching {
+                val result = mutableListOf<Track>()
+                result += scanner.scanMediaStore()
+                appScanRoots().forEach { root ->
+                    result += scanner.scanFileDirectory(root)
+                }
+                extraScanFolderUris
+                    .filterNot { skippedScanFolderUris.contains(it) }
+                    .forEach { uriText ->
+                        runCatching { result += scanner.scanDocumentTree(Uri.parse(uriText)) }
+                            .onFailure { Log.w(TAG, "Extra scan folder failed: $uriText", it) }
+                    }
+                filterSkippedTracks(result)
+                    .distinctBy { it.id }
+                    .sortedWith(MusicScanner.trackComparator)
+            }.getOrElse {
                 runOnUiThread { Toast.makeText(this, it.message ?: "扫描失败", Toast.LENGTH_SHORT).show() }
                 emptyList()
             }
             runOnUiThread { mergeScannedTracks(scanned, replace = true, source = "系统扫描") }
         }.start()
+    }
+
+    private fun appScanRoots(): List<File> {
+        return listOfNotNull(
+            filesDir,
+            getExternalFilesDir(null),
+            getExternalFilesDir(Environment.DIRECTORY_MUSIC),
+            getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+        ).distinctBy { it.absolutePath }.filter { it.exists() && it.isDirectory }
+    }
+
+    private fun filterSkippedTracks(tracks: List<Track>): List<Track> {
+        if (skippedScanFolderUris.isEmpty()) return tracks
+        val skippedPaths = skippedScanFolderUris.mapNotNull { uriText ->
+            val uri = runCatching { Uri.parse(uriText) }.getOrNull() ?: return@mapNotNull null
+            when (uri.scheme) {
+                "file" -> uri.path?.let { File(it).absolutePath }
+                else -> null
+            }
+        }
+        val skippedUriPrefixes = skippedScanFolderUris.filter { it.startsWith("content://") }
+        return tracks.filter { track ->
+            val local = localTrackFile(track)?.absolutePath.orEmpty()
+            val uri = track.uri
+            val source = track.sourcePath
+            skippedPaths.none { path -> local.startsWith(path) || source.startsWith(path) } &&
+                skippedUriPrefixes.none { prefix -> uri.startsWith(prefix) || source.startsWith(prefix) }
+        }
     }
 
     private fun showFirstLaunchDialogIfNeeded() {
@@ -2863,21 +2972,74 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun saveLrcLibLyrics(track: Track, lyrics: String): String {
         val fileName = safeFileName("${track.artist} - ${track.title}-${track.id.hashCode()}.lrc")
         val bytes = lyrics.toByteArray(Charsets.UTF_8)
-        if (outputDirectoryMode == OutputDirectoryMode.DOWNLOAD) {
-            return writeStreamDownloadBytes("smp", "lrc", fileName, "text/plain", bytes)
-        }
-        if (outputDirectoryMode == OutputDirectoryMode.SOURCE && hasAllFilesAccess()) {
-            val sourceDir = localTrackFile(track)?.parentFile
-            if (sourceDir != null && sourceDir.canWrite()) {
-                val file = File(sourceDir, fileName)
-                file.writeBytes(bytes)
-                return Uri.fromFile(file).toString()
+        return when (outputDirectoryMode) {
+            OutputDirectoryMode.DOWNLOAD -> writeDownloadOutputBytes("lrc", fileName, "text/plain", bytes)
+            OutputDirectoryMode.SOURCE -> {
+                val sourceDir = localTrackFile(track)?.parentFile
+                if (sourceDir != null && sourceDir.canWrite()) {
+                    val file = File(sourceDir, fileName)
+                    file.writeBytes(bytes)
+                    Uri.fromFile(file).toString()
+                } else {
+                    writeInternalOutputBytes("lrc", fileName, bytes)
+                }
             }
+            OutputDirectoryMode.INTERNAL -> writeInternalOutputBytes("lrc", fileName, bytes)
         }
-        val dir = File(getExternalFilesDir(null) ?: filesDir, "lrc").apply { mkdirs() }
+    }
+
+    private fun writeInternalOutputBytes(folder: String, fileName: String, bytes: ByteArray): String {
+        val dir = File(getExternalFilesDir(null) ?: filesDir, folder).apply { mkdirs() }
         val file = File(dir, fileName)
         file.writeBytes(bytes)
         return Uri.fromFile(file).toString()
+    }
+
+    private fun writeDownloadOutputBytes(folder: String, fileName: String, mimeType: String, bytes: ByteArray): String {
+        if (streamDownloadFolderUri.isNotBlank() && hasPersistedWritePermission(streamDownloadFolderUri)) {
+            return runCatching {
+                val root = Uri.parse(streamDownloadFolderUri)
+                val folderDir = findOrCreateDocumentDir(root, folder)
+                val fileUri = DocumentsContract.createDocument(contentResolver, folderDir, mimeType, fileName)
+                    ?: error("无法创建输出文件")
+                contentResolver.openOutputStream(fileUri)?.use { it.write(bytes) } ?: error("无法写入输出文件")
+                fileUri.toString()
+            }.getOrElse { error ->
+                Log.w(TAG, "Configured output folder write failed: $streamDownloadFolderUri", error)
+                writePublicDownloadOrInternal(folder, fileName, bytes)
+            }
+        }
+        return writePublicDownloadOrInternal(folder, fileName, bytes)
+    }
+
+    private fun writePublicDownloadOrInternal(folder: String, fileName: String, bytes: ByteArray): String {
+        if (Build.VERSION.SDK_INT >= 29) {
+            runCatching {
+                val values = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                    put(MediaStore.Downloads.RELATIVE_PATH, "Download/SMP/$folder")
+                    put(MediaStore.Downloads.IS_PENDING, 1)
+                }
+                val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: error("无法创建下载目录输出文件")
+                contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: error("无法写入下载目录输出文件")
+                contentResolver.update(uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null)
+                return uri.toString()
+            }.onFailure { Log.w(TAG, "MediaStore download output failed: $folder/$fileName", it) }
+        }
+        val baseDir = if (hasAllFilesAccess()) {
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "SMP")
+        } else {
+            getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: getExternalFilesDir(null) ?: filesDir
+        }
+        val dir = File(baseDir, folder).apply { mkdirs() }
+        val file = File(dir, fileName)
+        return runCatching {
+            file.writeBytes(bytes)
+            Uri.fromFile(file).toString()
+        }.getOrElse {
+            writeInternalOutputBytes(folder, fileName, bytes)
+        }
     }
 
     private fun queueForCurrentView(): List<Track> {
@@ -3472,6 +3634,18 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         return uri.lastPathSegment?.substringAfterLast('/') ?: "image"
     }
 
+    private fun folderDisplayName(uriText: String): String {
+        val uri = runCatching { Uri.parse(uriText) }.getOrNull() ?: return uriText
+        if (uri.scheme == "file") return uri.path.orEmpty().ifBlank { uriText }
+        val documentId = runCatching { DocumentsContract.getTreeDocumentId(uri) }.getOrNull()
+        return documentId?.substringAfterLast(':')?.ifBlank { documentId } ?: uri.lastPathSegment.orEmpty().ifBlank { uriText }
+    }
+
+    private fun addUniqueUri(target: MutableList<String>, uri: String) {
+        if (uri.isBlank() || target.contains(uri)) return
+        target += uri
+    }
+
     private fun loadRemoteImage(url: String, target: ImageView) {
         if (url.isBlank()) return
         val expected = url
@@ -3735,6 +3909,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         backgroundImageUri = prefs.getString("backgroundImageUri", "") ?: ""
         backgroundAlpha = prefs.getFloat("backgroundAlpha", 0.35f).coerceIn(0f, 1f)
         skipNoMediaFolders = prefs.getBoolean("skipNoMediaFolders", false)
+        extraScanFolderUris.replaceAllFromJson(prefs.getString("extraScanFolderUris", "") ?: "")
+        skippedScanFolderUris.replaceAllFromJson(prefs.getString("skippedScanFolderUris", "") ?: "")
         playbackMode = PlaybackMode.entries.getOrElse(prefs.getInt("playbackMode", 0)) { PlaybackMode.SEQUENTIAL }
         profileName = prefs.getString("profileName", "profile")?.ifBlank { "profile" } ?: "profile"
         profileAvatarUri = prefs.getString("profileAvatarUri", "") ?: ""
@@ -3780,6 +3956,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .putString("backgroundImageUri", backgroundImageUri)
             .putFloat("backgroundAlpha", backgroundAlpha)
             .putBoolean("skipNoMediaFolders", skipNoMediaFolders)
+            .putString("extraScanFolderUris", stringListJson(extraScanFolderUris))
+            .putString("skippedScanFolderUris", stringListJson(skippedScanFolderUris))
             .putInt("playbackMode", playbackMode.ordinal)
             .putString("profileName", profileName.ifBlank { "profile" })
             .putString("profileAvatarUri", profileAvatarUri)
@@ -3815,6 +3993,17 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val root = JSONObject()
         equalizerPresets.forEach { (name, values) -> root.put(name, JSONArray(values)) }
         return root.toString()
+    }
+
+    private fun stringListJson(values: List<String>): String = JSONArray(values).toString()
+
+    private fun MutableList<String>.replaceAllFromJson(raw: String) {
+        clear()
+        val array = runCatching { JSONArray(raw) }.getOrNull() ?: return
+        for (index in 0 until array.length()) {
+            val value = array.optString(index)
+            if (value.isNotBlank() && !contains(value)) add(value)
+        }
     }
 
     private fun savePlaybackState() {
@@ -3867,6 +4056,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .put("backgroundImageUri", backgroundImageUri)
             .put("backgroundAlpha", backgroundAlpha)
             .put("skipNoMediaFolders", skipNoMediaFolders)
+            .put("extraScanFolderUris", JSONArray(extraScanFolderUris))
+            .put("skippedScanFolderUris", JSONArray(skippedScanFolderUris))
             .put("profileName", profileName)
             .put("profileAvatarUri", profileAvatarUri)
             .put("localAccount", JSONObject().put("name", profileName).put("avatarUri", profileAvatarUri))
@@ -3910,6 +4101,14 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         backgroundImageUri = settings.optString("backgroundImageUri", backgroundImageUri)
         backgroundAlpha = settings.optDouble("backgroundAlpha", backgroundAlpha.toDouble()).toFloat().coerceIn(0f, 1f)
         skipNoMediaFolders = settings.optBoolean("skipNoMediaFolders", skipNoMediaFolders)
+        settings.optJSONArray("extraScanFolderUris")?.let { array ->
+            extraScanFolderUris.clear()
+            for (index in 0 until array.length()) addUniqueUri(extraScanFolderUris, array.optString(index))
+        }
+        settings.optJSONArray("skippedScanFolderUris")?.let { array ->
+            skippedScanFolderUris.clear()
+            for (index in 0 until array.length()) addUniqueUri(skippedScanFolderUris, array.optString(index))
+        }
         profileName = settings.optString("profileName", profileName).ifBlank { "profile" }
         profileAvatarUri = settings.optString("profileAvatarUri", profileAvatarUri)
         settings.optJSONObject("localAccount")?.let { account ->
@@ -4061,9 +4260,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val root = (0 until releases.length())
             .mapNotNull { releases.optJSONObject(it) }
             .firstOrNull { release ->
-                val name = "${release.optString("tag_name")} ${release.optString("name")}".lowercase(Locale.ROOT)
-                if (includeBetaUpdates) name.contains("beta") else !name.contains("beta")
-            } ?: error("没有找到可用的 ${if (includeBetaUpdates) "beta" else "正式"} release")
+                if (release.optBoolean("draft", false)) return@firstOrNull false
+                val prerelease = release.optBoolean("prerelease", false)
+                if (includeBetaUpdates) prerelease else !prerelease
+            } ?: error("没有找到可用的 ${if (includeBetaUpdates) "预发行" else "正式"} release")
         val tag = root.optString("tag_name").ifBlank { root.optString("name") }
         return ReleaseInfo(
             version = tag.removePrefix("v").trim(),
@@ -4299,6 +4499,15 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         startActivityForResult(intent, REQUEST_TREE)
     }
 
+    private fun openScanFolderPicker(requestCode: Int) {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
+        }
+        startActivityForResult(intent, requestCode)
+    }
+
     private fun openManualImport() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             type = "*/*"
@@ -4509,7 +4718,6 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 downloadStreamTrackSync(track, details, coverPath)?.let { downloaded += it }
                 updateDownloadNotification("下载 ${details.album.title}", index + 1, details.tracks.size)
             }
-            writeStreamAlbumIndex(details, downloaded)
             addDownloadedTracksToLibrary(downloaded, details)
             finishDownloadNotification("下载完成：${details.album.title}", downloaded.size, details.tracks.size)
             runOnUiThread {
@@ -4531,7 +4739,6 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             updateDownloadNotification("下载 ${displayTitle(track)}", 0, 1)
             val coverPath = downloadStreamCover(details)
             val downloaded = downloadStreamTrackSync(track, details, coverPath)
-            if (downloaded != null) writeStreamAlbumIndex(details, listOf(downloaded))
             if (downloaded != null) addDownloadedTracksToLibrary(listOf(downloaded), details)
             finishDownloadNotification("下载完成：${displayTitle(track)}", if (downloaded == null) 0 else 1, 1)
             runOnUiThread {
@@ -4545,18 +4752,51 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         return runCatching {
             val bytes = DizzylabClient(dizzylabCookie).download(track.uri, details.album.url)
             val fileName = safeFileName("${track.displayTitle}.${track.uri.substringBefore("?").substringAfterLast('.', "mp3")}")
-            val uri = writeStreamDownloadBytes("dizzylab", details.album.title, fileName, track.mimeType.ifBlank { "audio/mpeg" }, bytes)
+            val taggedBytes = tagDownloadedStreamBytes(fileName, bytes, track, details, coverPath)
+            val uri = writeStreamDownloadBytes("dizzylab", details.album.title, fileName, track.mimeType.ifBlank { "audio/mpeg" }, taggedBytes)
             track.copy(
                 id = "download:dizzylab:${uri.hashCode()}",
                 uri = uri,
                 album = details.album.title,
                 artist = track.artist.ifBlank { details.circle },
-                sourcePath = fileName,
+                sourcePath = localPathForUriString(uri).ifBlank { fileName },
                 artworkPath = coverPath
             )
         }.onFailure {
             Log.w(TAG, "DizzyLab track download failed: ${track.uri}", it)
         }.getOrNull()
+    }
+
+    private fun tagDownloadedStreamBytes(
+        fileName: String,
+        bytes: ByteArray,
+        track: Track,
+        details: StreamAlbumDetails,
+        coverPath: String
+    ): ByteArray {
+        val dir = File(cacheDir, "stream_metadata").apply { mkdirs() }
+        val file = File(dir, safeFileName("${System.currentTimeMillis()}-$fileName"))
+        return runCatching {
+            file.writeBytes(bytes)
+            val coverBytes = coverPath.takeIf { it.isNotBlank() }?.let { File(it) }?.takeIf { it.isFile }?.readBytes()
+            AudioMetadataWriter().write(
+                file,
+                AudioMetadataUpdate(
+                    title = track.displayTitle,
+                    artist = track.artist.ifBlank { details.circle },
+                    composer = track.composer,
+                    year = track.date.take(4).ifBlank { details.releaseDate.take(4) },
+                    album = details.album.title,
+                    coverBytes = coverBytes
+                )
+            )
+            file.readBytes()
+        }.getOrElse { error ->
+            Log.w(TAG, "Stream metadata write failed: $fileName", error)
+            bytes
+        }.also {
+            runCatching { file.delete() }
+        }
     }
 
     private fun downloadStreamCover(details: StreamAlbumDetails): String {
@@ -4577,41 +4817,6 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }.onFailure {
             Log.w(TAG, "DizzyLab cover download failed: $url", it)
         }.getOrDefault("")
-    }
-
-    private fun writeStreamAlbumIndex(details: StreamAlbumDetails, downloaded: List<Track>) {
-        if (downloaded.isEmpty()) return
-        runCatching {
-            val coverName = safeFileName("${details.album.title}.jpg")
-            val tracksJson = JSONArray()
-            downloaded.sortedBy { it.trackNumber.takeIf { number -> number > 0 } ?: Int.MAX_VALUE }.forEachIndexed { index, track ->
-                tracksJson.put(
-                    JSONObject()
-                        .put("file", track.sourcePath.substringAfterLast('/').ifBlank { safeFileName("${track.displayTitle}.mp3") })
-                        .put("title", track.displayTitle)
-                        .put("artist", track.artist.ifBlank { details.circle })
-                        .put("album", details.album.title)
-                        .put("trackNumber", track.trackNumber.takeIf { it > 0 } ?: index + 1)
-                        .put("durationMs", track.durationMs)
-                        .put("date", track.date.ifBlank { details.releaseDate })
-                        .put("composer", track.composer)
-                        .put("cover", coverName)
-                )
-            }
-            val root = JSONObject()
-                .put("source", "dizzylab")
-                .put("albumTitle", details.album.title)
-                .put("cover", coverName)
-                .put("trackCount", downloaded.size)
-                .put("circle", details.circle)
-                .put("releaseDate", details.releaseDate)
-                .put("description", details.description)
-                .put("tags", JSONArray(details.tags))
-                .put("tracks", tracksJson)
-            writeStreamDownloadBytes("dizzylab", details.album.title, "album.json", "application/json", root.toString(2).toByteArray(Charsets.UTF_8))
-        }.onFailure {
-            Log.w(TAG, "DizzyLab album index write failed: ${details.album.title}", it)
-        }
     }
 
     private fun writeStreamDownloadBytes(source: String, album: String, fileName: String, mimeType: String, bytes: ByteArray): String {
@@ -4817,7 +5022,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                     val result = converter.convert(uri, outputDir)
                     if (outputDirectoryMode == OutputDirectoryMode.DOWNLOAD) {
                         val mimeType = if (result.format == "flac") "audio/flac" else "audio/mpeg"
-                        val outputUri = writeStreamDownloadBytes("smp", "ConvertedMusic", result.outputFile.name, mimeType, result.outputFile.readBytes())
+                        val outputUri = writeDownloadOutputBytes("ConvertedMusic", result.outputFile.name, mimeType, result.outputFile.readBytes())
                         result.outputFile.delete()
                         outputUri
                     } else {
@@ -4864,6 +5069,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
             }
         }.getOrNull()?.let { File(it) }?.takeIf { it.exists() }
+    }
+
+    private fun localPathForUriString(uriText: String): String {
+        val uri = runCatching { Uri.parse(uriText) }.getOrNull() ?: return ""
+        if (uri.scheme == "file") return uri.path.orEmpty()
+        return localFileFromUri(uri)?.absolutePath.orEmpty()
     }
 
     private fun persistUriPermission(uri: Uri, flags: Int) {
@@ -5097,6 +5308,34 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                         } else {
                             handleFourWaySwipe(startX, startY, event.x, event.y, onLeft, onRight, onUp, onDown)
                         }
+                    }
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> true
+                else -> true
+            }
+        }
+    }
+
+    private fun attachNowPlayingBlankGestures(view: View, track: Track) {
+        var startX = 0f
+        var startY = 0f
+        view.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    startX = event.x
+                    startY = event.y
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    val dx = event.x - startX
+                    val dy = event.y - startY
+                    val isTap = kotlin.math.abs(dx) < dp(18) && kotlin.math.abs(dy) < dp(18)
+                    if (isTap) {
+                        nowPlayingArtworkHidden = !nowPlayingArtworkHidden
+                        render(Page.NOW_PLAYING)
+                    } else if (kotlin.math.abs(dy) >= dp(72) && kotlin.math.abs(dy) > kotlin.math.abs(dx) * 1.4f) {
+                        if (dy < 0) showCurrentQueueDialog() else showTrackDetailsDialog(track)
                     }
                     true
                 }
@@ -5362,6 +5601,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val REQUEST_STREAM_DOWNLOAD_DIR = 1010
         private const val REQUEST_STREAM_CACHE_DIR = 1011
         private const val REQUEST_METADATA_COVER = 1012
+        private const val REQUEST_EXTRA_SCAN_DIR = 1013
+        private const val REQUEST_SKIP_SCAN_DIR = 1014
         private const val NOTIFICATION_CHANNEL_ID = "playback"
         private const val DOWNLOAD_CHANNEL_ID = "downloads"
         private const val NOTIFICATION_ID = 11
@@ -5369,7 +5610,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val LYRICS_NOTIFICATION_ID = 31
         private const val FLOATING_LYRICS_NOTIFICATION_ID = 41
         private const val TAG = "SMP"
-        private const val APP_VERSION = "1.5.0"
+        private const val APP_VERSION = "beta1.0.5"
         private const val REPO_URL = "https://github.com/SuperMite233/Simple-Music-Player"
         private const val ISSUES_URL = "$REPO_URL/issues"
         private const val AUTHOR_URL = "https://space.bilibili.com/287415007"
