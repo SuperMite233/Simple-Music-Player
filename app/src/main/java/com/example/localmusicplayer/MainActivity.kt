@@ -4124,10 +4124,17 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun updatePlaybackNotification() {
         if (!notificationEnabled && !lockscreenNotificationEnabled) {
             notificationManager.cancel(NOTIFICATION_ID)
+            notificationManager.cancel(FLOATING_LYRICS_NOTIFICATION_ID)
             return
         }
-        val track = player.currentTrack ?: return
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val track = player.currentTrack ?: run {
+            notificationManager.cancel(FLOATING_LYRICS_NOTIFICATION_ID)
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notificationManager.cancel(FLOATING_LYRICS_NOTIFICATION_ID)
+            return
+        }
         val artwork = decodeArtworkPath(resolvedArtworkPath(track))
         val playPause = if (player.isPlaying()) "暂停" else "播放"
         val notification = Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
@@ -4143,13 +4150,35 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .setContentIntent(playbackPendingIntent(ACTION_OPEN))
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_previous_track), "上一首", playbackPendingIntent(ACTION_PREV)).build())
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, if (player.isPlaying()) R.drawable.ic_pause_circle else R.drawable.ic_play_block), playPause, playbackPendingIntent(ACTION_PLAY_PAUSE)).build())
-            .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_musiclist), if (floatingLyricsEnabled) "关闭悬浮歌词" else "开启悬浮歌词", playbackPendingIntent(ACTION_TOGGLE_FLOATING_LYRICS)).build())
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_next_track), "下一首", playbackPendingIntent(ACTION_NEXT)).build())
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_previous_track), "-10s", playbackPendingIntent(ACTION_REWIND)).build())
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_next_track), "+10s", playbackPendingIntent(ACTION_FORWARD)).build())
             .setStyle(Notification.MediaStyle().setMediaSession(mediaSession.sessionToken).setShowActionsInCompactView(0, 1, 2))
             .build()
         notificationManager.notify(NOTIFICATION_ID, notification)
+        updateFloatingLyricsToggleNotification()
+    }
+
+    private fun updateFloatingLyricsToggleNotification() {
+        if (!player.isPlaying() || (!notificationEnabled && !lockscreenNotificationEnabled)) {
+            notificationManager.cancel(FLOATING_LYRICS_NOTIFICATION_ID)
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notificationManager.cancel(FLOATING_LYRICS_NOTIFICATION_ID)
+            return
+        }
+        val notification = Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_musiclist)
+            .setContentTitle("悬浮歌词")
+            .setContentText(if (floatingLyricsEnabled) "已开启，点击关闭" else "已关闭，点击开启")
+            .setCategory(Notification.CATEGORY_STATUS)
+            .setOngoing(false)
+            .setShowWhen(false)
+            .setVisibility(if (lockscreenNotificationEnabled) Notification.VISIBILITY_PUBLIC else Notification.VISIBILITY_PRIVATE)
+            .setContentIntent(playbackPendingIntent(ACTION_TOGGLE_FLOATING_LYRICS))
+            .build()
+        notificationManager.notify(FLOATING_LYRICS_NOTIFICATION_ID, notification)
     }
 
     private fun playbackPendingIntent(action: String): PendingIntent {
@@ -4192,6 +4221,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             saveSettings()
         }
         updateFloatingLyrics()
+        updateFloatingLyricsToggleNotification()
     }
 
     private fun handleMediaKey(keyCode: Int): Boolean {
@@ -5337,8 +5367,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val NOTIFICATION_ID = 11
         private const val DOWNLOAD_NOTIFICATION_ID = 21
         private const val LYRICS_NOTIFICATION_ID = 31
+        private const val FLOATING_LYRICS_NOTIFICATION_ID = 41
         private const val TAG = "SMP"
-        private const val APP_VERSION = "beta1.0.3"
+        private const val APP_VERSION = "beta1.0.4"
         private const val REPO_URL = "https://github.com/SuperMite233/Simple-Music-Player"
         private const val ISSUES_URL = "$REPO_URL/issues"
         private const val AUTHOR_URL = "https://space.bilibili.com/287415007"
