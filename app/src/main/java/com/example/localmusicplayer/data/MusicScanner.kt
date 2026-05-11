@@ -64,9 +64,11 @@ class MusicScanner(private val context: Context) {
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.TRACK,
             MediaStore.Audio.Media.YEAR,
-            MediaStore.Audio.Media.MIME_TYPE
+            MediaStore.Audio.Media.MIME_TYPE,
+            MediaStore.Audio.Media.DATA
         )
         val result = mutableListOf<Track>()
+        val fileAlbumIndexCache = mutableMapOf<String, AlbumIndex?>()
         resolver.query(
             collection,
             projection,
@@ -78,36 +80,89 @@ class MusicScanner(private val context: Context) {
             val nameIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
             val titleIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
             val artistIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-            val albumIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+            val albumColumnIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
             val durationIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val trackIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
             val yearIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
             val mimeIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
+            val dataIndex = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
             while (cursor.moveToNext()) {
                 val mediaId = cursor.getLong(idIndex)
                 val uri = ContentUris.withAppendedId(collection, mediaId)
                 val displayName = cursor.getString(nameIndex).orEmpty()
+                val filePath = if (dataIndex >= 0) cursor.getString(dataIndex).orEmpty() else ""
+                val sourcePath = filePath.ifBlank { displayName }
+                val fileName = filePath.substringAfterLast(File.separatorChar).ifBlank { displayName }
                 val id = "media:$mediaId"
                 val metadata = readMetadata(uri, id)
+                val fileAlbumIndex = fileAlbumIndexForPath(filePath, fileAlbumIndexCache)
+                val indexedTrack = fileAlbumIndex?.trackForName(fileName)
+                val indexedArtwork = indexedTrack?.coverUri.orEmpty().ifBlank { fileAlbumIndex?.coverUri.orEmpty() }
                 result += Track(
                     id = id,
                     uri = uri.toString(),
-                    title = cursor.getString(titleIndex).orEmpty().ifBlank { metadata.title }.ifBlank { displayName.substringBeforeLast('.') },
-                    artist = splitArtists(cursor.getString(artistIndex).orEmpty().ifBlank { metadata.artist }),
-                    album = cursor.getString(albumIndex).orEmpty().ifBlank { metadata.album },
-                    durationMs = cursor.getLong(durationIndex).coerceAtLeast(metadata.durationMs),
-                    trackNumber = normalizeTrackNumber(cursor.getInt(trackIndex)).takeIf { it > 0 } ?: metadata.trackNumber,
+                    title = indexedTrack?.title.orEmpty().ifBlank { cursor.getString(titleIndex).orEmpty() }.ifBlank { metadata.title }.ifBlank { displayName.substringBeforeLast('.') },
+                    artist = splitArtists(indexedTrack?.artist.orEmpty().ifBlank { cursor.getString(artistIndex).orEmpty() }.ifBlank { metadata.artist }.ifBlank { fileAlbumIndex?.circle.orEmpty() }),
+                    album = indexedTrack?.album.orEmpty().ifBlank { fileAlbumIndex?.albumTitle.orEmpty() }.ifBlank { cursor.getString(albumColumnIndex).orEmpty() }.ifBlank { metadata.album },
+                    durationMs = (indexedTrack?.durationMs ?: 0L).takeIf { it > 0 } ?: cursor.getLong(durationIndex).coerceAtLeast(metadata.durationMs),
+                    trackNumber = (indexedTrack?.trackNumber ?: 0).takeIf { it > 0 } ?: normalizeTrackNumber(cursor.getInt(trackIndex)).takeIf { it > 0 } ?: metadata.trackNumber,
                     year = cursor.getInt(yearIndex).takeIf { it > 0 } ?: metadata.year,
-                    date = metadata.date,
-                    composer = metadata.composer,
+                    date = indexedTrack?.date.orEmpty().ifBlank { fileAlbumIndex?.releaseDate.orEmpty() }.ifBlank { metadata.date },
+                    composer = indexedTrack?.composer.orEmpty().ifBlank { metadata.composer },
                     mimeType = cursor.getString(mimeIndex).orEmpty(),
-                    sourcePath = displayName,
-                    lyricsUri = lyricsByBaseName[baseName(displayName)].orEmpty(),
-                    artworkPath = metadata.artworkPath
+                    sourcePath = sourcePath,
+                    lyricsUri = lyricsByBaseName[baseName(sourcePath)].orEmpty(),
+                    artworkPath = indexedArtwork.ifBlank { metadata.artworkPath }
                 )
             }
         }
         return result
+    }
+
+    private fun fileAlbumIndexForPath(audioPath: String, cache: MutableMap<String, AlbumIndex?>): AlbumIndex? {
+        if (audioPath.isBlank()) return null
+        val parent = File(audioPath).parentFile ?: return null
+        return cache.getOrPut(parent.absolutePath) {
+            parseAlbumIndexFile(File(parent, "album.json"))
+        }
+    }
+
+    private fun parseAlbumIndexFile(file: File): AlbumIndex? {
+        if (!file.isFile) return null
+        val root = runCatching { JSONObject(file.readText(Charsets.UTF_8)) }.getOrNull() ?: return null
+        val parent = file.parentFile ?: return null
+        fun resolveSibling(path: String): String {
+            if (path.isBlank() || path.startsWith("content://") || path.startsWith("file://") || path.startsWith("http://") || path.startsWith("https://")) return path
+            val direct = File(parent, path.replace('\\', File.separatorChar))
+            if (direct.exists()) return direct.absolutePath
+            return File(parent, path.replace('\\', '/').substringAfterLast('/')).takeIf { it.exists() }?.absolutePath.orEmpty()
+        }
+        val tracks = mutableListOf<IndexedTrack>()
+        root.optJSONArray("tracks")?.let { array ->
+            for (index in 0 until array.length()) {
+                val track = array.optJSONObject(index) ?: continue
+                tracks += IndexedTrack(
+                    file = track.optString("file"),
+                    title = track.optString("title"),
+                    artist = track.optString("artist"),
+                    album = track.optString("album"),
+                    trackNumber = track.optInt("trackNumber", index + 1),
+                    durationMs = track.optLong("durationMs", 0L),
+                    date = track.optString("date"),
+                    composer = track.optString("composer"),
+                    coverUri = resolveSibling(track.optString("cover"))
+                )
+            }
+        }
+        return AlbumIndex(
+            relativePath = parent.absolutePath,
+            albumTitle = root.optString("albumTitle"),
+            circle = root.optString("circle"),
+            releaseDate = root.optString("releaseDate"),
+            coverUri = resolveSibling(root.optString("cover")),
+            trackCount = root.optInt("trackCount", tracks.size),
+            tracks = tracks
+        )
     }
 
     private fun scanLyricFiles(): Map<String, String> {
@@ -410,8 +465,13 @@ class MusicScanner(private val context: Context) {
         val tracks: List<IndexedTrack>
     ) {
         fun trackFor(item: DocumentItem): IndexedTrack? {
-            val itemName = item.name.lowercase(Locale.ROOT)
-            val itemBase = item.name.substringBeforeLast('.').lowercase(Locale.ROOT)
+            return trackForName(item.name)
+        }
+
+        fun trackForName(name: String): IndexedTrack? {
+            val normalized = name.replace('\\', '/').substringAfterLast('/')
+            val itemName = normalized.lowercase(Locale.ROOT)
+            val itemBase = normalized.substringBeforeLast('.').lowercase(Locale.ROOT)
             return tracks.firstOrNull { track ->
                 val fileName = track.file.replace('\\', '/').substringAfterLast('/').lowercase(Locale.ROOT)
                 fileName == itemName || fileName.substringBeforeLast('.') == itemBase

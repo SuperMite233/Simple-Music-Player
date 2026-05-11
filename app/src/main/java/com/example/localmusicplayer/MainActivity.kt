@@ -29,6 +29,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.OpenableColumns
 import android.provider.DocumentsContract
+import android.provider.MediaStore
 import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
@@ -147,6 +148,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var themeColor: Int = Palette.ACCENT
     private var darkMode: DarkMode = DarkMode.SYSTEM
     private var includeBetaUpdates: Boolean = false
+    private var autoCheckUpdates: Boolean = true
     private var notificationEnabled: Boolean = false
     private var lockscreenNotificationEnabled: Boolean = false
     private var floatingLyricsEnabled: Boolean = false
@@ -167,6 +169,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var streamDownloadFolderUri: String = ""
     private var streamCacheLimitGb: Float = 2.0f
     private var streamCacheFolderUri: String = ""
+    private var outputDirectoryMode: OutputDirectoryMode = OutputDirectoryMode.INTERNAL
     private var restorePlaybackOnLaunch: Boolean = false
     private var audioFocusBehavior: AudioFocusBehavior = AudioFocusBehavior.PAUSE
     private var streamSource: StreamSource? = null
@@ -272,7 +275,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         restorePlaybackState()
         showFirstLaunchDialogIfNeeded()
         updateFloatingLyrics()
-        checkForUpdates(silent = true)
+        if (autoCheckUpdates) checkForUpdates(silent = true)
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -915,9 +918,16 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val playlists = store.visiblePlaylists(store.history.map { it.trackId }).filter { it.id != LibraryStore.LOCAL_ID }
         return when (playlistCategory) {
             PlaylistCategory.COMMON -> playlists.filter { it.systemType.isBlank() || it.systemType in setOf("favorites", "history", "ranking") }
-            PlaylistCategory.CUE -> playlists.filter { it.systemType == "cue" }
-            PlaylistCategory.ALBUM -> playlists.filter { it.systemType == "album" }
+            PlaylistCategory.AUTO -> playlists.filter { it.systemType == "cue" || it.systemType == "album" }
         }
+    }
+
+    private fun Playlist.canAcceptManualAdds(): Boolean {
+        return systemType.isBlank() || id == LibraryStore.FAVORITES_ID
+    }
+
+    private fun Playlist.canManuallyEditTracks(): Boolean {
+        return systemType.isBlank()
     }
 
     private fun playlistDetails(playlist: Playlist): View {
@@ -1310,10 +1320,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(settingCard("播放设置", "启动恢复：${if (restorePlaybackOnLaunch) "继续播放" else "保持暂停"}；其他音乐：${audioFocusBehavior.label}") {
             showPlaybackSettingsDialog()
         })
-        box.addView(settingCard("配置文件", "将当前设置、用户歌单和我喜欢的音乐导出为 JSON，或从 JSON 导入。") {
-            showConfigDialog()
-        })
-        box.addView(settingCard("存储设置", "扫描、串流下载/缓存和音乐格式转换") {
+        box.addView(settingCard("存储设置", "扫描、串流下载/缓存、配置文件和音乐格式转换") {
             showStorageSettingsDialog()
         })
         box.addView(settingCard("软件详情", "版本号、作者、构建说明、软件介绍和 GitHub 仓库") {
@@ -1331,21 +1338,21 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             setPadding(dp(18), dp(8), dp(18), dp(8))
         }
         box.addView(settingCard("版本号", APP_VERSION) {
-            checkForUpdates(silent = false)
+            showUpdateSettingsDialog()
         })
-        var dialog: AlertDialog? = null
-        box.addView(settingCard("下载测试版", if (includeBetaUpdates) "开启：只检查包含 beta 字段的 release" else "关闭：只检查不含 beta 字段的 release") {
-            includeBetaUpdates = !includeBetaUpdates
-            saveSettings()
-            Toast.makeText(this, "下载测试版：${if (includeBetaUpdates) "开启" else "关闭"}", Toast.LENGTH_SHORT).show()
-            dialog?.dismiss()
-            showSoftwareDetailsDialog()
+        box.addView(settingCard(
+            "更新设置",
+            "自动检查：${if (autoCheckUpdates) "开启" else "关闭"}；下载通道：${if (includeBetaUpdates) "测试版" else "正式版"}"
+        ) {
+            showUpdateSettingsDialog()
         })
         box.addView(settingCard("软件作者", "SuperMite") {
             openExternalUrl(AUTHOR_URL)
         })
         box.addView(settingCard("构建提醒", "本软件使用 ChatGPT 辅助构建；音乐格式转换功能的 NCM 解密核心参考并移植自 MIT 许可项目 NCMConverter4a（https://github.com/cdb96/NCMConverter4a）。"))
-        box.addView(settingCard("软件介绍", readBundledReadme()))
+        box.addView(settingCard("软件介绍", "点击查看 README 介绍") {
+            showReadmeDialog()
+        })
         box.addView(settingCard("GitHub 仓库", REPO_URL) {
             openExternalUrl(REPO_URL)
         })
@@ -1353,8 +1360,59 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             openExternalUrl(ISSUES_URL)
         })
         scroll.addView(box)
-        dialog = dialogBuilder()
+        dialogBuilder()
             .setTitle("软件详情")
+            .setView(scroll)
+            .setPositiveButton("关闭", null)
+            .show()
+    }
+
+    private fun showUpdateSettingsDialog() {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(8), dp(18), dp(2))
+        }
+        val autoBox = CheckBox(this).apply {
+            text = "启动时自动检查更新"
+            isChecked = autoCheckUpdates
+            setTextColor(Palette.TEXT)
+        }
+        val betaBox = CheckBox(this).apply {
+            text = "下载测试版（只检查包含 beta 字段的 release）"
+            isChecked = includeBetaUpdates
+            setTextColor(Palette.TEXT)
+        }
+        box.addView(autoBox)
+        box.addView(betaBox)
+        box.addView(actionButton("手动检查更新") {
+            autoCheckUpdates = autoBox.isChecked
+            includeBetaUpdates = betaBox.isChecked
+            saveSettings()
+            checkForUpdates(silent = false)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
+            topMargin = dp(10)
+        })
+        dialogBuilder()
+            .setTitle("更新设置")
+            .setView(box)
+            .setPositiveButton("保存") { _, _ ->
+                autoCheckUpdates = autoBox.isChecked
+                includeBetaUpdates = betaBox.isChecked
+                saveSettings()
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun showReadmeDialog() {
+        val scroll = ScrollView(this)
+        scroll.addView(TextView(this).apply {
+            text = readBundledReadme()
+            bodyStyle(14f)
+            setPadding(dp(18), dp(10), dp(18), dp(10))
+        })
+        dialogBuilder()
+            .setTitle("软件介绍")
             .setView(scroll)
             .setPositiveButton("关闭", null)
             .show()
@@ -1450,6 +1508,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(streamSourceCard("DAV 服务器", "待后续更新", R.drawable.ic_dav) {
             Toast.makeText(this, "DAV 暂待后续更新", Toast.LENGTH_SHORT).show()
         })
+        box.addView(streamSourceCard("Last.fm", "待后续更新", R.drawable.ic_lastfm) {
+            Toast.makeText(this, "Last.fm 暂待后续更新", Toast.LENGTH_SHORT).show()
+        })
         scroll.addView(box)
         dialogBuilder()
             .setTitle("流媒体账号凭证")
@@ -1504,40 +1565,17 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
             })
         }
-        val cacheLimitInput = dialogInput("缓存空间上限（GB）", "%.1f".format(streamCacheLimitGb))
         box.addView(label)
         box.addView(valueLabel)
         box.addView(slider)
-        box.addView(TextView(this).apply {
-            text = "下载目录：" + streamFolderLabel(streamDownloadFolderUri, "应用默认目录")
-            bodyStyle(14f, Palette.MUTED)
-            setPadding(0, dp(8), 0, dp(8))
-        })
-        box.addView(TextView(this).apply {
-            text = "缓存目录：" + streamFolderLabel(streamCacheFolderUri, "Android 数据目录")
-            bodyStyle(14f, Palette.MUTED)
-            setPadding(0, dp(4), 0, dp(8))
-        })
-        box.addView(cacheLimitInput)
         dialogBuilder()
-            .setTitle("串流选项")
+            .setTitle("串流预加载")
             .setView(box)
             .setPositiveButton("保存") { _, _ ->
-                streamCacheLimitGb = cacheLimitInput.text.toString().toFloatOrNull()?.coerceAtLeast(0.1f) ?: streamCacheLimitGb
                 saveSettings()
-                enforceStreamCacheLimit()
                 render(Page.SETTINGS)
             }
-            .setNeutralButton("选择下载文件夹") { _, _ ->
-                streamCacheLimitGb = cacheLimitInput.text.toString().toFloatOrNull()?.coerceAtLeast(0.1f) ?: streamCacheLimitGb
-                saveSettings()
-                openStreamDownloadFolderPicker()
-            }
-            .setNegativeButton("选择缓存文件夹") { _, _ ->
-                streamCacheLimitGb = cacheLimitInput.text.toString().toFloatOrNull()?.coerceAtLeast(0.1f) ?: streamCacheLimitGb
-                saveSettings()
-                openStreamCacheFolderPicker()
-            }
+            .setNegativeButton("取消", null)
             .show()
     }
 
@@ -1550,11 +1588,20 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(settingCard("扫描设置", "含 .nomedia 的文件夹：${if (skipNoMediaFolders) "跳过" else "扫描"}") {
             showScanSettingsDialog()
         })
-        box.addView(settingCard(
-            "串流选项",
-            "预加载：$streamPreloadCount 首；下载目录：${streamFolderLabel(streamDownloadFolderUri, "应用默认目录")}；缓存上限：${"%.1f".format(streamCacheLimitGb)} GB"
-        ) {
-            showStreamingSettingsDialog()
+        box.addView(settingCard("下载目录", streamFolderLabel(streamDownloadFolderUri, "应用默认目录")) {
+            openStreamDownloadFolderPicker()
+        })
+        box.addView(settingCard("缓存位置", streamFolderLabel(streamCacheFolderUri, "Android 数据目录")) {
+            openStreamCacheFolderPicker()
+        })
+        box.addView(settingCard("缓存空间上限", "${"%.1f".format(streamCacheLimitGb)} GB") {
+            showStreamCacheLimitDialog()
+        })
+        box.addView(settingCard("输出文件目录", outputDirectoryMode.label) {
+            showOutputDirectoryDialog()
+        })
+        box.addView(settingCard("配置文件", "将当前设置、用户歌单和我喜欢的音乐导出为 JSON，或从 JSON 导入。") {
+            showConfigDialog()
         })
         box.addView(settingCard("音乐格式转换", "选择 NCM 文件并转换为 MP3/FLAC。转换核心移植自 NCMConverter4a。") {
             openNcmConvertPicker()
@@ -1564,6 +1611,39 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .setTitle("存储设置")
             .setView(scroll)
             .setPositiveButton("关闭", null)
+            .show()
+    }
+
+    private fun showStreamCacheLimitDialog() {
+        val input = dialogInput("缓存空间上限（GB）", "%.1f".format(streamCacheLimitGb))
+        dialogBuilder()
+            .setTitle("缓存空间上限")
+            .setView(input)
+            .setPositiveButton("保存") { _, _ ->
+                streamCacheLimitGb = input.text.toString().toFloatOrNull()?.coerceAtLeast(0.1f) ?: streamCacheLimitGb
+                saveSettings()
+                enforceStreamCacheLimit()
+                render(Page.SETTINGS)
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun showOutputDirectoryDialog() {
+        val entries = OutputDirectoryMode.entries
+        val labels = entries.map { it.label }.toTypedArray()
+        dialogBuilder()
+            .setTitle("输出文件目录")
+            .setSingleChoiceItems(labels, outputDirectoryMode.ordinal) { dialog, which ->
+                outputDirectoryMode = entries[which]
+                saveSettings()
+                if (outputDirectoryMode == OutputDirectoryMode.SOURCE && !hasAllFilesAccess()) {
+                    Toast.makeText(this, "与源文件相同目录需要文件管理权限；权限不足时会回退到软件内部目录。", Toast.LENGTH_LONG).show()
+                }
+                dialog.dismiss()
+                render(Page.SETTINGS)
+            }
+            .setNegativeButton("取消", null)
             .show()
     }
 
@@ -1938,6 +2018,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             }
         }
         box.addView(focusSpinner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)))
+        box.addView(actionButton("串流预加载：$streamPreloadCount 首") {
+            showStreamingSettingsDialog()
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
+            topMargin = dp(12)
+        })
         box.addView(actionButton(
             "悬浮歌词：${if (floatingLyricsEnabled) "开启" else "关闭"} / ${floatingLyricsPosition.label} / ${(floatingLyricsAlpha * 100).toInt()}% / ${floatingLyricsTextSizeSp.toInt()}sp"
         ) { showFloatingLyricsSettingsDialog() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
@@ -2343,9 +2428,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         bar.addView(selectionCountText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         bar.addView(actionButton("收藏") { favoriteSelectedTracks() }, LinearLayout.LayoutParams(dp(62), dp(38)))
-        bar.addView(actionButton(if (selectionFromLibrary) "加入" else "移动") { showAddSelectedToPlaylistDialog() }, LinearLayout.LayoutParams(dp(62), dp(38)).apply { leftMargin = dp(6) })
+        val canEditSource = selectionFromLibrary || selectionPlaylist?.canManuallyEditTracks() == true
+        bar.addView(actionButton(if (canEditSource && !selectionFromLibrary) "移动" else "加入") { showAddSelectedToPlaylistDialog() }, LinearLayout.LayoutParams(dp(62), dp(38)).apply { leftMargin = dp(6) })
         bar.addView(actionButton("歌词") { matchSelectedLyrics() }, LinearLayout.LayoutParams(dp(62), dp(38)).apply { leftMargin = dp(6) })
-        bar.addView(actionButton("删除") { confirmDeleteSelectedTracks() }, LinearLayout.LayoutParams(dp(62), dp(38)).apply { leftMargin = dp(6) })
+        if (selectionFromLibrary || selectionPlaylist?.canManuallyEditTracks() == true) {
+            bar.addView(actionButton("删除") { confirmDeleteSelectedTracks() }, LinearLayout.LayoutParams(dp(62), dp(38)).apply { leftMargin = dp(6) })
+        }
         bar.addView(actionButton("取消") {
             clearSelection()
             renderCurrentListPage()
@@ -2377,11 +2465,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun showAddSelectedToPlaylistDialog() {
         val ids = selectedTrackIds.toList()
         val playlists = store.visiblePlaylists(store.history.map { it.trackId })
-            .filter { it.id != LibraryStore.HISTORY_ID && it.id != LibraryStore.LOCAL_ID }
+            .filter { it.canAcceptManualAdds() }
             .filter { selectionFromLibrary || it.id != selectionPlaylist?.id }
         val names = playlists.map { it.name }.toTypedArray()
+        val shouldMove = !selectionFromLibrary && selectionPlaylist?.canManuallyEditTracks() == true
         dialogBuilder()
-            .setTitle(if (selectionFromLibrary) "加入播放列表" else "移动到播放列表")
+            .setTitle(if (shouldMove) "移动到播放列表" else "加入播放列表")
             .setItems(names) { _, which ->
                 val playlist = playlists[which]
                 if (playlist.id == LibraryStore.FAVORITES_ID) {
@@ -2389,13 +2478,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 } else {
                     store.addToPlaylist(playlist.id, ids)
                 }
-                if (!selectionFromLibrary) {
+                if (shouldMove) {
                     selectionPlaylist?.let { store.removeTracksFromPlaylist(it.id, ids) }
                     openedPlaylist = selectionPlaylist?.let { current ->
                         store.visiblePlaylists(store.history.map { it.trackId }).firstOrNull { it.id == current.id }
                     }
                 }
-                Toast.makeText(this, if (selectionFromLibrary) "已加入 ${playlist.name}" else "已移动到 ${playlist.name}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, if (shouldMove) "已移动到 ${playlist.name}" else "已加入 ${playlist.name}", Toast.LENGTH_SHORT).show()
                 clearSelection()
                 renderCurrentListPage()
             }
@@ -2404,6 +2493,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun confirmDeleteSelectedTracks() {
+        if (!selectionFromLibrary && selectionPlaylist?.canManuallyEditTracks() != true) {
+            Toast.makeText(this, "自动歌单不允许手动删除歌曲", Toast.LENGTH_SHORT).show()
+            return
+        }
         val count = selectedTrackIds.size
         val message = if (selectionFromLibrary) {
             "将尝试删除 $count 首音乐的源文件，并从音乐库和歌单中移除记录。此操作不可撤销，是否继续？"
@@ -2588,7 +2681,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val playlist = openedPlaylist
         val favoriteText = if (store.isFavorite(track.id)) "取消喜欢" else "加入我喜欢的音乐"
         val actions = mutableListOf("播放", favoriteText, "加入播放列表", "匹配歌词", "编辑音乐信息")
-        if (playlist != null && !playlist.isLocked) actions.add("从当前播放列表移除")
+        if (playlist != null && playlist.canManuallyEditTracks()) actions.add("从当前播放列表移除")
         dialogBuilder()
             .setTitle(displayTitle(track))
             .setItems(actions.toTypedArray()) { _, which ->
@@ -2721,9 +2814,22 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun saveLrcLibLyrics(track: Track, lyrics: String): String {
+        val fileName = safeFileName("${track.artist} - ${track.title}-${track.id.hashCode()}.lrc")
+        val bytes = lyrics.toByteArray(Charsets.UTF_8)
+        if (outputDirectoryMode == OutputDirectoryMode.DOWNLOAD) {
+            return writeStreamDownloadBytes("smp", "lrc", fileName, "text/plain", bytes)
+        }
+        if (outputDirectoryMode == OutputDirectoryMode.SOURCE && hasAllFilesAccess()) {
+            val sourceDir = localTrackFile(track)?.parentFile
+            if (sourceDir != null && sourceDir.canWrite()) {
+                val file = File(sourceDir, fileName)
+                file.writeBytes(bytes)
+                return Uri.fromFile(file).toString()
+            }
+        }
         val dir = File(getExternalFilesDir(null) ?: filesDir, "lrc").apply { mkdirs() }
-        val file = File(dir, safeFileName("${track.artist} - ${track.title}-${track.id.hashCode()}.lrc"))
-        file.writeText(lyrics, Charsets.UTF_8)
+        val file = File(dir, fileName)
+        file.writeBytes(bytes)
         return Uri.fromFile(file).toString()
     }
 
@@ -2736,7 +2842,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun showAddToPlaylistDialog(track: Track) {
-        val playlists = store.visiblePlaylists(store.history.map { it.trackId }).filter { it.id != LibraryStore.HISTORY_ID }
+        val playlists = store.visiblePlaylists(store.history.map { it.trackId }).filter { it.canAcceptManualAdds() }
         val names = playlists.map { it.name }.toTypedArray()
         dialogBuilder()
             .setTitle("加入播放列表")
@@ -3346,7 +3452,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val prefs = getSharedPreferences("settings", MODE_PRIVATE)
         themeColor = prefs.getInt("themeColor", Palette.ACCENT)
         darkMode = DarkMode.entries.getOrElse(prefs.getInt("darkMode", DarkMode.SYSTEM.ordinal)) { DarkMode.SYSTEM }
-        includeBetaUpdates = prefs.getBoolean("includeBetaUpdates", false)
+        includeBetaUpdates = if (prefs.contains("includeBetaUpdates")) {
+            prefs.getBoolean("includeBetaUpdates", false)
+        } else {
+            packageName.contains("beta", ignoreCase = true) || APP_VERSION.contains("beta", ignoreCase = true)
+        }
+        autoCheckUpdates = prefs.getBoolean("autoCheckUpdates", true)
         notificationEnabled = prefs.getBoolean("notificationEnabled", false)
         lockscreenNotificationEnabled = prefs.getBoolean("lockscreenNotificationEnabled", false)
         floatingLyricsEnabled = prefs.getBoolean("floatingLyricsEnabled", false)
@@ -3367,6 +3478,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         streamDownloadFolderUri = prefs.getString("streamDownloadFolderUri", "") ?: ""
         streamCacheLimitGb = prefs.getFloat("streamCacheLimitGb", 2.0f).coerceAtLeast(0.1f)
         streamCacheFolderUri = prefs.getString("streamCacheFolderUri", "") ?: ""
+        outputDirectoryMode = OutputDirectoryMode.entries.getOrElse(prefs.getInt("outputDirectoryMode", OutputDirectoryMode.INTERNAL.ordinal)) { OutputDirectoryMode.INTERNAL }
         restorePlaybackOnLaunch = prefs.getBoolean("restorePlaybackOnLaunch", false)
         audioFocusBehavior = AudioFocusBehavior.entries.getOrElse(prefs.getInt("audioFocusBehavior", AudioFocusBehavior.PAUSE.ordinal)) { AudioFocusBehavior.PAUSE }
         equalizerPreset = prefs.getString("equalizerPreset", "默认") ?: "默认"
@@ -3379,6 +3491,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 .putString("profileName", profileName)
                 .apply()
         }
+        if (!prefs.contains("includeBetaUpdates")) {
+            prefs.edit().putBoolean("includeBetaUpdates", includeBetaUpdates).apply()
+        }
         applyAppPalette()
     }
 
@@ -3387,6 +3502,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .putInt("themeColor", themeColor)
             .putInt("darkMode", darkMode.ordinal)
             .putBoolean("includeBetaUpdates", includeBetaUpdates)
+            .putBoolean("autoCheckUpdates", autoCheckUpdates)
             .putBoolean("notificationEnabled", notificationEnabled)
             .putBoolean("lockscreenNotificationEnabled", lockscreenNotificationEnabled)
             .putBoolean("floatingLyricsEnabled", floatingLyricsEnabled)
@@ -3407,6 +3523,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .putString("streamDownloadFolderUri", streamDownloadFolderUri)
             .putFloat("streamCacheLimitGb", streamCacheLimitGb)
             .putString("streamCacheFolderUri", streamCacheFolderUri)
+            .putInt("outputDirectoryMode", outputDirectoryMode.ordinal)
             .putBoolean("restorePlaybackOnLaunch", restorePlaybackOnLaunch)
             .putInt("audioFocusBehavior", audioFocusBehavior.ordinal)
             .putString("equalizerPreset", equalizerPreset)
@@ -3472,6 +3589,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .put("themeColor", themeColor)
             .put("darkMode", darkMode.ordinal)
             .put("includeBetaUpdates", includeBetaUpdates)
+            .put("autoCheckUpdates", autoCheckUpdates)
             .put("notificationEnabled", notificationEnabled)
             .put("lockscreenNotificationEnabled", lockscreenNotificationEnabled)
             .put("floatingLyricsEnabled", floatingLyricsEnabled)
@@ -3502,6 +3620,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .put("streamDownloadFolderUri", streamDownloadFolderUri)
             .put("streamCacheLimitGb", streamCacheLimitGb)
             .put("streamCacheFolderUri", streamCacheFolderUri)
+            .put("outputDirectoryMode", outputDirectoryMode.ordinal)
             .put("restorePlaybackOnLaunch", restorePlaybackOnLaunch)
             .put("audioFocusBehavior", audioFocusBehavior.ordinal)
             .put("equalizerPreset", equalizerPreset)
@@ -3513,6 +3632,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         themeColor = settings.optInt("themeColor", themeColor)
         darkMode = DarkMode.entries.getOrElse(settings.optInt("darkMode", darkMode.ordinal)) { DarkMode.SYSTEM }
         includeBetaUpdates = settings.optBoolean("includeBetaUpdates", includeBetaUpdates)
+        autoCheckUpdates = settings.optBoolean("autoCheckUpdates", autoCheckUpdates)
         notificationEnabled = settings.optBoolean("notificationEnabled", notificationEnabled)
         lockscreenNotificationEnabled = settings.optBoolean("lockscreenNotificationEnabled", lockscreenNotificationEnabled)
         floatingLyricsEnabled = settings.optBoolean("floatingLyricsEnabled", floatingLyricsEnabled)
@@ -3542,6 +3662,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         streamDownloadFolderUri = settings.optString("streamDownloadFolderUri", streamDownloadFolderUri)
         streamCacheLimitGb = settings.optDouble("streamCacheLimitGb", streamCacheLimitGb.toDouble()).toFloat().coerceAtLeast(0.1f)
         streamCacheFolderUri = settings.optString("streamCacheFolderUri", streamCacheFolderUri)
+        outputDirectoryMode = OutputDirectoryMode.entries.getOrElse(settings.optInt("outputDirectoryMode", outputDirectoryMode.ordinal)) { outputDirectoryMode }
         restorePlaybackOnLaunch = settings.optBoolean("restorePlaybackOnLaunch", restorePlaybackOnLaunch)
         audioFocusBehavior = AudioFocusBehavior.entries.getOrElse(settings.optInt("audioFocusBehavior", audioFocusBehavior.ordinal)) { AudioFocusBehavior.PAUSE }
         settings.optJSONObject("equalizerPresets")?.let { loadEqualizerPresets(it.toString()) }
@@ -3593,7 +3714,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun refreshThemedViews(view: View?) {
         when (view) {
             is Button -> if (view.tag == "accentButton") {
-                view.setTextColor(contrastTextColor(themeColor))
+                view.setTextColor(buttonTextColor())
                 view.background = panelDrawable(themeColor, 8, this)
                 tintButtonDrawables(view, view.currentTextColor)
             }
@@ -3601,6 +3722,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 for (index in 0 until view.childCount) refreshThemedViews(view.getChildAt(index))
             }
         }
+    }
+
+    private fun buttonTextColor(): Int {
+        return if (isDarkModeActive(darkMode)) Palette.TEXT else contrastTextColor(themeColor)
     }
 
     private fun dialogBuilder(): AlertDialog.Builder {
@@ -4369,17 +4494,28 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             val results = mutableListOf<String>()
             var success = 0
             uris.forEach { uri ->
-                runCatching { converter.convert(uri) }
+                runCatching {
+                    val outputDir = ncmOutputDirectory(uri)
+                    val result = converter.convert(uri, outputDir)
+                    if (outputDirectoryMode == OutputDirectoryMode.DOWNLOAD) {
+                        val mimeType = if (result.format == "flac") "audio/flac" else "audio/mpeg"
+                        val outputUri = writeStreamDownloadBytes("smp", "ConvertedMusic", result.outputFile.name, mimeType, result.outputFile.readBytes())
+                        result.outputFile.delete()
+                        outputUri
+                    } else {
+                        result.outputFile.absolutePath
+                    }
+                }
                     .onSuccess { result ->
                         success++
-                        results += result.outputFile.absolutePath
+                        results += result
                     }
                     .onFailure { error ->
                         results += "失败：${error.message ?: uri}"
                     }
             }
             runOnUiThread {
-                val message = "转换完成：$success / ${uris.size}\n输出目录：${(getExternalFilesDir(null) ?: filesDir).absolutePath}\\ConvertedMusic"
+                val message = "转换完成：$success / ${uris.size}\n输出位置：${outputDirectoryMode.label}"
                 dialogBuilder()
                     .setTitle("音乐格式转换")
                     .setMessage(message + if (results.isNotEmpty()) "\n\n" + results.take(6).joinToString("\n") else "")
@@ -4388,6 +4524,28 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 setStatus("音乐格式转换完成：$success / ${uris.size}")
             }
         }.start()
+    }
+
+    private fun ncmOutputDirectory(uri: Uri): File? {
+        return when (outputDirectoryMode) {
+            OutputDirectoryMode.INTERNAL, OutputDirectoryMode.DOWNLOAD -> File(getExternalFilesDir(null) ?: filesDir, "ConvertedMusic").apply { mkdirs() }
+            OutputDirectoryMode.SOURCE -> {
+                if (!hasAllFilesAccess()) return File(getExternalFilesDir(null) ?: filesDir, "ConvertedMusic").apply { mkdirs() }
+                localFileFromUri(uri)?.parentFile?.takeIf { it.canWrite() }
+                    ?: File(getExternalFilesDir(null) ?: filesDir, "ConvertedMusic").apply { mkdirs() }
+            }
+        }
+    }
+
+    private fun localFileFromUri(uri: Uri): File? {
+        if (uri.scheme == "file") return uri.path?.let { File(it) }?.takeIf { it.exists() }
+        if (uri.scheme != "content") return null
+        return runCatching {
+            contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DATA), null, null, null)?.use { cursor ->
+                val index = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+                if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+            }
+        }.getOrNull()?.let { File(it) }?.takeIf { it.exists() }
     }
 
     private fun persistUriPermission(uri: Uri, flags: Int) {
@@ -4727,7 +4885,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             tag = "accentButton"
             this.text = text
             isAllCaps = false
-            setTextColor(contrastTextColor(themeColor))
+            setTextColor(buttonTextColor())
             textSize = 13f
             minHeight = 0
             minimumHeight = 0
@@ -4762,7 +4920,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val icon = tintedDrawable(iconRes, button.currentTextColor, 18) ?: return
         if (button.text.isNullOrBlank()) {
             button.gravity = Gravity.CENTER
-            button.setPadding(0, 0, 0, 0)
+            button.setPadding(0, dp(10), 0, 0)
             button.setCompoundDrawables(null, icon, null, null)
         } else {
             button.gravity = Gravity.CENTER
@@ -4836,8 +4994,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private enum class PlaylistCategory(val label: String) {
         COMMON("常用歌单"),
-        CUE("CUE 歌单"),
-        ALBUM("专辑歌单")
+        AUTO("自动歌单")
     }
 
     private enum class AudioFocusBehavior(val label: String) {
@@ -4858,6 +5015,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         BOTTOM("底部")
     }
 
+    private enum class OutputDirectoryMode(val label: String) {
+        INTERNAL("使用软件内部目录"),
+        DOWNLOAD("使用下载目录"),
+        SOURCE("与源文件相同目录")
+    }
+
     companion object {
         private const val REQUEST_AUDIO = 1001
         private const val REQUEST_TREE = 1002
@@ -4876,7 +5039,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val DOWNLOAD_NOTIFICATION_ID = 21
         private const val LYRICS_NOTIFICATION_ID = 31
         private const val TAG = "SMP"
-        private const val APP_VERSION = "beta1.0.2"
+        private const val APP_VERSION = "beta1.0.3"
         private const val REPO_URL = "https://github.com/SuperMite233/Simple-Music-Player"
         private const val ISSUES_URL = "$REPO_URL/issues"
         private const val AUTHOR_URL = "https://space.bilibili.com/287415007"

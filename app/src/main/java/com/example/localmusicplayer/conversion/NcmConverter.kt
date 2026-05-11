@@ -13,7 +13,7 @@ import javax.crypto.spec.SecretKeySpec
 class NcmConverter(private val context: Context) {
     data class Result(val outputFile: File, val title: String, val format: String)
 
-    fun convert(uri: Uri): Result {
+    fun convert(uri: Uri, outputDir: File? = null): Result {
         val input = context.contentResolver.openInputStream(uri) ?: error("无法打开文件")
         BufferedInputStream(input).use { stream ->
             skipFully(stream, 10)
@@ -23,10 +23,10 @@ class NcmConverter(private val context: Context) {
             val title = metadata.optString("musicName").ifBlank { "converted_music" }
             skipCover(stream)
 
-            val outputDir = File(context.getExternalFilesDir(null) ?: context.filesDir, "ConvertedMusic").apply {
+            val targetDir = (outputDir ?: File(context.getExternalFilesDir(null) ?: context.filesDir, "ConvertedMusic")).apply {
                 mkdirs()
             }
-            val output = uniqueFile(outputDir, sanitizeFileName(title), if (format == "flac") "flac" else "mp3")
+            val output = uniqueFile(targetDir, sanitizeFileName(title), if (format == "flac") "flac" else "mp3")
             output.outputStream().use { out ->
                 val keyStream = buildKeyStream(rc4Key)
                 val buffer = ByteArray(DEFAULT_BUFFER_SIZE)

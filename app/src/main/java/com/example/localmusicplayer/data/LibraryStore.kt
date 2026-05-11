@@ -69,6 +69,7 @@ class LibraryStore(context: Context) {
 
     fun addToPlaylist(playlistId: String, trackIds: Collection<String>) {
         val playlist = playlists.firstOrNull { it.id == playlistId } ?: return
+        if (!playlist.canManuallyEditTracks()) return
         val ids = trackIds.distinct()
         if (ids.isEmpty()) return
         playlist.trackIds.removeAll(ids.toSet())
@@ -79,6 +80,7 @@ class LibraryStore(context: Context) {
 
     fun removeFromPlaylist(playlistId: String, trackId: String) {
         val playlist = playlists.firstOrNull { it.id == playlistId } ?: return
+        if (!playlist.canManuallyEditTracks()) return
         playlist.trackIds.remove(trackId)
         playlist.updatedAt = System.currentTimeMillis()
         save()
@@ -86,6 +88,7 @@ class LibraryStore(context: Context) {
 
     fun removeTracksFromPlaylist(playlistId: String, trackIds: Collection<String>) {
         val playlist = playlists.firstOrNull { it.id == playlistId } ?: return
+        if (!playlist.canManuallyEditTracks()) return
         playlist.trackIds.removeAll(trackIds.toSet())
         playlist.updatedAt = System.currentTimeMillis()
         save()
@@ -308,6 +311,7 @@ class LibraryStore(context: Context) {
                 first.trackIds.clear()
                 first.trackIds.addAll(uniqueIds)
             }
+        playlists.removeAll { it.systemType in setOf("album", "cue") && it.trackIds.isEmpty() }
     }
 
     private fun ensureSystemPlaylists() {
@@ -415,6 +419,10 @@ class LibraryStore(context: Context) {
         const val RANKING_ID = "system:ranking"
         const val HISTORY_LIMIT = 100
     }
+}
+
+private fun Playlist.canManuallyEditTracks(): Boolean {
+    return systemType.isBlank()
 }
 
 private fun cueDisplayName(cueSheet: String): String {
