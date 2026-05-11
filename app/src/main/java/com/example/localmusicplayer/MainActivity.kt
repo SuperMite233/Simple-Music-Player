@@ -1277,9 +1277,25 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         nowPageLyricsScroll = ScrollView(this).apply {
             visibility = if (nowPlayingArtworkHidden) View.VISIBLE else View.GONE
             isFillViewport = true
+            var downX = 0f
+            var downY = 0f
             setOnTouchListener { _, event ->
                 if (event.actionMasked == MotionEvent.ACTION_DOWN || event.actionMasked == MotionEvent.ACTION_MOVE) {
                     lastLyricsUserInteractionAt = System.currentTimeMillis()
+                }
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        downX = event.x
+                        downY = event.y
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        val isTap = kotlin.math.abs(event.x - downX) < dp(18) && kotlin.math.abs(event.y - downY) < dp(18)
+                        if (isTap && isLyricsBlankTap(event.y)) {
+                            nowPlayingArtworkHidden = false
+                            render(Page.NOW_PLAYING)
+                            return@setOnTouchListener true
+                        }
+                    }
                 }
                 false
             }
@@ -3490,6 +3506,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                     bodyStyle(16f, Palette.MUTED)
                     gravity = Gravity.CENTER
                     setPadding(dp(8), dp(108), dp(8), dp(108))
+                    setOnClickListener {
+                        nowPlayingArtworkHidden = false
+                        render(Page.NOW_PLAYING)
+                    }
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             } else {
                 lines.forEachIndexed { index, line ->
@@ -3522,6 +3542,17 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         if (nowPlayingArtworkHidden && System.currentTimeMillis() - lastLyricsUserInteractionAt > 5_000L) {
             scrollLyricsToIndex(current)
         }
+    }
+
+    private fun isLyricsBlankTap(y: Float): Boolean {
+        val scroll = nowPageLyricsScroll ?: return false
+        val box = nowPageLyricsBox ?: return true
+        val contentY = (scroll.scrollY + y).toInt()
+        for (index in 0 until box.childCount) {
+            val child = box.getChildAt(index)
+            if (child.tag is Int && contentY in child.top..child.bottom) return false
+        }
+        return true
     }
 
     private fun attachLyricLineDoubleTap(view: TextView, timeMs: Long) {
@@ -4112,8 +4143,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .setContentIntent(playbackPendingIntent(ACTION_OPEN))
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_previous_track), "上一首", playbackPendingIntent(ACTION_PREV)).build())
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, if (player.isPlaying()) R.drawable.ic_pause_circle else R.drawable.ic_play_block), playPause, playbackPendingIntent(ACTION_PLAY_PAUSE)).build())
-            .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_next_track), "下一首", playbackPendingIntent(ACTION_NEXT)).build())
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_musiclist), if (floatingLyricsEnabled) "关闭悬浮歌词" else "开启悬浮歌词", playbackPendingIntent(ACTION_TOGGLE_FLOATING_LYRICS)).build())
+            .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_next_track), "下一首", playbackPendingIntent(ACTION_NEXT)).build())
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_previous_track), "-10s", playbackPendingIntent(ACTION_REWIND)).build())
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, R.drawable.ic_next_track), "+10s", playbackPendingIntent(ACTION_FORWARD)).build())
             .setStyle(Notification.MediaStyle().setMediaSession(mediaSession.sessionToken).setShowActionsInCompactView(0, 1, 2))
