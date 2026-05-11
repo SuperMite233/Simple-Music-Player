@@ -717,6 +717,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         nowPageSeek = null
         nowPageTime = null
         nowPageLyrics = null
+        nowPageLyricsScroll = null
+        nowPageLyricsBox = null
         miniPlayerPanel.visibility = if (target == Page.NOW_PLAYING || target == Page.SETTINGS) View.GONE else View.VISIBLE
         headerTitle.text = if (target == Page.SETTINGS) "SMP" else ""
         navButtons.forEach { (navPage, button) ->
@@ -3245,7 +3247,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val artist = dialogInput("歌手", track.artist)
         val composer = dialogInput("作曲", track.composer)
         val year = dialogInput("年份", track.year.takeIf { it > 0 }?.toString().orEmpty())
-        val lyrics = dialogInput("歌词", scanner.readText(track.lyricsUri).orEmpty()).apply {
+        val lyrics = dialogInput("歌词", readTrackLyricsSafely(track)).apply {
             minLines = 3
             maxLines = 6
             setSingleLine(false)
@@ -3325,6 +3327,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             updateMediaSessionMetadata(updated)
             updatePlaybackNotification()
         }
+    }
+
+    private fun readTrackLyricsSafely(track: Track): String {
+        if (track.lyricsUri.isBlank()) return ""
+        return runCatching { scanner.readText(track.lyricsUri).orEmpty() }.getOrDefault("")
     }
 
     private fun updateNowPlayingViews(track: Track) {
@@ -3475,7 +3482,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun updateLyricView(track: Track?) {
         if (track == null || nowPageLyricsBox == null) return
         val box = nowPageLyricsBox ?: return
-        val lines = timedLyrics(track)
+        val lines = runCatching { timedLyrics(track) }.getOrDefault(emptyList())
         if (box.childCount == 0) {
             if (track.lyricsUri.isBlank() || lines.isEmpty()) {
                 box.addView(TextView(this).apply {

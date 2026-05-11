@@ -46,7 +46,10 @@ class MusicScanner(private val context: Context) {
 
     fun readText(uriText: String): String? {
         val uri = runCatching { Uri.parse(uriText) }.getOrNull() ?: return null
-        val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
+        if (uriText.isBlank()) return null
+        val bytes = runCatching {
+            resolver.openInputStream(uri)?.use { it.readBytes() }
+        }.getOrNull() ?: return null
         val charsets = listOf(Charsets.UTF_8, charset("GB18030"), Charsets.ISO_8859_1)
         return charsets
             .mapNotNull { charset -> runCatching { String(bytes, charset) }.getOrNull() }
