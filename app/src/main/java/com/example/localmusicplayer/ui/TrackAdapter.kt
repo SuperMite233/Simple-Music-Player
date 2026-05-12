@@ -40,6 +40,11 @@ class TrackAdapter(
             field = value
             notifyDataSetChanged()
         }
+    var currentTrackId: String? = null
+        set(value) {
+            field = value
+            notifyDataSetChanged()
+        }
     var onMoreClick: ((Track) -> Unit)? = null
     var onTrackClick: ((Track) -> Unit)? = null
     var onTrackLongClick: ((Track, Int) -> Unit)? = null
@@ -112,6 +117,8 @@ class TrackAdapter(
         val more = view.getChildAt(view.childCount - 1) as ImageButton
         more.visibility = if (selectionMode) View.GONE else View.VISIBLE
         more.setOnClickListener { onMoreClick?.invoke(track) }
+        val isCurrent = track.id == currentTrackId
+        holder.title.setTextColor(if (isCurrent) Palette.ACCENT else Palette.TEXT)
         holder.title.text = edit?.alias?.takeIf { it.isNotBlank() } ?: track.displayTitle
         view.setOnLongClickListener {
             onTrackLongClick?.invoke(track, position)

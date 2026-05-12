@@ -22,6 +22,7 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.Icon
 import android.media.AudioManager
 import android.media.MediaMetadata
+import android.media.MediaMetadataRetriever
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.net.Uri
@@ -72,6 +73,10 @@ import com.supermite.smp.playback.MusicPlayer
 import com.supermite.smp.stream.DizzylabClient
 import com.supermite.smp.stream.StreamAlbum
 import com.supermite.smp.stream.StreamAlbumDetails
+import com.supermite.smp.stream.WebDavClient
+import com.supermite.smp.stream.WebDavItem
+import com.supermite.smp.data.WebDavServer
+import java.util.UUID
 import com.supermite.smp.ui.Palette
 import com.supermite.smp.ui.PlaylistAdapter
 import com.supermite.smp.ui.TrackAdapter
@@ -163,6 +168,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var backgroundImageUri: String = ""
     private var backgroundAlpha: Float = 0.35f
     private var skipNoMediaFolders: Boolean = false
+    private var debugMode: Boolean = false
     private val extraScanFolderUris = mutableListOf<String>()
     private val skippedScanFolderUris = mutableListOf<String>()
     private var libraryFiltersExpanded: Boolean = false
@@ -187,6 +193,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var dizzylabAlbums: List<StreamAlbum> = emptyList()
     private var openedDizzylabAlbum: StreamAlbumDetails? = null
     private var pendingStreamDownloadAfterFolder: (() -> Unit)? = null
+    private var webDavCurrentPath: String = ""
+    private var webDavCurrentServer: WebDavServer? = null
+    private var webDavCurrentItems: List<WebDavItem> = emptyList()
+    private var webDavCache: MutableMap<String, List<WebDavItem>> = mutableMapOf()
+    private var webDavSearchQuery: String = ""
     private var nowPageLyrics: TextView? = null
     private var nowPageLyricsScroll: ScrollView? = null
     private var nowPageLyricsBox: LinearLayout? = null
@@ -279,6 +290,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             isActive = true
         }
         loadSettings()
+        initDebugLogger()
         scanner.skipNoMediaFolders = skipNoMediaFolders
         player.setEqualizerLevels(equalizerLevels)
         allTracks = store.savedTracks().sortedWith(MusicScanner.trackComparator)
@@ -333,6 +345,19 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     @Deprecated("Deprecated in Android SDK")
     override fun onBackPressed() {
         when {
+            page == Page.STREAMING && streamSource == StreamSource.WEBDAV && webDavCurrentPath.isNotBlank() -> {
+                val parent = webDavCurrentPath.substringBeforeLast('/').ifBlank { "" }
+                navigateWebDavDir(parent)
+            }
+            page == Page.STREAMING && streamSource == StreamSource.WEBDAV -> {
+                streamSource = null
+                webDavCurrentServer = null
+                webDavCurrentPath = ""
+                webDavCurrentItems = emptyList()
+                webDavCache.clear()
+                webDavSearchQuery = ""
+                render(Page.STREAMING)
+            }
             page == Page.STREAMING && openedDizzylabAlbum != null -> {
                 openedDizzylabAlbum = null
                 render(Page.STREAMING)
@@ -481,6 +506,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     override fun onPrepared(track: Track) {
         playbackPositionMs = 0L
         playbackDurationMs = track.durationMs.coerceAtLeast(1L)
+        trackAdapter.currentTrackId = track.id
         if (pendingRestoreTrackId == track.id) {
             if (pendingRestoreSeekMs > 0L) player.seekTo(pendingRestoreSeekMs)
             if (!pendingRestoreShouldPlay) player.pause()
@@ -508,6 +534,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     override fun onCompleted() {
+        trackAdapter.currentTrackId = null
         if (playbackMode == PlaybackMode.REPEAT_ONE && currentIndex in currentQueue.indices) {
             playTrack(currentQueue[currentIndex], currentQueue, countPlay = false)
         } else {
@@ -1139,6 +1166,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                     bottomMargin = dp(8)
                 })
             }
+        } else if (streamSource == StreamSource.WEBDAV && webDavCurrentServer != null) {
+            renderWebDavBrowser(box)
         } else {
             box.addView(streamSourceCard("DizzyLab", if (dizzylabCookie.isBlank()) "未登录，点击登录或加载账户专辑" else "已登录，点击加载账户专辑", R.drawable.ic_dizzylab) {
                 if (dizzylabCookie.isBlank()) showDizzylabLogin() else loadDizzylabAlbums()
@@ -1146,8 +1175,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             box.addView(streamSourceCard("Navidrome 服务器", "待后续更新", R.drawable.ic_navidrome) {
                 Toast.makeText(this, "Navidrome 暂待后续更新", Toast.LENGTH_SHORT).show()
             })
-            box.addView(streamSourceCard("DAV 服务器", "待后续更新", R.drawable.ic_dav) {
-                Toast.makeText(this, "DAV 暂待后续更新", Toast.LENGTH_SHORT).show()
+            box.addView(streamSourceCard("WebDav 服务器", if (store.webDavServers.isEmpty()) "未添加服务器，请在设置中添加" else "已添加 ${store.webDavServers.size} 台服务器", R.drawable.ic_dav) {
+                if (store.webDavServers.isEmpty()) {
+                    Toast.makeText(this, "请先在设置-用户帐号-流媒体账号凭证中添加 WebDav 服务器", Toast.LENGTH_SHORT).show()
+                } else {
+                    showWebDavServerPicker()
+                }
             })
         }
         scroll.addView(box)
@@ -1691,8 +1724,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(streamSourceCard("Navidrome 服务器", "待后续更新", R.drawable.ic_navidrome) {
             Toast.makeText(this, "Navidrome 暂待后续更新", Toast.LENGTH_SHORT).show()
         })
-        box.addView(streamSourceCard("DAV 服务器", "待后续更新", R.drawable.ic_dav) {
-            Toast.makeText(this, "DAV 暂待后续更新", Toast.LENGTH_SHORT).show()
+        box.addView(streamSourceCard("WebDav 服务器", if (store.webDavServers.isEmpty()) "未添加服务器" else "已添加 ${store.webDavServers.size} 台服务器", R.drawable.ic_dav) {
+            showWebDavManagementDialog()
         })
         box.addView(streamSourceCard("Last.fm", "待后续更新", R.drawable.ic_lastfm) {
             Toast.makeText(this, "Last.fm 暂待后续更新", Toast.LENGTH_SHORT).show()
@@ -1778,7 +1811,19 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             openStreamDownloadFolderPicker()
         })
         box.addView(settingCard("缓存位置", streamFolderLabel(streamCacheFolderUri, "Android 数据目录")) {
-            openStreamCacheFolderPicker()
+            dialogBuilder()
+                .setTitle("缓存位置")
+                .setItems(arrayOf("选择文件夹", "恢复默认目录")) { _, which ->
+                    if (which == 0) {
+                        openStreamCacheFolderPicker()
+                    } else {
+                        streamCacheFolderUri = ""
+                        saveSettings()
+                        render(Page.SETTINGS)
+                        Toast.makeText(this, "已恢复为默认目录", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                .show()
         })
         box.addView(settingCard("缓存空间上限", "${"%.1f".format(streamCacheLimitGb)} GB") {
             showStreamCacheLimitDialog()
@@ -1791,6 +1836,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         })
         box.addView(settingCard("音乐格式转换", "选择 NCM 文件并转换为 MP3/FLAC。转换核心移植自 NCMConverter4a。") {
             openNcmConvertPicker()
+        })
+        box.addView(settingCard("调试模式", if (debugMode) "已开启，报错将产生日志文件" else "已关闭") {
+            debugMode = !debugMode
+            saveSettings()
+            render(Page.SETTINGS)
+            Toast.makeText(this, "调试模式已${if (debugMode) "开启" else "关闭"}", Toast.LENGTH_SHORT).show()
         })
         scroll.addView(box)
         dialogBuilder()
@@ -4032,6 +4083,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         backgroundImageUri = prefs.getString("backgroundImageUri", "") ?: ""
         backgroundAlpha = prefs.getFloat("backgroundAlpha", 0.35f).coerceIn(0f, 1f)
         skipNoMediaFolders = prefs.getBoolean("skipNoMediaFolders", false)
+        debugMode = prefs.getBoolean("debugMode", false)
         extraScanFolderUris.replaceAllFromJson(prefs.getString("extraScanFolderUris", "") ?: "")
         skippedScanFolderUris.replaceAllFromJson(prefs.getString("skippedScanFolderUris", "") ?: "")
         playbackMode = PlaybackMode.entries.getOrElse(prefs.getInt("playbackMode", 0)) { PlaybackMode.SEQUENTIAL }
@@ -4079,6 +4131,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .putString("backgroundImageUri", backgroundImageUri)
             .putFloat("backgroundAlpha", backgroundAlpha)
             .putBoolean("skipNoMediaFolders", skipNoMediaFolders)
+            .putBoolean("debugMode", debugMode)
             .putString("extraScanFolderUris", stringListJson(extraScanFolderUris))
             .putString("skippedScanFolderUris", stringListJson(skippedScanFolderUris))
             .putInt("playbackMode", playbackMode.ordinal)
@@ -4426,6 +4479,445 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }.onFailure {
             Toast.makeText(this, "无法打开浏览器", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun initDebugLogger() {
+        WebDavClient.debugLogger = { msg -> writeDebugLog("WEBDAV", msg) }
+    }
+
+    private fun writeDebugLog(tag: String, msg: String) {
+        if (!debugMode) return
+        try {
+            val dir = File(streamCacheDir(), "debug_logs").apply { mkdirs() }
+            val file = File(dir, "webdav_debug.log")
+            val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT).format(Date())
+            file.appendText("[$timestamp][$tag] $msg\n")
+        } catch (_: Exception) {}
+    }
+
+    private fun loadWebDavCache(serverId: String): MutableMap<String, List<WebDavItem>> {
+        try {
+            val dir = File(streamCacheDir(), "webdav_index")
+            val file = File(dir, "${serverId}.json")
+            if (!file.exists()) return mutableMapOf()
+            val root = JSONObject(file.readText())
+            val cache = mutableMapOf<String, List<WebDavItem>>()
+            root.keys().forEach { path ->
+                val arr = root.optJSONArray(path) ?: return@forEach
+                val items = mutableListOf<WebDavItem>()
+                for (i in 0 until arr.length()) {
+                    val obj = arr.optJSONObject(i) ?: continue
+                    items += WebDavItem(
+                        name = obj.optString("n"), path = obj.optString("p"),
+                        isDirectory = obj.optBoolean("d"), size = obj.optLong("s"),
+                        lastModified = obj.optString("m")
+                    )
+                }
+                cache[path] = items
+            }
+            return cache
+        } catch (_: Exception) { return mutableMapOf() }
+    }
+
+    private fun saveWebDavCache(serverId: String, cache: Map<String, List<WebDavItem>>) {
+        try {
+            val dir = File(streamCacheDir(), "webdav_index").apply { mkdirs() }
+            val root = JSONObject()
+            cache.forEach { (path, items) ->
+                val arr = JSONArray()
+                items.forEach { item ->
+                    arr.put(JSONObject().apply {
+                        put("n", item.name); put("p", item.path)
+                        put("d", item.isDirectory); put("s", item.size); put("m", item.lastModified)
+                    })
+                }
+                root.put(path, arr)
+            }
+            File(dir, "${serverId}.json").writeText(root.toString())
+        } catch (_: Exception) {}
+    }
+
+    private fun showWebDavManagementDialog() {
+        val scroll = ScrollView(this)
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+        }
+        store.webDavServers.forEach { server ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(12), dp(10), dp(12), dp(10))
+                background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    bottomMargin = dp(8)
+                }
+            }
+            val textBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            textBox.addView(TextView(this).apply { text = server.displayName; titleStyle(15f); maxLines = 1 })
+            textBox.addView(TextView(this).apply { text = server.url; bodyStyle(12f); maxLines = 1 })
+            textBox.addView(TextView(this).apply {
+                text = if (server.username.isNotBlank()) "需要认证" else "匿名访问"
+                bodyStyle(11f, Palette.MUTED)
+            })
+            row.addView(textBox, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(actionButton("编辑") { showWebDavEditDialog(server) }, LinearLayout.LayoutParams(dp(60), dp(38)).apply { rightMargin = dp(4) })
+            row.setOnLongClickListener {
+                dialogBuilder().setTitle("删除服务器").setMessage("确定要删除服务器「${server.displayName}」吗？")
+                    .setPositiveButton("删除") { _, _ -> store.webDavServers.removeAll { it.id == server.id }; store.save(); showWebDavManagementDialog() }
+                    .setNegativeButton("取消", null).show()
+                true
+            }
+            box.addView(row)
+        }
+        box.addView(actionButton("添加服务器") { showWebDavEditDialog(null) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply { topMargin = dp(4) })
+        scroll.addView(box)
+        dialogBuilder().setTitle("WebDav 服务器管理").setView(scroll).setPositiveButton("关闭", null).show()
+    }
+
+    private fun showWebDavEditDialog(existing: WebDavServer?) {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(8), dp(18), dp(2)) }
+        val urlInput = dialogInput("服务器地址 (https://...)", existing?.url.orEmpty())
+        box.addView(TextView(this).apply { text = "服务器地址"; bodyStyle(12f, Palette.MUTED) })
+        box.addView(urlInput)
+        val userInput = dialogInput("用户名（选填）", existing?.username.orEmpty())
+        box.addView(TextView(this).apply { text = "用户名（选填）"; bodyStyle(12f, Palette.MUTED); setPadding(0, dp(8), 0, 0) })
+        box.addView(userInput)
+        val passInput = dialogInput("密码（选填）", existing?.password.orEmpty())
+        box.addView(TextView(this).apply { text = "密码（选填）"; bodyStyle(12f, Palette.MUTED); setPadding(0, dp(8), 0, 0) })
+        box.addView(passInput)
+        val nameInput = dialogInput("服务器备注", existing?.name.orEmpty())
+        box.addView(TextView(this).apply { text = "服务器备注"; bodyStyle(12f, Palette.MUTED); setPadding(0, dp(8), 0, 0) })
+        box.addView(nameInput)
+        val aliasInput = dialogInput("服务器别名（优先显示）", existing?.alias.orEmpty())
+        box.addView(TextView(this).apply { text = "服务器别名（优先显示）"; bodyStyle(12f, Palette.MUTED); setPadding(0, dp(8), 0, 0) })
+        box.addView(aliasInput)
+        val portInput = dialogInput("端口（选填，默认自动）", if (existing?.port ?: 0 > 0) existing!!.port.toString() else "")
+        box.addView(TextView(this).apply { text = "端口（选填）"; bodyStyle(12f, Palette.MUTED); setPadding(0, dp(8), 0, 0) })
+        box.addView(portInput)
+        val certCheck = CheckBox(this).apply { text = "忽略证书问题"; isChecked = existing?.ignoreCert ?: false; setTextColor(Palette.TEXT); setPadding(0, dp(8), 0, 0) }
+        box.addView(certCheck)
+        dialogBuilder()
+            .setTitle(if (existing == null) "添加 WebDav 服务器" else "编辑 WebDav 服务器")
+            .setView(box)
+            .setPositiveButton(if (existing == null) "添加并验证" else "保存") { _, _ ->
+                val url = urlInput.text.toString().trim()
+                if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                    Toast.makeText(this, "服务器地址必须以 http:// 或 https:// 开头", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                val password = passInput.text.toString().trim()
+                val server = WebDavServer(
+                    id = existing?.id ?: UUID.randomUUID().toString(),
+                    name = nameInput.text.toString().trim(),
+                    alias = aliasInput.text.toString().trim(),
+                    url = url.trimEnd('/'),
+                    username = userInput.text.toString().trim(),
+                    password = password,
+                    port = portInput.text.toString().trim().toIntOrNull() ?: 0,
+                    ignoreCert = certCheck.isChecked
+                )
+                setStatus("正在验证 WebDav 服务器...")
+                writeDebugLog("TEST", "验证服务器: ${server.url}, port=${server.port}, user=${server.username.ifBlank { "无" }}, pwd=${password.ifBlank { "无" }}, ignoreCert=${server.ignoreCert}")
+                Thread {
+                    val result = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert).testConnection()
+                    runOnUiThread {
+                        result.onSuccess { msg ->
+                            writeDebugLog("TEST", "验证成功: $msg")
+                            if (existing != null) store.webDavServers.removeAll { it.id == server.id }
+                            store.webDavServers.add(server); store.save()
+                            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                            setStatus("WebDav 服务器验证成功"); showWebDavManagementDialog()
+                        }.onFailure { error ->
+                            writeDebugLog("TEST", "验证失败: ${error.message}")
+                            Toast.makeText(this, "验证失败：${error.message}", Toast.LENGTH_SHORT).show()
+                            setStatus("WebDav 服务器验证失败")
+                        }
+                    }
+                }.start()
+            }
+            .setNegativeButton("取消", null).show()
+    }
+
+    private fun showWebDavServerPicker() {
+        val servers = store.webDavServers.toList()
+        if (servers.isEmpty()) { Toast.makeText(this, "请先在设置中添加 WebDav 服务器", Toast.LENGTH_SHORT).show(); return }
+        dialogBuilder().setTitle("选择 WebDav 服务器")
+            .setItems(servers.map { it.displayName }.toTypedArray()) { _, which -> connectWebDavServer(servers[which]) }.show()
+    }
+
+    private fun connectWebDavServer(server: WebDavServer) {
+        streamSource = StreamSource.WEBDAV; webDavCurrentServer = server; webDavCurrentPath = ""; webDavSearchQuery = ""
+        webDavCache = loadWebDavCache(server.id)
+        val cached = webDavCache[""]
+        if (cached != null) {
+            webDavCurrentItems = cached; render(Page.STREAMING)
+            setStatus("${server.displayName}：${cached.size} 项（缓存）")
+            Thread { refreshWebDavDir(server, "") }.start(); return
+        }
+        setStatus("正在连接 ${server.displayName}...")
+        writeDebugLog("CONNECT", "连接服务器: ${server.url}, port=${server.port}")
+        Thread {
+            val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert)
+            val items = runCatching { client.listDirectory("") }.getOrElse {
+                runOnUiThread { writeDebugLog("CONNECT", "连接失败: ${it.message}"); Toast.makeText(this, "连接服务器失败：${it.message}", Toast.LENGTH_SHORT).show(); setStatus("WebDav 连接失败") }
+                return@Thread
+            }
+            webDavCache[""] = items; saveWebDavCache(server.id, webDavCache)
+            runOnUiThread { webDavCurrentItems = items; render(Page.STREAMING); setStatus("${server.displayName}：${items.size} 项") }
+        }.start()
+    }
+
+    private fun navigateWebDavDir(path: String) {
+        val server = webDavCurrentServer ?: return
+        webDavCurrentPath = path; webDavSearchQuery = ""
+        val cached = webDavCache[path]
+        if (cached != null) { webDavCurrentItems = cached; render(Page.STREAMING); setStatus("${server.displayName}：${cached.size} 项（缓存）"); Thread { refreshWebDavDir(server, path) }.start(); return }
+        setStatus("正在加载目录..."); writeDebugLog("NAVIGATE", "加载目录: $path")
+        Thread {
+            val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert)
+            val items = runCatching { client.listDirectory(path) }.getOrElse {
+                runOnUiThread { writeDebugLog("NAVIGATE", "加载失败: ${it.message}"); Toast.makeText(this, "加载目录失败：${it.message}", Toast.LENGTH_SHORT).show(); setStatus("WebDav 加载失败") }
+                return@Thread
+            }
+            webDavCache[path] = items; saveWebDavCache(server.id, webDavCache)
+            runOnUiThread { webDavCurrentItems = items; render(Page.STREAMING); setStatus("${server.displayName}：${items.size} 项") }
+        }.start()
+    }
+
+    private fun refreshWebDavDir(server: WebDavServer, path: String) {
+        val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert)
+        val items = runCatching { client.listDirectory(path) }.getOrElse { return }
+        webDavCache[path] = items; saveWebDavCache(server.id, webDavCache)
+        runOnUiThread { if (webDavCurrentPath == path && webDavCurrentServer?.id == server.id) { webDavCurrentItems = items; render(Page.STREAMING); setStatus("${server.displayName}：${items.size} 项") } }
+    }
+
+    private fun renderWebDavBrowser(box: LinearLayout) {
+        val server = webDavCurrentServer ?: return
+        box.addView(actionButton("返回流媒体来源") {
+            streamSource = null; webDavCurrentServer = null; webDavCurrentPath = ""; webDavCurrentItems = emptyList(); webDavCache.clear(); webDavSearchQuery = ""; render(Page.STREAMING)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)))
+        if (webDavCurrentPath.isNotBlank()) {
+            val parentPath = webDavCurrentPath.substringBeforeLast('/').ifBlank { "" }
+            val navRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(4) }
+            }
+            navRow.addView(actionButton("返回上级") { navigateWebDavDir(parentPath) }, LinearLayout.LayoutParams(0, dp(42), 1f))
+            navRow.addView(actionButton("下载整张专辑") { downloadWebDavAlbum() }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { leftMargin = dp(6) })
+            box.addView(navRow)
+        }
+        val searchEdit = editText("搜索当前目录", webDavSearchQuery) { value ->
+            webDavSearchQuery = value
+            filterWebDavItems(box)
+        }
+        val searchRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        searchRow.addView(searchEdit, LinearLayout.LayoutParams(0, dp(48), 1f))
+        searchRow.addView(actionButton("刷新") {
+            val srv = webDavCurrentServer ?: return@actionButton; setStatus("正在刷新..."); Thread { refreshWebDavDir(srv, webDavCurrentPath); runOnUiThread { webDavSearchQuery = ""; filterWebDavItems(box) } }.start()
+        }, LinearLayout.LayoutParams(dp(60), dp(42)).apply { leftMargin = dp(6) })
+        box.addView(searchRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6); bottomMargin = dp(6) })
+        val dirs = webDavCurrentItems.filter { it.isDirectory }
+        val files = webDavCurrentItems.filter { !it.isDirectory && isMusicFile(it.name) }
+        if (dirs.isEmpty() && files.isEmpty()) { box.addView(TextView(this).apply { text = "当前目录为空或无音乐文件"; bodyStyle(14f, Palette.MUTED); setPadding(dp(12), dp(20), dp(12), dp(20)) }); return }
+        dirs.forEach { item -> box.addView(webDavItemCard(item, true) { navigateWebDavDir(item.path) }) }
+        if (files.isNotEmpty()) {
+            if (dirs.isNotEmpty()) { box.addView(TextView(this).apply { text = "音乐文件（${files.size}）"; bodyStyle(12f, Palette.MUTED); setPadding(dp(12), dp(8), dp(12), dp(4)) }) }
+            files.forEach { item -> val track = webDavItemToTrack(item, server); box.addView(webDavTrackCard(track, item)) }
+        }
+        filterWebDavItems(box)
+    }
+
+    private fun filterWebDavItems(box: LinearLayout) {
+        var itemCount = 0
+        for (i in 0 until box.childCount) {
+            val child = box.getChildAt(i)
+            val tag = child.tag as? String ?: continue
+            if (tag == "dav_item") {
+                val card = (child as? LinearLayout)?.getChildAt(1) as? LinearLayout
+                val title = (card?.getChildAt(0) as? TextView)?.text?.toString() ?: ""
+                val match = webDavSearchQuery.isBlank() || title.contains(webDavSearchQuery, ignoreCase = true)
+                child.visibility = if (match) View.VISIBLE else View.GONE
+                if (match) itemCount++
+            }
+        }
+        if (webDavSearchQuery.isNotBlank()) {
+            setStatus("找到 $itemCount 项")
+        }
+    }
+
+    private fun isMusicFile(name: String): Boolean {
+        val lower = name.lowercase(Locale.ROOT)
+        return listOf(".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg", ".wma", ".opus").any { lower.endsWith(it) }
+    }
+
+    private fun isLyricsFile(name: String): Boolean {
+        val lower = name.lowercase(Locale.ROOT); return lower.endsWith(".lrc") || lower.endsWith(".txt")
+    }
+
+    private fun webDavItemToTrack(item: WebDavItem, server: WebDavServer): Track {
+        val fullUrl = "${server.url.trimEnd('/')}/${item.path.trimStart('/')}"
+        val ext = item.name.substringAfterLast('.', "").lowercase(Locale.ROOT)
+        val mimeType = when (ext) { "flac" -> "audio/flac"; "wav" -> "audio/wav"; "m4a" -> "audio/mp4"; "ogg" -> "audio/ogg"; "aac" -> "audio/aac"; "opus" -> "audio/ogg"; else -> "audio/mpeg" }
+        return Track(id = "webdav:${fullUrl.hashCode()}", uri = fullUrl, title = item.name.substringBeforeLast('.'), artist = server.displayName, album = webDavCurrentPath.substringAfterLast('/').ifBlank { server.displayName }, durationMs = 0L, mimeType = mimeType, sourcePath = fullUrl)
+    }
+
+    private fun webDavItemCard(item: WebDavItem, isDir: Boolean, onClick: () -> Unit): View {
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(12), dp(12), dp(12)); background = panelDrawable(Palette.PANEL, 8, this@MainActivity); setOnClickListener { onClick() }; layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(6) }; tag = "dav_item" }
+        row.addView(TextView(this).apply { text = if (isDir) "\uD83D\uDCC1" else "\uD83C\uDFB5"; textSize = 22f }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { rightMargin = dp(10) })
+        val textBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        textBox.addView(TextView(this).apply { text = item.name; titleStyle(15f); maxLines = 2 })
+        if (!isDir && item.size > 0) { textBox.addView(TextView(this).apply { text = formatFileSize(item.size); bodyStyle(12f, Palette.MUTED) }) }
+        row.addView(textBox, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)); return row
+    }
+
+    private fun webDavTrackCard(track: Track, item: WebDavItem): View {
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(12), dp(12), dp(12)); background = panelDrawable(Palette.PANEL, 8, this@MainActivity); layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(6) }; setOnClickListener { playWebDavTrack(track) }; setOnLongClickListener { dialogBuilder().setTitle(track.displayTitle).setItems(arrayOf("下载")) { _, _ -> downloadWebDavTrack(track, item) }.show(); true }; tag = "dav_item" }
+        row.addView(TextView(this).apply { text = "\uD83C\uDFB5"; textSize = 22f }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { rightMargin = dp(10) })
+        val textBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        textBox.addView(TextView(this).apply { text = track.displayTitle; titleStyle(15f); maxLines = 2 })
+        textBox.addView(TextView(this).apply { text = listOfNotNull(if (item.size > 0) formatFileSize(item.size) else null, item.lastModified.ifBlank { null }).joinToString(" \u00B7 "); bodyStyle(11.5f, Palette.MUTED) })
+        row.addView(textBox, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)); return row
+    }
+
+    private fun formatFileSize(bytes: Long): String {
+        return when { bytes < 1024 -> "$bytes B"; bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024.0); bytes < 1024 * 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024.0)); else -> "%.2f GB".format(bytes / (1024.0 * 1024.0 * 1024.0)) }
+    }
+
+    private fun playWebDavTrack(track: Track) {
+        val server = webDavCurrentServer ?: return
+        val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert)
+        val streamPreload = streamPreloadCount.coerceIn(0, 5)
+        val item = webDavCurrentItems.firstOrNull { webDavItemToTrack(it, server).id == track.id }
+        val allMusic = webDavCurrentItems.filter { !it.isDirectory && isMusicFile(it.name) }.map { webDavItemToTrack(it, server) }
+        val startIdx = allMusic.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
+        currentQueue = if (allMusic.size > 1) {
+            val preload = allMusic.drop(startIdx).take(streamPreload + 1)
+            val rest = allMusic.filter { it.id !in preload.map { t -> t.id } }
+            preload + rest
+        } else listOf(track)
+        player.headersForTrack = { t ->
+            if (t.id.startsWith("webdav:")) client.streamHeaders()
+            else if (t.id.startsWith("stream:dizzylab:") && dizzylabCookie.isNotBlank()) DizzylabClient(dizzylabCookie).streamHeaders()
+            else emptyMap()
+        }
+        if (item != null) {
+            val ext = item.name.substringAfterLast('.', "mp3")
+            val cacheDir = File(streamCacheDir(), "webdav_stream").apply { mkdirs() }
+            val cacheFile = File(cacheDir, "${item.path.hashCode()}_${safeFileName(track.displayTitle)}.$ext")
+            if (cacheFile.exists()) {
+                val cachedTrack = track.copy(uri = Uri.fromFile(cacheFile).toString(), sourcePath = cacheFile.absolutePath)
+                playTrack(cachedTrack, currentQueue)
+                return
+            }
+            setStatus("正在缓冲 ${track.displayTitle}...")
+            Thread {
+                val bytes = runCatching { client.download(item.path) }.getOrElse {
+                    runOnUiThread { Toast.makeText(this, "缓冲失败", Toast.LENGTH_SHORT).show(); setStatus("缓冲失败") }
+                    return@Thread
+                }
+                cacheFile.writeBytes(bytes)
+                enforceStreamCacheLimit()
+                val cachedTrack = track.copy(uri = Uri.fromFile(cacheFile).toString(), sourcePath = cacheFile.absolutePath)
+                runOnUiThread { playTrack(cachedTrack, currentQueue) }
+                Thread {
+                    val dirPath = track.sourcePath.substringBeforeLast('/')
+                    val coverUrl = runCatching { client.findCoverImage(dirPath) }.getOrNull()
+                    if (coverUrl != null) { val ct = cachedTrack.copy(artworkPath = coverUrl); runOnUiThread { if (player.currentTrack?.id == track.id) updateNowPlayingViews(ct) } }
+                }.start()
+            }.start()
+            return
+        }
+        playTrack(track, currentQueue)
+        Thread {
+            val dirPath = track.sourcePath.substringBeforeLast('/')
+            val coverUrl = runCatching { client.findCoverImage(dirPath) }.getOrNull()
+            if (coverUrl != null) { val ct = track.copy(artworkPath = coverUrl); runOnUiThread { if (player.currentTrack?.id == track.id) updateNowPlayingViews(ct) } }
+        }.start()
+    }
+
+    private fun downloadWebDavTrack(track: Track, item: WebDavItem) {
+        val server = webDavCurrentServer ?: return
+        if (!ensureStreamDownloadFolderReady { downloadWebDavTrack(track, item) }) return
+        val folderName = webDavCurrentPath.substringAfterLast('/').ifBlank { server.name }
+        setStatus("正在下载：${track.displayTitle}"); writeDebugLog("DOWNLOAD", "开始下载: ${item.path}, url=${track.uri}")
+        Thread {
+            val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert)
+            runCatching {
+                val bytes = client.download(item.path)
+                val fileName = safeFileName("${track.displayTitle}.${track.uri.substringBefore("?").substringAfterLast('.', "mp3")}")
+                val lyricsBytes = tryDownloadWebDavLyrics(client, item)
+                val lyricsUri = if (lyricsBytes != null) { val lrcName = safeFileName("${track.displayTitle}.lrc"); writeStreamDownloadBytes("webdav", folderName, lrcName, "text/plain", lyricsBytes) } else ""
+                val uri = writeStreamDownloadBytes("webdav", folderName, fileName, track.mimeType.ifBlank { "audio/mpeg" }, bytes)
+                val scanned = rescanMetadata(uri, track)
+                val downloaded = scanned.copy(id = "download:webdav:${uri.hashCode()}", uri = uri, lyricsUri = lyricsUri, sourcePath = localPathForUriString(uri).ifBlank { fileName })
+                addDownloadedTracksToLibrary(listOf(downloaded), StreamAlbumDetails(album = StreamAlbum(server.name, server.name, server.url), tracks = listOf(downloaded), circle = server.name))
+                runOnUiThread { writeDebugLog("DOWNLOAD", "下载完成: ${track.displayTitle}"); Toast.makeText(this, "下载完成：${track.displayTitle}", Toast.LENGTH_SHORT).show(); setStatus("下载完成：${track.displayTitle}") }
+            }.onFailure { error -> runOnUiThread { writeDebugLog("DOWNLOAD", "下载失败: ${error.message}"); Toast.makeText(this, "下载失败：${error.message}", Toast.LENGTH_SHORT).show(); setStatus("下载失败") } }
+        }.start()
+    }
+
+    private fun rescanMetadata(uri: String, fallback: Track): Track {
+        return runCatching {
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(this, Uri.parse(uri))
+            val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)?.trim()?.ifBlank { null }
+            val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)?.trim()?.ifBlank { null }
+            val album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)?.trim()?.ifBlank { null }
+            val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+            retriever.release()
+            fallback.copy(
+                title = title ?: fallback.title,
+                artist = artist ?: fallback.artist,
+                album = album ?: fallback.album,
+                durationMs = duration ?: fallback.durationMs
+            )
+        }.getOrElse { fallback }
+    }
+
+    private fun tryDownloadWebDavLyrics(client: WebDavClient, item: WebDavItem): ByteArray? {
+        return runCatching {
+            val dirPath = item.path.substringBeforeLast('/'); val baseName = item.name.substringBeforeLast('.')
+            val items = client.listDirectory(dirPath)
+            val lrcItem = items.firstOrNull { !it.isDirectory && isLyricsFile(it.name) && it.name.substringBeforeLast('.').equals(baseName, ignoreCase = true) } ?: return null
+            client.download(lrcItem.path)
+        }.getOrNull()
+    }
+
+    private fun downloadWebDavAlbum() {
+        val server = webDavCurrentServer ?: return
+        val allFiles = webDavCurrentItems.filter { !it.isDirectory && isMusicFile(it.name) }
+        if (allFiles.isEmpty()) { Toast.makeText(this, "当前目录没有音乐文件", Toast.LENGTH_SHORT).show(); return }
+        if (!ensureStreamDownloadFolderReady { downloadWebDavAlbum() }) return
+        val folderName = webDavCurrentPath.substringAfterLast('/').ifBlank { server.name }
+        val total = allFiles.size
+        setStatus("正在下载专辑 (0/$total)...")
+        updateDownloadNotification("下载专辑", 0, total)
+        Thread {
+            val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert)
+            val downloaded = mutableListOf<Track>()
+            allFiles.forEachIndexed { index, item ->
+                runCatching {
+                    val bytes = client.download(item.path)
+                    val track = webDavItemToTrack(item, server)
+                    val fileName = safeFileName("${track.displayTitle}.${track.uri.substringBefore("?").substringAfterLast('.', "mp3")}")
+                    val lyricsBytes = tryDownloadWebDavLyrics(client, item)
+                    val lyricsUri = if (lyricsBytes != null) { val lrcName = safeFileName("${track.displayTitle}.lrc"); writeStreamDownloadBytes("webdav", folderName, lrcName, "text/plain", lyricsBytes) } else ""
+                    val uri = writeStreamDownloadBytes("webdav", folderName, fileName, track.mimeType.ifBlank { "audio/mpeg" }, bytes)
+                    val scanned = rescanMetadata(uri, track)
+                    downloaded += scanned.copy(id = "download:webdav:${uri.hashCode()}", uri = uri, lyricsUri = lyricsUri, sourcePath = localPathForUriString(uri).ifBlank { fileName })
+                }
+                runOnUiThread { updateDownloadNotification("下载专辑", index + 1, total); setStatus("正在下载专辑 (${index + 1}/$total)...") }
+            }
+            if (downloaded.isNotEmpty()) {
+                addDownloadedTracksToLibrary(downloaded, StreamAlbumDetails(album = StreamAlbum(server.name, server.name, server.url), tracks = downloaded, circle = server.name))
+            }
+            runOnUiThread {
+                finishDownloadNotification("下载完成", downloaded.size, total)
+                Toast.makeText(this, "专辑下载完成：${downloaded.size} / $total", Toast.LENGTH_LONG).show()
+                setStatus("下载完成：${downloaded.size} / $total")
+            }
+        }.start()
     }
 
     private fun readBundledReadme(): String {
@@ -5679,7 +6171,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private enum class StreamSource {
-        DIZZYLAB
+        DIZZYLAB, WEBDAV
     }
 
     private enum class PlaylistCategory(val label: String) {
@@ -5733,7 +6225,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val LYRICS_NOTIFICATION_ID = 31
         private const val FLOATING_LYRICS_NOTIFICATION_ID = 41
         private const val TAG = "SMP"
-        private const val APP_VERSION = "1.5.1"
+        private const val APP_VERSION = "beta1.1.0"
         private const val REPO_URL = "https://github.com/SuperMite233/Simple-Music-Player"
         private const val ISSUES_URL = "$REPO_URL/issues"
         private const val AUTHOR_URL = "https://space.bilibili.com/287415007"

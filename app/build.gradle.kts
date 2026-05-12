@@ -11,8 +11,8 @@ android {
         applicationId = "com.supermite.smp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18
-        versionName = "1.5.1"
+        versionCode = 20
+        versionName = "beta1.1.0"
     }
 
     kotlinOptions {
@@ -27,4 +27,5 @@ android {
 
 dependencies {
     implementation("net.jthink:jaudiotagger:3.0.1")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }

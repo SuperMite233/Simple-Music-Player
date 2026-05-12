@@ -18,6 +18,8 @@ class LibraryStore(context: Context) {
     var albumPlaylistsCreated: Boolean = false
         private set
 
+    val webDavServers: MutableList<WebDavServer> = mutableListOf()
+
     init {
         load()
         ensureSystemPlaylists()
@@ -370,9 +372,22 @@ class LibraryStore(context: Context) {
         countsObj.keys().forEach { key ->
             playCounts[key] = countsObj.optInt(key, 0).coerceAtLeast(0)
         }
+
+        root.optJSONArray("webDavServers").forEachObject { obj ->
+            webDavServers += WebDavServer(
+                id = obj.optString("id"),
+                name = obj.optString("name"),
+                alias = obj.optString("alias", ""),
+                url = obj.optString("url"),
+                username = obj.optString("username"),
+                password = obj.optString("password"),
+                port = obj.optInt("port", 0),
+                ignoreCert = obj.optBoolean("ignoreCert", false)
+            )
+        }
     }
 
-    private fun save() {
+    fun save() {
         val root = JSONObject()
         root.put("albumPlaylistsCreated", albumPlaylistsCreated)
 
@@ -408,6 +423,18 @@ class LibraryStore(context: Context) {
         val countsObj = JSONObject()
         playCounts.forEach { (id, count) -> countsObj.put(id, count) }
         root.put("playCounts", countsObj)
+
+        root.put("webDavServers", JSONArray(webDavServers.map { server ->
+            JSONObject()
+                .put("id", server.id)
+                .put("name", server.name)
+                .put("alias", server.alias)
+                .put("url", server.url)
+                .put("username", server.username)
+                .put("password", server.password)
+                .put("port", server.port)
+                .put("ignoreCert", server.ignoreCert)
+        }))
 
         file.writeText(root.toString(2))
     }

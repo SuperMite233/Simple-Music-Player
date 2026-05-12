@@ -76,3 +76,16 @@ data class CueTrack(
     val startMs: Long
 )
 
+data class WebDavServer(
+    val id: String,
+    val name: String,
+    val alias: String = "",
+    val url: String,
+    val username: String = "",
+    val password: String = "",
+    val port: Int = 0,
+    val ignoreCert: Boolean = false
+) {
+    val displayName: String get() = alias.ifBlank { name.ifBlank { url } }
+}
+
