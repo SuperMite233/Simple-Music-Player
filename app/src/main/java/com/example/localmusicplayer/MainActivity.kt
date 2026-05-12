@@ -181,6 +181,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var dizzylabQuery: String = ""
     private var dizzylabVisibleAlbumCount: Int = 40
     private var pendingStreamScrollY: Int = -1
+    private var streamScrollView: ScrollView? = null
+    private var streamContentBox: LinearLayout? = null
+    private var streamSearchEdit: EditText? = null
     private var dizzylabAlbums: List<StreamAlbum> = emptyList()
     private var openedDizzylabAlbum: StreamAlbumDetails? = null
     private var pendingStreamDownloadAfterFolder: (() -> Unit)? = null
@@ -642,7 +645,43 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun buildMiniPlayer(): View {
-        val panel = LinearLayout(this).apply {
+        val panel = object : LinearLayout(this@MainActivity) {
+            private var swipeStartX = 0f
+            private var swiping = false
+
+            override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+                when (ev.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        swipeStartX = ev.x
+                        swiping = false
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        if (!swiping && kotlin.math.abs(ev.x - swipeStartX) > dp(30).toFloat()) {
+                            swiping = true
+                            return true
+                        }
+                    }
+                }
+                return swiping
+            }
+
+            override fun onTouchEvent(event: MotionEvent): Boolean {
+                when (event.action) {
+                    MotionEvent.ACTION_UP -> {
+                        if (swiping) {
+                            val dx = event.x - swipeStartX
+                            if (kotlin.math.abs(dx) > dp(60).toFloat()) {
+                                if (dx < 0) playNextOrFirst() else playPreviousOrFirst()
+                            }
+                            swiping = false
+                            return true
+                        }
+                    }
+                    MotionEvent.ACTION_CANCEL -> swiping = false
+                }
+                return super.onTouchEvent(event)
+            }
+        }.apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(10), dp(12), dp(10))
             background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
@@ -1046,6 +1085,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         content.addView(actionButton("返回音乐列表") {
             streamSource = null
             openedDizzylabAlbum = null
+            streamScrollView = null
+            streamContentBox = null
             render(Page.PLAYLISTS)
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)))
         content.addView(sectionTitle("流媒体模式"))
@@ -1056,11 +1097,15 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         if (openedDizzylabAlbum != null) {
             renderDizzylabAlbum(box, openedDizzylabAlbum!!)
         } else if (streamSource == StreamSource.DIZZYLAB && dizzylabAlbums.isNotEmpty()) {
+            streamScrollView = scroll
+            streamContentBox = box
             box.addView(actionButton("返回流媒体来源") {
                 streamSource = null
                 dizzylabAlbums = emptyList()
                 dizzylabQuery = ""
                 dizzylabVisibleAlbumCount = 40
+                streamScrollView = null
+                streamContentBox = null
                 render(Page.STREAMING)
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)))
             val searchRow = LinearLayout(this).apply {
@@ -1069,8 +1114,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             }
             val search = editText("搜索已购专辑", dizzylabQuery) { value ->
                 dizzylabQuery = value
-                render(Page.STREAMING)
+                filterStreamingAlbums()
             }
+            streamSearchEdit = search
             searchRow.addView(search, LinearLayout.LayoutParams(0, dp(54), 1f))
             searchRow.addView(actionButton("在线搜索") { loadDizzylabAlbums(dizzylabQuery) }, LinearLayout.LayoutParams(dp(92), dp(48)).apply {
                 leftMargin = dp(8)
@@ -1081,15 +1127,14 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             }
             filteredAlbums.take(dizzylabVisibleAlbumCount).forEach { album ->
                 box.addView(streamAlbumCard(album, "DizzyLab 专辑") {
+                    pendingStreamScrollY = streamScrollView?.scrollY ?: -1
                     loadDizzylabAlbum(album)
                 })
             }
             if (filteredAlbums.size > dizzylabVisibleAlbumCount) {
                 box.addView(actionButton("加载更多（${dizzylabVisibleAlbumCount}/${filteredAlbums.size}）") {
-                    pendingStreamScrollY = scroll.scrollY
-                    dizzylabVisibleAlbumCount += 40
-                    render(Page.STREAMING)
-                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
+                    loadMoreStreamingAlbums()
+                }.apply { tag = "load_more" }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
                     topMargin = dp(8)
                     bottomMargin = dp(8)
                 })
@@ -1107,12 +1152,75 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         scroll.addView(box)
         content.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        if (pendingStreamScrollY >= 0) {
+        if (pendingStreamScrollY >= 0 && openedDizzylabAlbum == null) {
             val restoreY = pendingStreamScrollY
             pendingStreamScrollY = -1
             scroll.post { scroll.scrollTo(0, restoreY) }
         }
         setStatus("流媒体模式")
+    }
+
+    private fun loadMoreStreamingAlbums() {
+        val box = streamContentBox ?: return
+        val filteredAlbums = dizzylabAlbums.filter { album ->
+            dizzylabQuery.isBlank() || album.title.contains(dizzylabQuery, ignoreCase = true)
+        }
+        val oldCount = dizzylabVisibleAlbumCount
+        val newAlbums = filteredAlbums.drop(oldCount).take(40)
+        if (newAlbums.isEmpty()) return
+        dizzylabVisibleAlbumCount += 40
+        if (box.childCount > 0) box.removeViewAt(box.childCount - 1)
+        newAlbums.forEach { album ->
+            box.addView(streamAlbumCard(album, "DizzyLab 专辑") {
+                pendingStreamScrollY = streamScrollView?.scrollY ?: -1
+                loadDizzylabAlbum(album)
+            })
+        }
+        if (filteredAlbums.size > dizzylabVisibleAlbumCount) {
+            box.addView(actionButton("加载更多（${dizzylabVisibleAlbumCount}/${filteredAlbums.size}）") {
+                loadMoreStreamingAlbums()
+            }.apply { tag = "load_more" }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
+                topMargin = dp(8)
+                bottomMargin = dp(8)
+            })
+        }
+    }
+
+    private fun filterStreamingAlbums() {
+        val box = streamContentBox ?: return
+        var visibleCount = 0
+        var visibleTotal = 0
+        dizzylabAlbums.forEach { album ->
+            if (dizzylabQuery.isBlank() || album.title.contains(dizzylabQuery, ignoreCase = true)) {
+                visibleTotal++
+            }
+        }
+        for (i in 0 until box.childCount) {
+            val child = box.getChildAt(i)
+            val tag = child.tag as? String ?: continue
+            if (!tag.startsWith("album_card:")) continue
+            val albumId = tag.removePrefix("album_card:")
+            val album = dizzylabAlbums.firstOrNull { it.id == albumId }
+            if (album != null && (dizzylabQuery.isBlank() || album.title.contains(dizzylabQuery, ignoreCase = true))) {
+                child.visibility = View.VISIBLE
+                visibleCount++
+            } else {
+                child.visibility = View.GONE
+            }
+        }
+        val lastChild = if (box.childCount > 0) box.getChildAt(box.childCount - 1) else null
+        val isLoadMore = (lastChild?.tag as? String)?.startsWith("load_more") == true
+        if (visibleTotal > visibleCount) {
+            if (isLoadMore) box.removeViewAt(box.childCount - 1)
+            box.addView(actionButton("加载更多（${visibleCount}/${visibleTotal}）") {
+                loadMoreStreamingAlbums()
+            }.apply { tag = "load_more" }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
+                topMargin = dp(8)
+                bottomMargin = dp(8)
+            })
+        } else if (isLoadMore) {
+            box.removeViewAt(box.childCount - 1)
+        }
     }
 
     private fun renderDizzylabAlbum(box: LinearLayout, details: StreamAlbumDetails) {
@@ -1145,6 +1253,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(8)
             }
+            tag = "album_card:${album.id}"
         }
         val cover = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
@@ -1277,9 +1386,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             artFrame,
             onLeft = { playNextOrFirst() },
             onRight = { playPreviousOrFirst() },
-            onUp = {},
-            onDown = {},
-            onSingleTap = {},
+            onUp = { showCurrentQueueDialog() },
+            onDown = { showTrackDetailsDialog(track) },
+            onSingleTap = {        
+                nowPlayingArtworkHidden = !nowPlayingArtworkHidden
+                render(Page.NOW_PLAYING)
+        },
             onDoubleTap = {
                 if (nowPlayingArtworkHidden) seekToVisibleLyric(track) else toggleFavoriteFromArtwork(track)
             }
@@ -1303,7 +1415,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                     MotionEvent.ACTION_UP -> {
                         val isTap = kotlin.math.abs(event.x - downX) < dp(18) && kotlin.math.abs(event.y - downY) < dp(18)
                         if (isTap && isLyricsBlankTap(event.y)) {
-                            nowPlayingArtworkHidden = false
+                            nowPlayingArtworkHidden = true
                             render(Page.NOW_PLAYING)
                             return@setOnTouchListener true
                         }
@@ -1360,6 +1472,15 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         controls.addView(iconActionButton("下一首", R.drawable.ic_next_track) { playNext() }, weightedParams())
         controls.addView(iconActionButton("菜单", R.drawable.ic_menu) { showNowPlayingMenu(track) }, weightedParams())
         box.addView(controls)
+
+        val bottomBlankGestureArea = View(this).apply {
+        background = ColorDrawable(Color.TRANSPARENT)
+        }
+        attachNowPlayingBlankGestures(bottomBlankGestureArea, track)
+        box.addView(bottomBlankGestureArea, LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        dp(120)
+        ))
 
         scroll.addView(box)
         content.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -2970,7 +3091,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun saveLrcLibLyrics(track: Track, lyrics: String): String {
-        val fileName = safeFileName("${track.artist} - ${track.title}-${track.id.hashCode()}.lrc")
+        val songFile = localTrackFile(track)
+        val baseName = songFile?.nameWithoutExtension ?: track.title
+        val fileName = safeFileName("${baseName}.lrc")
         val bytes = lyrics.toByteArray(Charsets.UTF_8)
         return when (outputDirectoryMode) {
             OutputDirectoryMode.DOWNLOAD -> writeDownloadOutputBytes("lrc", fileName, "text/plain", bytes)
@@ -5610,7 +5733,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val LYRICS_NOTIFICATION_ID = 31
         private const val FLOATING_LYRICS_NOTIFICATION_ID = 41
         private const val TAG = "SMP"
-        private const val APP_VERSION = "beta1.0.5"
+        private const val APP_VERSION = "beta1.0.6"
         private const val REPO_URL = "https://github.com/SuperMite233/Simple-Music-Player"
         private const val ISSUES_URL = "$REPO_URL/issues"
         private const val AUTHOR_URL = "https://space.bilibili.com/287415007"

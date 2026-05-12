@@ -26,10 +26,12 @@ class DizzylabClient(private val cookie: String) {
 
     fun albums(musicUrl: String, query: String = ""): List<StreamAlbum> {
         val startUrl = if (query.isBlank()) musicUrl else musicUrl.trimEnd('/') + "/?q=" + URLEncoder.encode(query, "UTF-8")
-        val html = get(startUrl)
-        val allAlbums = albumsFromHtml(html).toMutableList()
-        pageUrls(html, startUrl).forEach { pageUrl ->
-            runCatching { allAlbums += albumsFromHtml(get(pageUrl)) }
+        val allAlbums = mutableListOf<StreamAlbum>()
+        var currentUrl: String? = startUrl
+        while (currentUrl != null) {
+            val html = get(currentUrl)
+            allAlbums += albumsFromHtml(html)
+            currentUrl = nextPageUrl(html, currentUrl)
         }
         return allAlbums.distinctBy { it.url }
     }
@@ -212,15 +214,16 @@ class DizzylabClient(private val cookie: String) {
             val rawText = stripTags(match.groupValues[3]).cleanText()
             val number = match.groupValues[1].toIntOrNull()?.plus(1) ?: 0
             val duration = parseDurationText(rawText)
+            val cleanedText = rawText
+                .replace(Regex("""^\d+\.\s*"""), "")
+                .replace(Regex("""\s*\(\d{1,2}:\d{2}(?::\d{2})?\)\s*$"""), "")
+                .trim()
+            val (trackTitle, trackArtist) = splitTitleArtist(cleanedText)
             Track(
                 id = "stream:dizzylab:${match.groupValues[2].hashCode()}",
                 uri = absoluteUrl(match.groupValues[2]),
-                title = rawText
-                    .replace(Regex("""^\d+\.\s*"""), "")
-                    .replace(Regex("""\s*\(\d{1,2}:\d{2}(?::\d{2})?\)\s*$"""), "")
-                    .trim()
-                    .ifBlank { "Track $number" },
-                artist = parseTrackArtist(rawText).ifBlank { parseCircle(html).ifBlank { "DizzyLab" } },
+                title = trackTitle.ifBlank { "Track $number" },
+                artist = trackArtist.ifBlank { parseTrackArtist(rawText).ifBlank { parseCircle(html).ifBlank { "DizzyLab" } } },
                 album = albumTitle,
                 durationMs = duration,
                 trackNumber = number,
@@ -242,11 +245,13 @@ class DizzylabClient(private val cookie: String) {
             .filter { it.isNotBlank() && it.length <= 120 }
             .toList()
         return audioSources.mapIndexed { index, url ->
+            val rawName = names.getOrNull(index).orEmpty()
+            val (trackTitle, trackArtist) = splitTitleArtist(rawName)
             Track(
                 id = "stream:dizzylab:${url.hashCode()}",
                 uri = url,
-                title = names.getOrNull(index).orEmpty().ifBlank { "Track ${index + 1}" },
-                artist = parseCircle(html).ifBlank { "DizzyLab" },
+                title = trackTitle.ifBlank { "Track ${index + 1}" },
+                artist = trackArtist.ifBlank { parseCircle(html).ifBlank { "DizzyLab" } },
                 album = albumTitle,
                 durationMs = parseDurationNear(html, url),
                 mimeType = mimeFromUrl(url),
@@ -256,18 +261,49 @@ class DizzylabClient(private val cookie: String) {
         }
     }
 
-    private fun pageUrls(html: String, musicUrl: String): List<String> {
-        val base = musicUrl.substringBefore("?").trimEnd('/')
-        val query = musicUrl.substringAfter("?", "")
+    private fun nextPageUrl(html: String, currentUrl: String): String? {
+        val nextByAttr = Regex(
+            """<a\b[^>]*\b(?:rel=["']next["']|aria-label=["'](?:Next|下一页)["'])[^>]*href=["']([^"']+)["']""",
+            setOf(RegexOption.IGNORE_CASE)
+        )
+        nextByAttr.find(html)?.groupValues?.getOrNull(1)?.let { href ->
+            buildNextPageUrl(currentUrl, href)?.let { return it }
+        }
+
+        val nextPattern = Regex(
+            """<a\b[^>]*href=["']([^"']+)["'][^>]*>.*?(?:下一页|Next|›|»|&rsaquo;|&raquo;|\u203a|次へ|next\s*page).*?</a>""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        )
+        nextPattern.find(html)?.groupValues?.getOrNull(1)?.let { href ->
+            buildNextPageUrl(currentUrl, href)?.let { return it }
+        }
+
         val pages = Regex("""[?&]page=(\d+)""")
             .findAll(html)
             .mapNotNull { it.groupValues[1].toIntOrNull() }
-            .filter { it > 1 }
             .distinct()
             .sorted()
-        return pages.map { page ->
-            if (query.isBlank()) "$base/?page=$page" else "$base/?$query&page=$page"
-        }.toList()
+            .toList()
+        if (pages.isEmpty()) return null
+        val currentPage = Regex("""[?&]page=(\d+)""").find(currentUrl)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 1
+        val maxPage = pages.last()
+        val nextPage = if (currentPage + 1 <= maxPage) currentPage + 1 else null
+        if (nextPage == null || nextPage !in 1..maxPage) return null
+        return buildPageUrl(currentUrl, nextPage)
+    }
+
+    private fun buildNextPageUrl(currentUrl: String, href: String): String? {
+        val pageNum = Regex("""[?&]page=(\d+)""").find(href)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: return null
+        val currentPage = Regex("""[?&]page=(\d+)""").find(currentUrl)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 1
+        if (pageNum <= currentPage) return null
+        return buildPageUrl(currentUrl, pageNum)
+    }
+
+    private fun buildPageUrl(currentUrl: String, pageNum: Int): String {
+        val base = currentUrl.substringBefore("?").trimEnd('/')
+        val query = currentUrl.substringAfter("?", "").replace(Regex("""[&]?page=\d+"""), "")
+        val sep = if (query.isBlank()) "" else "&"
+        return "$base/?$query${sep}page=$pageNum"
     }
 
     private fun get(url: String): String {
@@ -398,6 +434,15 @@ class DizzylabClient(private val cookie: String) {
             .trim()
     }
 
+    private fun splitTitleArtist(cleanedText: String): Pair<String, String> {
+        val parts = cleanedText.split(" - ", limit = 2)
+        return if (parts.size == 2) {
+            parts[0].trim() to parts[1].trim()
+        } else {
+            cleanedText to ""
+        }
+    }
+
     private fun parseDurationText(text: String): Long {
         val match = Regex("""\((\d{1,2}):(\d{2})(?::(\d{2}))?\)""").find(text) ?: return 0L
         val first = match.groupValues[1].toLongOrNull() ?: 0L
@@ -463,7 +508,7 @@ class DizzylabClient(private val cookie: String) {
 
     companion object {
         private const val BASE = "https://www.dizzylab.net"
-        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android) SMP/beta1.0.5"
+        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android) SMP/beta1.0.6"
     }
 }
 
