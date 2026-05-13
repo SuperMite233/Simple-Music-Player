@@ -42,6 +42,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.view.inputmethod.EditorInfo
 import android.webkit.CookieManager
 import android.webkit.WebView
@@ -55,6 +56,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ListView
+import android.widget.ProgressBar
 import android.widget.RatingBar
 import android.widget.ScrollView
 import android.widget.SeekBar
@@ -212,6 +214,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var floatingLyricsView: StrokeTextView? = null
     private var floatingLyricsAdded: Boolean = false
     private var appInForeground: Boolean = false
+    private var loadingOverlay: View? = null
+    private var loadingCount: Int = 0
     private var updateCheckStarted: Boolean = false
     private var equalizerPreset: String = "默认"
     private var equalizerLevels: MutableList<Int> = MutableList(5) { 0 }
@@ -396,6 +400,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                     setStatus("通知权限未授予，状态栏播放控件已关闭。")
                 }
                 if (page == Page.SETTINGS) render(Page.SETTINGS)
+                autoScanOnceIfNeeded()
             }
         }
     }
@@ -625,7 +630,32 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         root.addView(miniPlayerPanel)
         root.addView(buildBottomNavigation())
         frame.addView(root, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        loadingOverlay = ProgressBar(this).apply {
+            visibility = View.GONE
+            isIndeterminate = true
+        }
+        frame.addView(loadingOverlay, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         setContentView(frame)
+    }
+
+    private fun showLoading() {
+        loadingCount++
+        loadingOverlay?.visibility = View.VISIBLE
+    }
+
+    private fun hideLoading() {
+        loadingCount = (loadingCount - 1).coerceAtLeast(0)
+        if (loadingCount == 0) loadingOverlay?.visibility = View.GONE
+    }
+
+    private fun applyCardPressEffect(view: View) {
+        view.setOnTouchListener { v, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> v.animate().scaleX(0.97f).scaleY(0.97f).setDuration(80).setInterpolator(DecelerateInterpolator()).start()
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> v.animate().scaleX(1f).scaleY(1f).setDuration(100).setInterpolator(DecelerateInterpolator()).start()
+            }
+            false
+        }
     }
 
     private fun addBackgroundImage(frame: FrameLayout) {
@@ -793,20 +823,45 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun render(target: Page) {
         if (target != Page.LIBRARY && target != Page.PLAYLISTS) clearSelection()
         page = target
-        content.removeAllViews()
-        nowPagePlayButton = null
-        nowPageSeek = null
-        nowPageTime = null
-        nowPageLyrics = null
-        nowPageLyricsScroll = null
-        nowPageLyricsBox = null
-        miniPlayerPanel.visibility = if (target == Page.NOW_PLAYING || target == Page.SETTINGS) View.GONE else View.VISIBLE
-        headerTitle.text = if (target == Page.SETTINGS) "SMP" else ""
+        if (content.childCount > 0) {
+            val old = content.getChildAt(0)
+            old.animate().alpha(0f).setDuration(120).withEndAction {
+                content.removeAllViews()
+                nowPagePlayButton = null; nowPageSeek = null; nowPageTime = null
+                nowPageLyrics = null; nowPageLyricsScroll = null; nowPageLyricsBox = null
+                miniPlayerPanel.visibility = if (target == Page.NOW_PLAYING || target == Page.SETTINGS) View.GONE else View.VISIBLE
+                headerTitle.text = if (target == Page.SETTINGS) "SMP" else ""
+                updateNavButtons(target)
+                buildPageContent(target)
+                if (content.childCount > 0) {
+                    content.getChildAt(0).alpha = 0f
+                    content.getChildAt(0).animate().alpha(1f).setDuration(120).start()
+                }
+            }.start()
+        } else {
+            content.removeAllViews()
+            nowPagePlayButton = null; nowPageSeek = null; nowPageTime = null
+            nowPageLyrics = null; nowPageLyricsScroll = null; nowPageLyricsBox = null
+            miniPlayerPanel.visibility = if (target == Page.NOW_PLAYING || target == Page.SETTINGS) View.GONE else View.VISIBLE
+            headerTitle.text = if (target == Page.SETTINGS) "SMP" else ""
+            updateNavButtons(target)
+            buildPageContent(target)
+            if (content.childCount > 0) {
+                content.getChildAt(0).alpha = 0f
+                content.getChildAt(0).animate().alpha(1f).setDuration(120).start()
+            }
+        }
+    }
+
+    private fun updateNavButtons(target: Page) {
         navButtons.forEach { (navPage, button) ->
             button.background = ColorDrawable(Color.TRANSPARENT)
             button.setTextColor(if (navPage == target) Palette.TEXT else Palette.MUTED)
             tintTextViewDrawables(button, if (navPage == target) Palette.TEXT else Palette.MUTED)
         }
+    }
+
+    private fun buildPageContent(target: Page) {
         when (target) {
             Page.SCAN -> renderScanPage()
             Page.LIBRARY -> renderLibraryPage()
@@ -1283,6 +1338,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             setPadding(dp(12), dp(12), dp(12), dp(12))
             background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
             setOnClickListener { onClick() }
+            applyCardPressEffect(this)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(8)
             }
@@ -1319,6 +1375,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             setPadding(dp(12), dp(12), dp(12), dp(12))
             background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
             setOnClickListener { onClick() }
+            applyCardPressEffect(this)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(8)
                 topMargin = dp(8)
@@ -1361,6 +1418,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             setPadding(dp(12), dp(12), dp(12), dp(12))
             background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
             setOnClickListener { onClick() }
+            applyCardPressEffect(this)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(8)
             }
@@ -2554,7 +2612,6 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 notificationEnabled = true
                 saveSettings()
                 requestNotificationPermissionIfNeeded()
-                autoScanOnceIfNeeded()
             }
             .setNegativeButton("仅扫描音乐") { _, _ ->
                 autoScanOnceIfNeeded()
@@ -3488,6 +3545,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             setPadding(dp(14), dp(12), dp(14), dp(12))
             background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
             setOnClickListener { onClick() }
+            applyCardPressEffect(this)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(8)
             }
@@ -4543,6 +4601,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(8), dp(12), dp(8))
         }
+        if (store.webDavServers.isEmpty()) {
+            box.addView(TextView(this).apply {
+                text = "未添加任何 WebDav 服务器\n\n取决于服务器的源文件质量，串流播放可能会非常消耗流量"
+                bodyStyle(14f, Palette.MUTED)
+                setPadding(dp(8), dp(4), dp(8), dp(12))
+            })
+        }
         store.webDavServers.forEach { server ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -4671,16 +4736,17 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun navigateWebDavDir(path: String) {
         val server = webDavCurrentServer ?: return
         webDavCurrentPath = path; webDavSearchQuery = ""
-        val cached = webDavCache[path]
-        if (cached != null) { webDavCurrentItems = cached; render(Page.STREAMING); setStatus("${server.displayName}：${cached.size} 项（缓存）"); Thread { refreshWebDavDir(server, path) }.start(); return }
-        setStatus("正在加载目录..."); writeDebugLog("NAVIGATE", "加载目录: $path")
+        val cacheKey = path.trimEnd('/').ifBlank { "" }
+        val cached = webDavCache[cacheKey]
+        if (cached != null) { webDavCurrentItems = cached; render(Page.STREAMING); setStatus("${server.displayName}：${cached.size} 项（缓存）"); Thread { refreshWebDavDir(server, cacheKey) }.start(); return }
+        setStatus("正在加载目录..."); writeDebugLog("NAVIGATE", "加载目录: \"$cacheKey\"")
         Thread {
             val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert)
-            val items = runCatching { client.listDirectory(path) }.getOrElse {
+            val items = runCatching { client.listDirectory(cacheKey) }.getOrElse {
                 runOnUiThread { writeDebugLog("NAVIGATE", "加载失败: ${it.message}"); Toast.makeText(this, "加载目录失败：${it.message}", Toast.LENGTH_SHORT).show(); setStatus("WebDav 加载失败") }
                 return@Thread
             }
-            webDavCache[path] = items; saveWebDavCache(server.id, webDavCache)
+            webDavCache[cacheKey] = items; saveWebDavCache(server.id, webDavCache)
             runOnUiThread { webDavCurrentItems = items; render(Page.STREAMING); setStatus("${server.displayName}：${items.size} 项") }
         }.start()
     }
@@ -4839,7 +4905,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun downloadWebDavTrack(track: Track, item: WebDavItem) {
         val server = webDavCurrentServer ?: return
         if (!ensureStreamDownloadFolderReady { downloadWebDavTrack(track, item) }) return
-        val folderName = webDavCurrentPath.substringAfterLast('/').ifBlank { server.name }
+        val folderName = item.path.substringBeforeLast('/').substringAfterLast('/').ifBlank { webDavCurrentPath.substringAfterLast('/').ifBlank { server.name } }
         setStatus("正在下载：${track.displayTitle}"); writeDebugLog("DOWNLOAD", "开始下载: ${item.path}, url=${track.uri}")
         Thread {
             val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert)
@@ -5836,6 +5902,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             setTextColor(if (selected) Palette.TEXT else Palette.MUTED)
             typeface = if (selected) android.graphics.Typeface.DEFAULT_BOLD else android.graphics.Typeface.DEFAULT
             setOnClickListener { onClick() }
+            applyCardPressEffect(this)
         }
     }
 
@@ -5846,6 +5913,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             gravity = Gravity.CENTER
             setPadding(dp(4), dp(6), dp(4), dp(6))
             setOnClickListener { onClick() }
+            applyCardPressEffect(this)
         }
     }
 
@@ -6016,6 +6084,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             setPadding(dp(14), dp(14), dp(14), dp(14))
             background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
             setOnClickListener { onClick() }
+            applyCardPressEffect(this)
         }
         row.addView(TextView(this).apply {
             text = title
@@ -6074,6 +6143,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             setPadding(dp(6), 0, dp(6), 0)
             background = panelDrawable(themeColor, 8, this@MainActivity)
             setOnClickListener { onClick() }
+            applyCardPressEffect(this)
         }
     }
 
@@ -6088,6 +6158,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             compoundDrawablePadding = dp(3)
             setTextColor(Palette.MUTED)
             setOnClickListener { onClick() }
+            applyCardPressEffect(this)
         }
     }
 
@@ -6225,7 +6296,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val LYRICS_NOTIFICATION_ID = 31
         private const val FLOATING_LYRICS_NOTIFICATION_ID = 41
         private const val TAG = "SMP"
-        private const val APP_VERSION = "beta1.1.0"
+        private const val APP_VERSION = "1.5.2"
         private const val REPO_URL = "https://github.com/SuperMite233/Simple-Music-Player"
         private const val ISSUES_URL = "$REPO_URL/issues"
         private const val AUTHOR_URL = "https://space.bilibili.com/287415007"

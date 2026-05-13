@@ -213,6 +213,17 @@ class LibraryStore(context: Context) {
                 "playlists",
                 JSONArray(playlists.filter { it.systemType.isBlank() || it.id == FAVORITES_ID }.map { it.toJson() })
             )
+            .put("webDavServers", JSONArray(webDavServers.map { server ->
+                JSONObject()
+                    .put("id", server.id)
+                    .put("name", server.name)
+                    .put("alias", server.alias)
+                    .put("url", server.url)
+                    .put("username", server.username)
+                    .put("password", server.password)
+                    .put("port", server.port)
+                    .put("ignoreCert", server.ignoreCert)
+            }))
     }
 
     fun importUserConfig(root: JSONObject): JSONObject {
@@ -243,6 +254,21 @@ class LibraryStore(context: Context) {
         }
         imported.filter { it.id != FAVORITES_ID }.forEach { playlist ->
             playlists.add(playlist.copy(id = playlist.id.ifBlank { UUID.randomUUID().toString() }, systemType = ""))
+        }
+        root.optJSONArray("webDavServers").forEachObject { obj ->
+            val server = WebDavServer(
+                id = obj.optString("id", UUID.randomUUID().toString()),
+                name = obj.optString("name"),
+                alias = obj.optString("alias", ""),
+                url = obj.optString("url"),
+                username = obj.optString("username"),
+                password = obj.optString("password"),
+                port = obj.optInt("port", 0),
+                ignoreCert = obj.optBoolean("ignoreCert", false)
+            )
+            if (webDavServers.none { it.url == server.url }) {
+                webDavServers += server
+            }
         }
         ensureSystemPlaylists()
         save()
