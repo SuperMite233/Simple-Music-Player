@@ -140,9 +140,9 @@ class MusicScanner(private val context: Context) {
                 result += Track(
                     id = id,
                     uri = uri.toString(),
-                    title = indexedTrack?.title.orEmpty().ifBlank { cursor.getString(titleIndex).orEmpty() }.ifBlank { metadata.title }.ifBlank { displayName.substringBeforeLast('.') },
-                    artist = splitArtists(indexedTrack?.artist.orEmpty().ifBlank { cursor.getString(artistIndex).orEmpty() }.ifBlank { metadata.artist }.ifBlank { fileAlbumIndex?.circle.orEmpty() }),
-                    album = indexedTrack?.album.orEmpty().ifBlank { fileAlbumIndex?.albumTitle.orEmpty() }.ifBlank { cursor.getString(albumColumnIndex).orEmpty() }.ifBlank { metadata.album },
+                    title = indexedTrack?.title.orEmpty().ifBlank { metadata.title }.ifBlank { cursor.getString(titleIndex).orEmpty() }.ifBlank { displayName.substringBeforeLast('.') },
+                    artist = splitArtists(indexedTrack?.artist.orEmpty().ifBlank { metadata.artist }.ifBlank { cursor.getString(artistIndex).orEmpty() }.ifBlank { fileAlbumIndex?.circle.orEmpty() }),
+                    album = indexedTrack?.album.orEmpty().ifBlank { fileAlbumIndex?.albumTitle.orEmpty() }.ifBlank { metadata.album }.ifBlank { cursor.getString(albumColumnIndex).orEmpty() },
                     durationMs = (indexedTrack?.durationMs ?: 0L).takeIf { it > 0 } ?: cursor.getLong(durationIndex).coerceAtLeast(metadata.durationMs),
                     trackNumber = (indexedTrack?.trackNumber ?: 0).takeIf { it > 0 } ?: normalizeTrackNumber(cursor.getInt(trackIndex)).takeIf { it > 0 } ?: metadata.trackNumber,
                     year = cursor.getInt(yearIndex).takeIf { it > 0 } ?: metadata.year,

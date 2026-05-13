@@ -171,6 +171,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var backgroundAlpha: Float = 0.35f
     private var skipNoMediaFolders: Boolean = false
     private var debugMode: Boolean = false
+    private var autoWriteMetadata: Boolean = false
     private val extraScanFolderUris = mutableListOf<String>()
     private val skippedScanFolderUris = mutableListOf<String>()
     private var libraryFiltersExpanded: Boolean = false
@@ -885,6 +886,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         })
         content.addView(scanAction("尝试通过 LrcLib 获取歌词", "为音乐库中具备曲名、作者和专辑元数据的音乐匹配带时间轴的 LRC 歌词。") {
             matchLyricsForTracks(allTracks, "全库歌词匹配")
+        })
+        content.addView(scanAction("通过 Last.fm 获取音频元数据", "为音乐库中缺少元数据的曲目获取标题、歌手、专辑等信息。一次最多同时匹配 5 首。") {
+            fetchLastFmMetadata()
         })
         content.addView(TextView(this).apply {
             text = "当前音乐库：${allTracks.size} 首；已识别歌词：${allTracks.count { it.hasLyrics }} 首。"
@@ -1785,9 +1789,6 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(streamSourceCard("WebDav 服务器", if (store.webDavServers.isEmpty()) "未添加服务器" else "已添加 ${store.webDavServers.size} 台服务器", R.drawable.ic_dav) {
             showWebDavManagementDialog()
         })
-        box.addView(streamSourceCard("Last.fm", "待后续更新", R.drawable.ic_lastfm) {
-            Toast.makeText(this, "Last.fm 暂待后续更新", Toast.LENGTH_SHORT).show()
-        })
         scroll.addView(box)
         dialogBuilder()
             .setTitle("流媒体账号凭证")
@@ -1900,6 +1901,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             saveSettings()
             render(Page.SETTINGS)
             Toast.makeText(this, "调试模式已${if (debugMode) "开启" else "关闭"}", Toast.LENGTH_SHORT).show()
+        })
+        box.addView(settingCard("元数据自动写入", if (autoWriteMetadata) "开启后 Last.fm 匹配到的元数据直接写入音频文件" else "关闭（Last.fm 匹配结果仅更新音乐库）") {
+            autoWriteMetadata = !autoWriteMetadata
+            saveSettings()
+            render(Page.SETTINGS)
+            Toast.makeText(this, if (autoWriteMetadata) "已开启（Last.fm 匹配后写入文件，需文件管理权限）" else "已关闭", Toast.LENGTH_SHORT).show()
         })
         scroll.addView(box)
         dialogBuilder()
@@ -2815,6 +2822,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val canEditSource = selectionFromLibrary || selectionPlaylist?.canManuallyEditTracks() == true
         bar.addView(actionButton(if (canEditSource && !selectionFromLibrary) "移动" else "加入") { showAddSelectedToPlaylistDialog() }, LinearLayout.LayoutParams(dp(62), dp(38)).apply { leftMargin = dp(6) })
         bar.addView(actionButton("歌词") { matchSelectedLyrics() }, LinearLayout.LayoutParams(dp(62), dp(38)).apply { leftMargin = dp(6) })
+        bar.addView(actionButton("元数据") { matchSelectedMetadata() }, LinearLayout.LayoutParams(dp(72), dp(38)).apply { leftMargin = dp(6) })
         if (selectionFromLibrary || selectionPlaylist?.canManuallyEditTracks() == true) {
             bar.addView(actionButton("删除") { confirmDeleteSelectedTracks() }, LinearLayout.LayoutParams(dp(62), dp(38)).apply { leftMargin = dp(6) })
         }
@@ -2844,6 +2852,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         clearSelection()
         renderCurrentListPage()
         matchLyricsForTracks(selected, "批量歌词匹配")
+    }
+
+    private fun matchSelectedMetadata() {
+        val selected = selectedTrackIds.mapNotNull { id -> allTracks.firstOrNull { it.id == id } }
+        clearSelection()
+        renderCurrentListPage()
+        fetchLastFmMetadataForTracks(selected)
     }
 
     private fun showAddSelectedToPlaylistDialog() {
@@ -3052,11 +3067,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         if (track.id.startsWith("stream:dizzylab:")) {
             dialogBuilder()
                 .setTitle(displayTitle(track))
-                .setItems(arrayOf("播放", "下载", "歌曲详细信息")) { _, which ->
+                .setItems(arrayOf("播放", "下载", "匹配元数据", "歌曲详细信息")) { _, which ->
                     when (which) {
                         0 -> playTrack(track, queueForCurrentView())
                         1 -> downloadStreamTrack(track)
-                        2 -> showTrackDetailsDialog(track)
+                        2 -> fetchLastFmMetadataForTracks(listOf(track))
+                        3 -> showTrackDetailsDialog(track)
                     }
                 }
                 .show()
@@ -3064,7 +3080,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         val playlist = openedPlaylist
         val favoriteText = if (store.isFavorite(track.id)) "取消喜欢" else "加入我喜欢的音乐"
-        val actions = mutableListOf("播放", favoriteText, "加入播放列表", "匹配歌词", "编辑音乐信息", "编辑音频元数据")
+        val actions = mutableListOf("播放", favoriteText, "加入播放列表", "匹配歌词", "匹配元数据", "获取封面", "编辑音乐信息", "编辑音频元数据")
         if (playlist != null && playlist.canManuallyEditTracks()) actions.add("从当前播放列表移除")
         dialogBuilder()
             .setTitle(displayTitle(track))
@@ -3081,6 +3097,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                     }
                     "加入播放列表" -> showAddToPlaylistDialog(track)
                     "匹配歌词" -> matchLyricsForTracks(listOf(track), "歌词匹配")
+                    "匹配元数据" -> fetchLastFmMetadataForTracks(listOf(track))
+                    "获取封面" -> fetchLastFmAlbumArtForTrack(track)
                     "编辑音乐信息" -> showEditDialog(track)
                     "编辑音频元数据" -> showAudioMetadataEditDialog(track)
                     "从当前播放列表移除" -> {
@@ -3654,6 +3672,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(8), dp(18), dp(2))
         }
+        val title = dialogInput("曲名", track.title)
         val artist = dialogInput("歌手", track.artist)
         val composer = dialogInput("作曲", track.composer)
         val year = dialogInput("年份", track.year.takeIf { it > 0 }?.toString().orEmpty())
@@ -3669,6 +3688,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             setPadding(0, dp(8), 0, dp(8))
         }
         pendingMetadataCoverLabel = coverLabel
+        box.addView(title)
         box.addView(artist)
         box.addView(composer)
         box.addView(year)
@@ -3688,7 +3708,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                     track,
                     sourceFile,
                     AudioMetadataUpdate(
-                        title = track.displayTitle,
+                        title = title.text.toString().trim().ifBlank { track.displayTitle },
                         artist = artist.text.toString().trim(),
                         composer = composer.text.toString().trim(),
                         year = year.text.toString().trim(),
@@ -3712,12 +3732,14 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             runOnUiThread {
                 if (result.success) {
                     val updated = track.copy(
-                        artist = update.artist.ifBlank { track.artist },
-                        composer = update.composer.ifBlank { track.composer },
-                        year = update.year.toIntOrNull() ?: track.year,
-                        album = update.album.ifBlank { track.album }
+                        title = update.title.trim().ifBlank { track.title },
+                        artist = update.artist.trim(),
+                        composer = update.composer.trim(),
+                        year = update.year.trim().toIntOrNull() ?: track.year,
+                        album = update.album.trim()
                     )
                     replaceTrackInMemory(updated)
+                    rescanTrackFile(updated)
                     Toast.makeText(this, listOf("元数据已写入", result.warnings.joinToString("；")).filter { it.isNotBlank() }.joinToString("："), Toast.LENGTH_LONG).show()
                     renderIfLibraryVisible()
                     if (page == Page.NOW_PLAYING) render(Page.NOW_PLAYING)
@@ -3737,6 +3759,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             updateMediaSessionMetadata(updated)
             updatePlaybackNotification()
         }
+    }
+
+    private fun rescanTrackFile(track: Track) {
+        try {
+            val file = localTrackFile(track) ?: return
+            android.media.MediaScannerConnection.scanFile(this, arrayOf(file.absolutePath), null, null)
+        } catch (_: Exception) {}
     }
 
     private fun readTrackLyricsSafely(track: Track): String {
@@ -4142,6 +4171,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         backgroundAlpha = prefs.getFloat("backgroundAlpha", 0.35f).coerceIn(0f, 1f)
         skipNoMediaFolders = prefs.getBoolean("skipNoMediaFolders", false)
         debugMode = prefs.getBoolean("debugMode", false)
+        autoWriteMetadata = prefs.getBoolean("autoWriteMetadata", false)
         extraScanFolderUris.replaceAllFromJson(prefs.getString("extraScanFolderUris", "") ?: "")
         skippedScanFolderUris.replaceAllFromJson(prefs.getString("skippedScanFolderUris", "") ?: "")
         playbackMode = PlaybackMode.entries.getOrElse(prefs.getInt("playbackMode", 0)) { PlaybackMode.SEQUENTIAL }
@@ -4190,6 +4220,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .putFloat("backgroundAlpha", backgroundAlpha)
             .putBoolean("skipNoMediaFolders", skipNoMediaFolders)
             .putBoolean("debugMode", debugMode)
+            .putBoolean("autoWriteMetadata", autoWriteMetadata)
             .putString("extraScanFolderUris", stringListJson(extraScanFolderUris))
             .putString("skippedScanFolderUris", stringListJson(skippedScanFolderUris))
             .putInt("playbackMode", playbackMode.ordinal)
@@ -4990,6 +5021,203 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         return runCatching {
             assets.open("readme.md").bufferedReader().use { it.readText() }
         }.getOrElse { "README 内容读取失败。" }
+    }
+
+    private fun fetchLastFmMetadata() {
+        fetchLastFmMetadataForTracks(allTracks.filter { track ->
+            !track.isCueTrack && (isUnknownOrBlank(track.title) || isUnknownOrBlank(track.artist) || isUnknownOrBlank(track.album) || track.durationMs <= 0L)
+        })
+    }
+
+    private fun fetchLastFmMetadataForTracks(tracks: List<Track>) {
+        val candidates = tracks.filter { track ->
+            !track.isCueTrack && (isUnknownOrBlank(track.title) || isUnknownOrBlank(track.artist) || isUnknownOrBlank(track.album) || track.durationMs <= 0L || track.artworkPath.isBlank())
+        }
+        if (candidates.isEmpty()) {
+            Toast.makeText(this, "没有需要补充元数据的曲目", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val total = candidates.size
+        val matched = java.util.concurrent.atomic.AtomicInteger(0)
+        val processed = java.util.concurrent.atomic.AtomicInteger(0)
+        setStatus("Last.fm 元数据匹配 (0/$total)...")
+        updateLyricsNotification("Last.fm 元数据匹配", 0, total, 0)
+        val executor = Executors.newFixedThreadPool(5)
+        val latch = CountDownLatch(candidates.size)
+        candidates.forEach { track ->
+            executor.execute {
+                try {
+                    val result = queryLastFmSmart(track)
+                    if (result != null) {
+                        val updated = track.copy(
+                            title = if (isUnknownOrBlank(track.title) && result.title.isNotBlank()) result.title else track.title,
+                            artist = if (isUnknownOrBlank(track.artist) && result.artist.isNotBlank()) result.artist else track.artist,
+                            album = if (isUnknownOrBlank(track.album) && result.album.isNotBlank()) result.album else track.album,
+                            durationMs = if (track.durationMs <= 0L && result.durationMs > 0L) result.durationMs else track.durationMs
+                        )
+                        if (updated.title != track.title || updated.artist != track.artist || updated.album != track.album || updated.durationMs != track.durationMs) {
+                            runOnUiThread {
+                                allTracks = allTracks.map { if (it.id == track.id) updated else it }.sortedWith(MusicScanner.trackComparator)
+                                visibleTracks = visibleTracks.map { if (it.id == track.id) updated else it }
+                                currentQueue = currentQueue.map { if (it.id == track.id) updated else it }
+                                store.saveTracks(allTracks)
+                                if (autoWriteMetadata && hasAllFilesAccess()) {
+                                    Thread { writeMetadataToFile(updated) }.start()
+                                }
+                            }
+                            matched.incrementAndGet()
+                        }
+                        if (track.artworkPath.isBlank() && updated.artist.isNotBlank() && updated.album.isNotBlank()) {
+                            val artUrl = queryLastFmAlbumArt(updated.artist, updated.album)
+                            if (artUrl != null) {
+                                val artFinal = updated.copy(artworkPath = artUrl)
+                                runOnUiThread {
+                                    allTracks = allTracks.map { if (it.id == track.id) artFinal else it }.sortedWith(MusicScanner.trackComparator)
+                                    visibleTracks = visibleTracks.map { if (it.id == track.id) artFinal else it }
+                                    currentQueue = currentQueue.map { if (it.id == track.id) artFinal else it }
+                                    store.saveTracks(allTracks)
+                                }
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+                val done = processed.incrementAndGet()
+                runOnUiThread {
+                    updateLyricsNotification("Last.fm 元数据匹配", done, total, matched.get())
+                    setStatus("Last.fm ($done/$total) 匹配 ${matched.get()} 首")
+                }
+                latch.countDown()
+            }
+        }
+        Thread {
+            latch.await(5, TimeUnit.MINUTES)
+            executor.shutdownNow()
+            runOnUiThread {
+                finishLyricsNotification("Last.fm 完成", matched.get(), total)
+                Toast.makeText(this, "Last.fm 匹配完成：${matched.get()} / $total", Toast.LENGTH_LONG).show()
+                setStatus("Last.fm 完成：${matched.get()} / $total")
+                if (autoWriteMetadata && !hasAllFilesAccess()) {
+                    Toast.makeText(this, "元数据自动写入需要文件管理权限", Toast.LENGTH_LONG).show()
+                }
+                renderIfLibraryVisible()
+            }
+        }.start()
+    }
+
+    private fun isUnknownOrBlank(value: String): Boolean {
+        return value.isBlank() || value.trim().equals("<unknown>", ignoreCase = true)
+    }
+
+    private fun queryLastFmSmart(track: Track): Track? {
+        val title = if (!isUnknownOrBlank(track.title)) track.title else track.sourcePath.substringAfterLast('/').substringBeforeLast('.')
+        val artist = if (!isUnknownOrBlank(track.artist)) track.artist else ""
+        if (title.isBlank()) return null
+        val params = mutableListOf(
+            "method" to "track.getInfo",
+            "api_key" to LASTFM_API_KEY,
+            "track" to URLEncoder.encode(title, "UTF-8"),
+            "format" to "json"
+        )
+        if (artist.isNotBlank()) params += "artist" to URLEncoder.encode(artist, "UTF-8")
+        val query = params.joinToString("&") { "${it.first}=${it.second}" }
+        return runCatching {
+            val url = URL("$LASTFM_BASE?$query")
+            val connection = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000; readTimeout = 10_000
+                setRequestProperty("User-Agent", "SMP/$APP_VERSION")
+            }
+            val body = connection.inputStream.bufferedReader().use { it.readText() }
+            val root = JSONObject(body)
+            val trackObj = root.optJSONObject("track") ?: return null
+            val fetchedTitle = trackObj.optString("name").trim().ifBlank { null }
+            val fetchedArtist = trackObj.optJSONObject("artist")?.optString("name")?.trim()?.ifBlank { null }
+            val fetchedAlbum = trackObj.optJSONObject("album")?.optString("title")?.trim()?.ifBlank { null }
+            val fetchedDuration = trackObj.optLong("duration", 0L).let { if (it > 0) it * 1000L else 0L }
+            if (fetchedTitle == null && fetchedArtist == null) return null
+            Track(
+                id = track.id, uri = track.uri,
+                title = fetchedTitle ?: title,
+                artist = fetchedArtist ?: artist,
+                album = fetchedAlbum ?: track.album,
+                durationMs = if (fetchedDuration > 0) fetchedDuration else track.durationMs,
+                sourcePath = track.sourcePath, artworkPath = track.artworkPath,
+                lyricsUri = track.lyricsUri
+            )
+        }.onFailure { Log.w(TAG, "Last.fm query failed: $title", it) }.getOrNull()
+    }
+
+    private fun queryLastFmAlbumArt(artist: String, album: String): String? {
+        return runCatching {
+            val params = listOf(
+                "method" to "album.getInfo",
+                "api_key" to LASTFM_API_KEY,
+                "artist" to URLEncoder.encode(artist, "UTF-8"),
+                "album" to URLEncoder.encode(album, "UTF-8"),
+                "autocorrect" to "1",
+                "format" to "json"
+            ).joinToString("&") { "${it.first}=${it.second}" }
+            val url = URL("$LASTFM_BASE?$params")
+            val connection = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000; readTimeout = 10_000
+                setRequestProperty("User-Agent", "SMP/$APP_VERSION")
+            }
+            val body = connection.inputStream.bufferedReader().use { it.readText() }
+            val albumObj = JSONObject(body).optJSONObject("album") ?: return null
+            val images = albumObj.optJSONArray("image") ?: return null
+            val sizes = listOf("extralarge", "large", "medium", "small")
+            for (size in sizes) {
+                for (i in 0 until images.length()) {
+                    val img = images.optJSONObject(i) ?: continue
+                    if (img.optString("size").equals(size, ignoreCase = true)) {
+                        val imgUrl = img.optString("#text").trim()
+                        if (imgUrl.isNotBlank()) return imgUrl
+                    }
+                }
+            }
+            null
+        }.onFailure { Log.w(TAG, "Last.fm album art failed: $artist - $album", it) }.getOrNull()
+    }
+
+    private fun fetchLastFmAlbumArtForTrack(track: Track) {
+        if (track.artist.isBlank() || track.album.isBlank()) {
+            Toast.makeText(this, "需要歌手和专辑信息才能获取封面", Toast.LENGTH_SHORT).show()
+            return
+        }
+        setStatus("正在获取封面：${track.displayTitle}...")
+        Thread {
+            val artUrl = queryLastFmAlbumArt(track.artist, track.album)
+            runOnUiThread {
+                if (artUrl != null) {
+                    val updated = track.copy(artworkPath = artUrl)
+                    allTracks = allTracks.map { if (it.id == track.id) updated else it }.sortedWith(MusicScanner.trackComparator)
+                    visibleTracks = visibleTracks.map { if (it.id == track.id) updated else it }
+                    currentQueue = currentQueue.map { if (it.id == track.id) updated else it }
+                    store.saveTracks(allTracks)
+                    renderIfLibraryVisible()
+                    if (player.currentTrack?.id == track.id) updateNowPlayingViews(updated)
+                    Toast.makeText(this, "封面已更新", Toast.LENGTH_SHORT).show()
+                    setStatus("封面已更新：${track.displayTitle}")
+                } else {
+                    Toast.makeText(this, "未找到封面", Toast.LENGTH_SHORT).show()
+                    setStatus("未找到封面")
+                }
+            }
+        }.start()
+    }
+
+    private fun writeMetadataToFile(track: Track) {
+        val file = localTrackFile(track) ?: return
+        runCatching {
+            AudioMetadataWriter().write(
+                file,
+                AudioMetadataUpdate(
+                    title = track.displayTitle,
+                    artist = track.displayArtist,
+                    album = track.displayAlbum,
+                    year = track.date.take(4)
+                )
+            )
+        }.onFailure { Log.w(TAG, "Metadata write failed: ${track.displayTitle}", it) }
     }
 
     private fun createNotificationChannel() {
@@ -6296,13 +6524,15 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val LYRICS_NOTIFICATION_ID = 31
         private const val FLOATING_LYRICS_NOTIFICATION_ID = 41
         private const val TAG = "SMP"
-        private const val APP_VERSION = "1.5.2"
+        private const val APP_VERSION = "beta1.1.1"
         private const val REPO_URL = "https://github.com/SuperMite233/Simple-Music-Player"
         private const val ISSUES_URL = "$REPO_URL/issues"
         private const val AUTHOR_URL = "https://space.bilibili.com/287415007"
         private const val RELEASES_URL = "$REPO_URL/releases"
         private const val RELEASES_API = "https://api.github.com/repos/SuperMite233/Simple-Music-Player/releases?per_page=20"
         private const val DIZZYLAB_LOGIN_URL = "https://www.dizzylab.net/albums/login/"
+        private const val LASTFM_BASE = "https://ws.audioscrobbler.com/2.0/"
+        private const val LASTFM_API_KEY = "67097e703d9a775d6501109447efd85d"
         private const val ACTION_OPEN = "com.supermite.smp.OPEN"
         private const val ACTION_PREV = "com.supermite.smp.PREV"
         private const val ACTION_NEXT = "com.supermite.smp.NEXT"

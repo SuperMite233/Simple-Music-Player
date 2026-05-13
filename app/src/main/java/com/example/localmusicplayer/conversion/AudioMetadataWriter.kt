@@ -2,6 +2,7 @@ package com.supermite.smp.conversion
 
 import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.FieldKey
+import org.jaudiotagger.tag.id3.ID3v23Tag
 import org.jaudiotagger.tag.images.StandardArtwork
 import java.io.File
 import java.util.logging.Level
@@ -31,15 +32,22 @@ class AudioMetadataWriter {
         val warnings = mutableListOf<String>()
         return try {
             val audio = AudioFileIO.read(file)
-            val tag = audio.tagOrCreateAndSetDefault
-            if (update.title.isNotBlank()) tag.setField(FieldKey.TITLE, update.title)
-            if (update.artist.isNotBlank()) tag.setField(FieldKey.ARTIST, update.artist)
-            if (update.composer.isNotBlank()) tag.setField(FieldKey.COMPOSER, update.composer)
-            if (update.year.isNotBlank()) tag.setField(FieldKey.YEAR, update.year)
-            if (update.album.isNotBlank()) tag.setField(FieldKey.ALBUM, update.album)
+            val existingTag = audio.tagOrCreateDefault
+            val tag = ID3v23Tag()
+            existingTag?.let { old ->
+                try { old.fields.forEach { f -> runCatching { tag.setField(f) } } } catch (_: Exception) {}
+            }
+            audio.tag = tag
+            if (update.title.isNotBlank()) tag.setField(FieldKey.TITLE, update.title) else tag.deleteField(FieldKey.TITLE)
+            if (update.artist.isNotBlank()) tag.setField(FieldKey.ARTIST, update.artist) else tag.deleteField(FieldKey.ARTIST)
+            if (update.composer.isNotBlank()) tag.setField(FieldKey.COMPOSER, update.composer) else tag.deleteField(FieldKey.COMPOSER)
+            if (update.year.isNotBlank()) tag.setField(FieldKey.YEAR, update.year) else tag.deleteField(FieldKey.YEAR)
+            if (update.album.isNotBlank()) tag.setField(FieldKey.ALBUM, update.album) else tag.deleteField(FieldKey.ALBUM)
             if (update.lyrics.isNotBlank()) {
                 runCatching { tag.setField(FieldKey.LYRICS, update.lyrics) }
                     .onFailure { warnings += "歌词字段写入失败：${it.message ?: "不支持该格式"}" }
+            } else {
+                runCatching { tag.deleteField(FieldKey.LYRICS) }
             }
             update.coverBytes?.takeIf { it.isNotEmpty() }?.let { bytes ->
                 runCatching {
@@ -52,7 +60,7 @@ class AudioMetadataWriter {
                 }.onFailure {
                     warnings += "封面写入失败：${it.message ?: "不支持该格式"}"
                 }
-            }
+            } ?: runCatching { tag.deleteArtworkField() }.onFailure { runCatching { tag.deleteField(FieldKey.COVER_ART) } }
             audio.commit()
             AudioMetadataWriteResult(success = true, warnings = warnings)
         } catch (error: Exception) {
