@@ -4584,6 +4584,16 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         } catch (_: Exception) {}
     }
 
+    private fun writeMetaDebugLog(msg: String) {
+        if (!debugMode) return
+        try {
+            val dir = File(streamCacheDir(), "debug_logs").apply { mkdirs() }
+            val file = File(dir, "metawrite_debug.log")
+            val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT).format(Date())
+            file.appendText("[$timestamp] $msg\n")
+        } catch (_: Exception) {}
+    }
+
     private fun loadWebDavCache(serverId: String): MutableMap<String, List<WebDavItem>> {
         try {
             val dir = File(streamCacheDir(), "webdav_index")
@@ -5056,12 +5066,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                             durationMs = if (track.durationMs <= 0L && result.durationMs > 0L) result.durationMs else track.durationMs
                         )
                         if (updated.title != track.title || updated.artist != track.artist || updated.album != track.album || updated.durationMs != track.durationMs) {
-                            runOnUiThread {
+                                runOnUiThread {
                                 allTracks = allTracks.map { if (it.id == track.id) updated else it }.sortedWith(MusicScanner.trackComparator)
                                 visibleTracks = visibleTracks.map { if (it.id == track.id) updated else it }
                                 currentQueue = currentQueue.map { if (it.id == track.id) updated else it }
                                 store.saveTracks(allTracks)
-                                if (autoWriteMetadata && hasAllFilesAccess()) {
+                                if (autoWriteMetadata) {
                                     Thread { writeMetadataToFile(updated) }.start()
                                 }
                             }
@@ -5076,6 +5086,19 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                                     visibleTracks = visibleTracks.map { if (it.id == track.id) artFinal else it }
                                     currentQueue = currentQueue.map { if (it.id == track.id) artFinal else it }
                                     store.saveTracks(allTracks)
+                                }
+                                if (autoWriteMetadata) {
+                                    val artBytes = downloadCoverImage(artUrl)
+                                    if (artBytes != null && artBytes.isNotEmpty()) {
+                                        val file = localTrackFile(track)
+                                        if (file != null) {
+                                            writeCoverToFile(file, artBytes)
+                                        } else {
+                                            writeMetaDebugLog("封面写入跳过: 文件路径解析失败, sourcePath=${track.sourcePath}")
+                                        }
+                                    } else {
+                                        writeMetaDebugLog("封面下载失败: URL=$artUrl")
+                                    }
                                 }
                             }
                         }
@@ -5186,6 +5209,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         setStatus("正在获取封面：${track.displayTitle}...")
         Thread {
             val artUrl = queryLastFmAlbumArt(track.artist, track.album)
+            val artBytes = if (autoWriteMetadata && artUrl != null) downloadCoverImage(artUrl) else null
             runOnUiThread {
                 if (artUrl != null) {
                     val updated = track.copy(artworkPath = artUrl)
@@ -5202,22 +5226,52 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                     setStatus("未找到封面")
                 }
             }
+            if (artBytes != null) {
+                val file = localTrackFile(track)
+                if (file != null) {
+                    writeCoverToFile(file, artBytes)
+                }
+            }
         }.start()
     }
 
     private fun writeMetadataToFile(track: Track) {
         val file = localTrackFile(track) ?: return
         runCatching {
-            AudioMetadataWriter().write(
-                file,
-                AudioMetadataUpdate(
-                    title = track.displayTitle,
-                    artist = track.displayArtist,
-                    album = track.displayAlbum,
-                    year = track.date.take(4)
-                )
-            )
-        }.onFailure { Log.w(TAG, "Metadata write failed: ${track.displayTitle}", it) }
+            val result = AudioMetadataWriter().write(file, AudioMetadataUpdate(
+                title = track.displayTitle,
+                artist = track.displayArtist,
+                album = track.displayAlbum,
+                year = track.date.take(4)
+            ))
+            if (!result.success) {
+                writeMetaDebugLog("元数据写入失败: ${track.displayTitle} - ${result.warnings.joinToString("; ")}")
+            }
+        }.onFailure { writeMetaDebugLog("元数据写入异常: ${track.displayTitle} - ${it.message}") }
+    }
+
+    private fun downloadCoverImage(url: String): ByteArray? {
+        return runCatching {
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = true
+                connectTimeout = 15_000; readTimeout = 15_000
+                setRequestProperty("User-Agent", "Mozilla/5.0")
+            }
+            if (connection.responseCode !in 200..299) {
+                val err = connection.errorStream?.bufferedReader()?.use { it.readText() }?.take(200) ?: ""
+                throw Exception("HTTP ${connection.responseCode} $err")
+            }
+            connection.inputStream.use { it.readBytes() }
+        }.onFailure {
+            writeMetaDebugLog("封面下载失败: ${it.message ?: it.javaClass.simpleName}")
+        }.getOrNull()
+    }
+
+    private fun writeCoverToFile(file: File, coverBytes: ByteArray) {
+        val result = AudioMetadataWriter().writeCoverOnly(file, coverBytes)
+        if (!result.success) {
+            writeMetaDebugLog("封面写入失败: ${file.name} - ${result.warnings.joinToString("; ")}")
+        }
     }
 
     private fun createNotificationChannel() {
@@ -6524,7 +6578,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val LYRICS_NOTIFICATION_ID = 31
         private const val FLOATING_LYRICS_NOTIFICATION_ID = 41
         private const val TAG = "SMP"
-        private const val APP_VERSION = "beta1.1.1"
+        private const val APP_VERSION = "beta1.1.2"
         private const val REPO_URL = "https://github.com/SuperMite233/Simple-Music-Player"
         private const val ISSUES_URL = "$REPO_URL/issues"
         private const val AUTHOR_URL = "https://space.bilibili.com/287415007"

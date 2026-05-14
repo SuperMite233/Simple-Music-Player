@@ -74,4 +74,26 @@ class AudioMetadataWriter {
         if (bytes.size >= 12 && bytes[0] == 0x52.toByte() && bytes[1] == 0x49.toByte() && bytes[2] == 0x46.toByte() && bytes[3] == 0x46.toByte() && bytes[8] == 0x57.toByte() && bytes[9] == 0x45.toByte() && bytes[10] == 0x42.toByte() && bytes[11] == 0x50.toByte()) return "image/webp"
         return "image/jpeg"
     }
+
+    fun writeCoverOnly(file: File, coverBytes: ByteArray): AudioMetadataWriteResult {
+        return try {
+            val audio = AudioFileIO.read(file)
+            val existingTag = audio.tagOrCreateDefault
+            val tag = ID3v23Tag()
+            existingTag?.let { old ->
+                try { old.fields.forEach { f -> runCatching { tag.setField(f) } } } catch (_: Exception) {}
+            }
+            audio.tag = tag
+            val artwork = StandardArtwork().apply {
+                binaryData = coverBytes
+                mimeType = detectImageMimeType(coverBytes)
+                pictureType = 3
+            }
+            tag.setField(artwork)
+            audio.commit()
+            AudioMetadataWriteResult(success = true)
+        } catch (error: Exception) {
+            AudioMetadataWriteResult(success = false, warnings = listOf(error.message ?: "封面写入失败"))
+        }
+    }
 }
