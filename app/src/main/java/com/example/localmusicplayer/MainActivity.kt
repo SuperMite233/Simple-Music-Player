@@ -172,6 +172,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var skipNoMediaFolders: Boolean = false
     private var debugMode: Boolean = false
     private var autoWriteMetadata: Boolean = false
+    private var allowMobileDataDownload: Boolean = true
     private val extraScanFolderUris = mutableListOf<String>()
     private val skippedScanFolderUris = mutableListOf<String>()
     private var libraryFiltersExpanded: Boolean = false
@@ -297,6 +298,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         loadSettings()
         initDebugLogger()
         scanner.skipNoMediaFolders = skipNoMediaFolders
+        scanner.excludedPaths = listOf(
+            cacheDir.absolutePath,
+            filesDir.absolutePath,
+            streamCacheDir().absolutePath,
+            getExternalFilesDir(null)?.absolutePath ?: "",
+            externalCacheDir?.absolutePath ?: ""
+        ).filter { it.isNotBlank() }
         player.setEqualizerLevels(equalizerLevels)
         allTracks = store.savedTracks().sortedWith(MusicScanner.trackComparator)
         PlaybackControlBus.handler = { action -> handlePlaybackAction(action) }
@@ -308,6 +316,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         showFirstLaunchDialogIfNeeded()
         updateFloatingLyrics()
         if (autoCheckUpdates) checkForUpdates(silent = true)
+        Thread { backgroundSilentRescan() }.start()
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -887,7 +896,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         content.addView(scanAction("尝试通过 LrcLib 获取歌词", "为音乐库中具备曲名、作者和专辑元数据的音乐匹配带时间轴的 LRC 歌词。") {
             matchLyricsForTracks(allTracks, "全库歌词匹配")
         })
-        content.addView(scanAction("通过 Last.fm 获取音频元数据", "为音乐库中缺少元数据的曲目获取标题、歌手、专辑等信息。一次最多同时匹配 5 首。") {
+        content.addView(scanAction("通过 Last.fm 获取音频元数据", "为音乐库中缺少元数据的曲目获取标题、歌手、专辑等信息。部分情况需要手动剔除错误元数据才能匹配到正确数据。") {
             fetchLastFmMetadata()
         })
         content.addView(TextView(this).apply {
@@ -1846,10 +1855,18 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(label)
         box.addView(valueLabel)
         box.addView(slider)
+        val mobileCheck = CheckBox(this).apply {
+            text = "允许使用流量下载（关闭后下载前会询问）"
+            isChecked = allowMobileDataDownload
+            setTextColor(Palette.TEXT)
+            setPadding(0, dp(12), 0, 0)
+        }
+        box.addView(mobileCheck)
         dialogBuilder()
             .setTitle("串流预加载")
             .setView(box)
             .setPositiveButton("保存") { _, _ ->
+                allowMobileDataDownload = mobileCheck.isChecked
                 saveSettings()
                 render(Page.SETTINGS)
             }
@@ -4172,6 +4189,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         skipNoMediaFolders = prefs.getBoolean("skipNoMediaFolders", false)
         debugMode = prefs.getBoolean("debugMode", false)
         autoWriteMetadata = prefs.getBoolean("autoWriteMetadata", false)
+        allowMobileDataDownload = prefs.getBoolean("allowMobileDataDownload", true)
         extraScanFolderUris.replaceAllFromJson(prefs.getString("extraScanFolderUris", "") ?: "")
         skippedScanFolderUris.replaceAllFromJson(prefs.getString("skippedScanFolderUris", "") ?: "")
         playbackMode = PlaybackMode.entries.getOrElse(prefs.getInt("playbackMode", 0)) { PlaybackMode.SEQUENTIAL }
@@ -4221,6 +4239,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .putBoolean("skipNoMediaFolders", skipNoMediaFolders)
             .putBoolean("debugMode", debugMode)
             .putBoolean("autoWriteMetadata", autoWriteMetadata)
+            .putBoolean("allowMobileDataDownload", allowMobileDataDownload)
             .putString("extraScanFolderUris", stringListJson(extraScanFolderUris))
             .putString("skippedScanFolderUris", stringListJson(skippedScanFolderUris))
             .putInt("playbackMode", playbackMode.ordinal)
@@ -4599,6 +4618,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             val dir = File(streamCacheDir(), "webdav_index")
             val file = File(dir, "${serverId}.json")
             if (!file.exists()) return mutableMapOf()
+            val ageHours = (System.currentTimeMillis() - file.lastModified()) / 3600000L
+            if (ageHours > 24) { runCatching { file.delete() }; return mutableMapOf() }
             val root = JSONObject(file.readText())
             val cache = mutableMapOf<String, List<WebDavItem>>()
             root.keys().forEach { path ->
@@ -4759,7 +4780,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         if (cached != null) {
             webDavCurrentItems = cached; render(Page.STREAMING)
             setStatus("${server.displayName}：${cached.size} 项（缓存）")
-            Thread { refreshWebDavDir(server, "") }.start(); return
+            return
         }
         setStatus("正在连接 ${server.displayName}...")
         writeDebugLog("CONNECT", "连接服务器: ${server.url}, port=${server.port}")
@@ -4779,7 +4800,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         webDavCurrentPath = path; webDavSearchQuery = ""
         val cacheKey = path.trimEnd('/').ifBlank { "" }
         val cached = webDavCache[cacheKey]
-        if (cached != null) { webDavCurrentItems = cached; render(Page.STREAMING); setStatus("${server.displayName}：${cached.size} 项（缓存）"); Thread { refreshWebDavDir(server, cacheKey) }.start(); return }
+        if (cached != null) { webDavCurrentItems = cached; render(Page.STREAMING); setStatus("${server.displayName}：${cached.size} 项（缓存）"); return }
         setStatus("正在加载目录..."); writeDebugLog("NAVIGATE", "加载目录: \"$cacheKey\"")
         Thread {
             val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert)
@@ -4869,6 +4890,28 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         return Track(id = "webdav:${fullUrl.hashCode()}", uri = fullUrl, title = item.name.substringBeforeLast('.'), artist = server.displayName, album = webDavCurrentPath.substringAfterLast('/').ifBlank { server.displayName }, durationMs = 0L, mimeType = mimeType, sourcePath = fullUrl)
     }
 
+    private fun fetchWebDavTrackMetadata(item: WebDavItem, server: WebDavServer): Track? {
+        val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert)
+        val headBytes = client.fetchRangeBytes(item.path, 0, 131072) ?: return null
+        return runCatching {
+            val tmpFile = File(cacheDir, "webdav_meta_${System.currentTimeMillis()}")
+            tmpFile.writeBytes(headBytes)
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(tmpFile.absolutePath)
+            val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE).orEmpty()
+            val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST).orEmpty()
+            val album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM).orEmpty()
+            val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+            retriever.release()
+            runCatching { tmpFile.delete() }
+            if (title.isBlank() && artist.isBlank()) return null
+            val fullUrl = "${server.url.trimEnd('/')}/${item.path.trimStart('/')}"
+            val ext = item.name.substringAfterLast('.', "").lowercase(Locale.ROOT)
+            val mimeType = when (ext) { "flac" -> "audio/flac"; "wav" -> "audio/wav"; "m4a" -> "audio/mp4"; "ogg" -> "audio/ogg"; "aac" -> "audio/aac"; else -> "audio/mpeg" }
+            Track(id = "webdav:${fullUrl.hashCode()}", uri = fullUrl, title = title.ifBlank { item.name.substringBeforeLast('.') }, artist = artist.ifBlank { server.displayName }, album = album.ifBlank { webDavCurrentPath.substringAfterLast('/').ifBlank { server.displayName } }, durationMs = duration, mimeType = mimeType, sourcePath = fullUrl)
+        }.getOrNull()
+    }
+
     private fun webDavItemCard(item: WebDavItem, isDir: Boolean, onClick: () -> Unit): View {
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(12), dp(12), dp(12)); background = panelDrawable(Palette.PANEL, 8, this@MainActivity); setOnClickListener { onClick() }; layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(6) }; tag = "dav_item" }
         row.addView(TextView(this).apply { text = if (isDir) "\uD83D\uDCC1" else "\uD83C\uDFB5"; textSize = 22f }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { rightMargin = dp(10) })
@@ -4896,11 +4939,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert)
         val streamPreload = streamPreloadCount.coerceIn(0, 5)
         val item = webDavCurrentItems.firstOrNull { webDavItemToTrack(it, server).id == track.id }
-        val allMusic = webDavCurrentItems.filter { !it.isDirectory && isMusicFile(it.name) }.map { webDavItemToTrack(it, server) }
-        val startIdx = allMusic.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
-        currentQueue = if (allMusic.size > 1) {
-            val preload = allMusic.drop(startIdx).take(streamPreload + 1)
-            val rest = allMusic.filter { it.id !in preload.map { t -> t.id } }
+        val allMusic = webDavCurrentItems.filter { !it.isDirectory && isMusicFile(it.name) }
+        val allTracks = allMusic.map { webDavItemToTrack(it, server) }
+        val startIdx = allTracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
+        currentQueue = if (allTracks.size > 1) {
+            val preload = allTracks.drop(startIdx).take(streamPreload + 1)
+            val rest = allTracks.filter { it.id !in preload.map { t -> t.id } }
             preload + rest
         } else listOf(track)
         player.headersForTrack = { t ->
@@ -4908,60 +4952,104 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             else if (t.id.startsWith("stream:dizzylab:") && dizzylabCookie.isNotBlank()) DizzylabClient(dizzylabCookie).streamHeaders()
             else emptyMap()
         }
+        val cacheDir = File(streamCacheDir(), "webdav_stream").apply { mkdirs() }
         if (item != null) {
             val ext = item.name.substringAfterLast('.', "mp3")
-            val cacheDir = File(streamCacheDir(), "webdav_stream").apply { mkdirs() }
             val cacheFile = File(cacheDir, "${item.path.hashCode()}_${safeFileName(track.displayTitle)}.$ext")
             if (cacheFile.exists()) {
-                val cachedTrack = track.copy(uri = Uri.fromFile(cacheFile).toString(), sourcePath = cacheFile.absolutePath)
+                val meta = rescanMetadata(Uri.fromFile(cacheFile).toString(), track)
+                val cachedTrack = meta.copy(uri = Uri.fromFile(cacheFile).toString(), sourcePath = cacheFile.absolutePath)
                 playTrack(cachedTrack, currentQueue)
-                return
-            }
-            setStatus("正在缓冲 ${track.displayTitle}...")
-            Thread {
-                val bytes = runCatching { client.download(item.path) }.getOrElse {
-                    runOnUiThread { Toast.makeText(this, "缓冲失败", Toast.LENGTH_SHORT).show(); setStatus("缓冲失败") }
-                    return@Thread
-                }
-                cacheFile.writeBytes(bytes)
-                enforceStreamCacheLimit()
-                val cachedTrack = track.copy(uri = Uri.fromFile(cacheFile).toString(), sourcePath = cacheFile.absolutePath)
-                runOnUiThread { playTrack(cachedTrack, currentQueue) }
+            } else {
+                setStatus("正在缓冲 ${track.displayTitle}...")
                 Thread {
-                    val dirPath = track.sourcePath.substringBeforeLast('/')
-                    val coverUrl = runCatching { client.findCoverImage(dirPath) }.getOrNull()
-                    if (coverUrl != null) { val ct = cachedTrack.copy(artworkPath = coverUrl); runOnUiThread { if (player.currentTrack?.id == track.id) updateNowPlayingViews(ct) } }
+                    val bytes = runCatching { client.download(item.path) }.getOrElse {
+                        runOnUiThread { Toast.makeText(this, "缓冲失败", Toast.LENGTH_SHORT).show(); setStatus("缓冲失败") }
+                        return@Thread
+                    }
+                    cacheFile.writeBytes(bytes)
+                    enforceStreamCacheLimit()
+                    val meta = rescanMetadata(Uri.fromFile(cacheFile).toString(), track)
+                    val cachedTrack = meta.copy(uri = Uri.fromFile(cacheFile).toString(), sourcePath = cacheFile.absolutePath)
+                    runOnUiThread { playTrack(cachedTrack, currentQueue) }
                 }.start()
-            }.start()
+            }
+            preloadWebDavTracks(client, allMusic, allTracks, item, cacheDir)
             return
         }
         playTrack(track, currentQueue)
-        Thread {
-            val dirPath = track.sourcePath.substringBeforeLast('/')
-            val coverUrl = runCatching { client.findCoverImage(dirPath) }.getOrNull()
-            if (coverUrl != null) { val ct = track.copy(artworkPath = coverUrl); runOnUiThread { if (player.currentTrack?.id == track.id) updateNowPlayingViews(ct) } }
-        }.start()
+    }
+
+    private fun preloadWebDavTracks(client: WebDavClient, allItems: List<WebDavItem>, allTracks: List<Track>, current: WebDavItem, cacheDir: File) {
+        val preloadCount = streamPreloadCount.coerceIn(0, 5)
+        if (preloadCount <= 0) return
+        val startIdx = allItems.indexOf(current)
+        if (startIdx < 0) return
+        allItems.drop(startIdx + 1).take(preloadCount).forEach { item ->
+            val ext = item.name.substringAfterLast('.', "mp3")
+            val cacheFile = File(cacheDir, "${item.path.hashCode()}_${safeFileName(item.name.substringBeforeLast('.'))}.$ext")
+            if (!cacheFile.exists()) {
+                Thread {
+                    runCatching {
+                        val bytes = client.download(item.path)
+                        cacheFile.parentFile?.mkdirs()
+                        cacheFile.writeBytes(bytes)
+                        enforceStreamCacheLimit()
+                    }
+                }.start()
+            }
+        }
     }
 
     private fun downloadWebDavTrack(track: Track, item: WebDavItem) {
         val server = webDavCurrentServer ?: return
         if (!ensureStreamDownloadFolderReady { downloadWebDavTrack(track, item) }) return
-        val folderName = item.path.substringBeforeLast('/').substringAfterLast('/').ifBlank { webDavCurrentPath.substringAfterLast('/').ifBlank { server.name } }
-        setStatus("正在下载：${track.displayTitle}"); writeDebugLog("DOWNLOAD", "开始下载: ${item.path}, url=${track.uri}")
+        val folderName = item.path.substringBeforeLast('/').substringAfterLast('/').ifBlank {
+            webDavCurrentPath.substringAfterLast('/').ifBlank { server.name.ifBlank { server.url.substringAfterLast('/').trimEnd('/').ifBlank { "webdav" } } }
+        }
+        writeDebugLog("DOWNLOAD", "下载文件夹: $folderName, 文件: ${item.name}")
+        checkMobileDataForDownload {
+        setStatus("正在下载：${track.displayTitle}"); writeDebugLog("DOWNLOAD", "开始下载: ${item.path}")
         Thread {
             val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert)
             runCatching {
-                val bytes = client.download(item.path)
-                val fileName = safeFileName("${track.displayTitle}.${track.uri.substringBefore("?").substringAfterLast('.', "mp3")}")
+                val ext = item.name.substringAfterLast('.', "mp3")
+                val cacheFile = File(streamCacheDir(), "webdav_stream/${item.path.hashCode()}_${safeFileName(track.displayTitle)}.$ext")
+                val bytes = if (cacheFile.exists()) cacheFile.readBytes() else { val b = client.download(item.path); cacheFile.parentFile?.mkdirs(); cacheFile.writeBytes(b); b }
+                val fileName = safeFileName("${track.displayTitle}.$ext")
                 val lyricsBytes = tryDownloadWebDavLyrics(client, item)
-                val lyricsUri = if (lyricsBytes != null) { val lrcName = safeFileName("${track.displayTitle}.lrc"); writeStreamDownloadBytes("webdav", folderName, lrcName, "text/plain", lyricsBytes) } else ""
+                val lyricsUri = if (lyricsBytes != null) { writeStreamDownloadBytes("webdav", folderName, safeFileName("${track.displayTitle}.lrc"), "text/plain", lyricsBytes) } else ""
                 val uri = writeStreamDownloadBytes("webdav", folderName, fileName, track.mimeType.ifBlank { "audio/mpeg" }, bytes)
                 val scanned = rescanMetadata(uri, track)
                 val downloaded = scanned.copy(id = "download:webdav:${uri.hashCode()}", uri = uri, lyricsUri = lyricsUri, sourcePath = localPathForUriString(uri).ifBlank { fileName })
-                addDownloadedTracksToLibrary(listOf(downloaded), StreamAlbumDetails(album = StreamAlbum(server.name, server.name, server.url), tracks = listOf(downloaded), circle = server.name))
-                runOnUiThread { writeDebugLog("DOWNLOAD", "下载完成: ${track.displayTitle}"); Toast.makeText(this, "下载完成：${track.displayTitle}", Toast.LENGTH_SHORT).show(); setStatus("下载完成：${track.displayTitle}") }
+                downloadWebDavExtraFiles(client, item, folderName)
+                runOnUiThread {
+                    allTracks = (allTracks.filter { it.sourcePath != downloaded.sourcePath || it.id.startsWith("download:") != downloaded.id.startsWith("download:") } + downloaded).distinctBy { it.id }.sortedWith(MusicScanner.trackComparator)
+                    store.saveTracks(allTracks)
+                    store.createAlbumPlaylistsIfNeeded(allTracks)
+                    renderIfLibraryVisible()
+                    writeDebugLog("DOWNLOAD", "下载完成: ${track.displayTitle}")
+                    Toast.makeText(this, "下载完成：${track.displayTitle}", Toast.LENGTH_SHORT).show()
+                    setStatus("下载完成：${track.displayTitle}")
+                }
             }.onFailure { error -> runOnUiThread { writeDebugLog("DOWNLOAD", "下载失败: ${error.message}"); Toast.makeText(this, "下载失败：${error.message}", Toast.LENGTH_SHORT).show(); setStatus("下载失败") } }
         }.start()
+        }
+    }
+
+    private fun downloadWebDavExtraFiles(client: WebDavClient, item: WebDavItem, folderName: String) {
+        val dirPath = item.path.substringBeforeLast('/')
+        if (dirPath.isBlank()) return
+        runCatching {
+            val items = client.listDirectory(dirPath)
+            items.filter { it.name.endsWith(".cue", ignoreCase = true) || it.name.endsWith(".jpg", ignoreCase = true) || it.name.endsWith(".jpeg", ignoreCase = true) || it.name.endsWith(".png", ignoreCase = true) }.forEach { extra ->
+                val extraBytes = client.download(extra.path)
+                if (extraBytes.isNotEmpty()) {
+                    val mime = when { extra.name.lowercase().endsWith(".png") -> "image/png"; extra.name.lowercase().endsWith(".jpg") || extra.name.lowercase().endsWith(".jpeg") -> "image/jpeg"; else -> "text/plain" }
+                    writeStreamDownloadBytes("webdav", folderName, safeFileName(extra.name), mime, extraBytes)
+                }
+            }
+        }
     }
 
     private fun rescanMetadata(uri: String, fallback: Track): Track {
@@ -4972,12 +5060,20 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)?.trim()?.ifBlank { null }
             val album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)?.trim()?.ifBlank { null }
             val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+            val coverBytes = retriever.embeddedPicture
+            val artworkPath = if (coverBytes != null) {
+                val artDir = File(filesDir, "artwork").apply { mkdirs() }
+                val artFile = File(artDir, "${uri.hashCode()}.jpg")
+                artFile.writeBytes(coverBytes)
+                artFile.absolutePath
+            } else fallback.artworkPath
             retriever.release()
             fallback.copy(
                 title = title ?: fallback.title,
                 artist = artist ?: fallback.artist,
                 album = album ?: fallback.album,
-                durationMs = duration ?: fallback.durationMs
+                durationMs = duration ?: fallback.durationMs,
+                artworkPath = artworkPath
             )
         }.getOrElse { fallback }
     }
@@ -4996,6 +5092,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val allFiles = webDavCurrentItems.filter { !it.isDirectory && isMusicFile(it.name) }
         if (allFiles.isEmpty()) { Toast.makeText(this, "当前目录没有音乐文件", Toast.LENGTH_SHORT).show(); return }
         if (!ensureStreamDownloadFolderReady { downloadWebDavAlbum() }) return
+        checkMobileDataForDownload {
         val folderName = webDavCurrentPath.substringAfterLast('/').ifBlank { server.name }
         val total = allFiles.size
         setStatus("正在下载专辑 (0/$total)...")
@@ -5025,12 +5122,67 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 setStatus("下载完成：${downloaded.size} / $total")
             }
         }.start()
+        }
     }
 
     private fun readBundledReadme(): String {
         return runCatching {
             assets.open("readme.md").bufferedReader().use { it.readText() }
         }.getOrElse { "README 内容读取失败。" }
+    }
+
+    private fun backgroundSilentRescan() {
+        val tracks = allTracks.toList()
+        if (tracks.isEmpty()) return
+        var changes = 0
+        val updatedTracks = tracks.toMutableList()
+        tracks.forEachIndexed { index, track ->
+            if (track.isCueTrack || track.id.startsWith("stream:") || track.id.startsWith("download:webdav:")) return@forEachIndexed
+            val file = localTrackFile(track)
+            if (file == null || !file.exists()) return@forEachIndexed
+            val metadata = readFileMetadataDirectly(file)
+            if (metadata != null) {
+                val current = updatedTracks[index]
+                val changed = metadata.title.isNotBlank() && metadata.title != current.title ||
+                    metadata.artist.isNotBlank() && metadata.artist != current.artist ||
+                    metadata.album.isNotBlank() && metadata.album != current.album ||
+                    metadata.durationMs > 0 && metadata.durationMs != current.durationMs
+                if (changed) {
+                    updatedTracks[index] = current.copy(
+                        title = metadata.title.ifBlank { current.title },
+                        artist = metadata.artist.ifBlank { current.artist },
+                        album = metadata.album.ifBlank { current.album },
+                        durationMs = if (metadata.durationMs > 0) metadata.durationMs else current.durationMs
+                    )
+                    changes++
+                }
+            }
+        }
+        if (changes > 0) {
+            runOnUiThread {
+                allTracks = updatedTracks.sortedWith(MusicScanner.trackComparator)
+                visibleTracks = if (page == Page.LIBRARY) allTracks.filter { track ->
+                    libraryQuery.isBlank() || track.displayTitle.contains(libraryQuery, ignoreCase = true) ||
+                        track.displayArtist.contains(libraryQuery, ignoreCase = true)
+                } else visibleTracks
+                store.saveTracks(allTracks)
+                renderIfLibraryVisible()
+                renderIfPlaylistChanged()
+            }
+        }
+    }
+
+    private fun readFileMetadataDirectly(file: File): Track? {
+        return runCatching {
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(file.absolutePath)
+            val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE).orEmpty()
+            val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST).orEmpty()
+            val album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM).orEmpty()
+            val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+            retriever.release()
+            Track(id = "", uri = "", title = title, artist = artist, album = album, durationMs = duration)
+        }.getOrNull()
     }
 
     private fun fetchLastFmMetadata() {
@@ -5271,6 +5423,27 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val result = AudioMetadataWriter().writeCoverOnly(file, coverBytes)
         if (!result.success) {
             writeMetaDebugLog("封面写入失败: ${file.name} - ${result.warnings.joinToString("; ")}")
+        }
+    }
+
+    private fun isOnMobileData(): Boolean {
+        if (Build.VERSION.SDK_INT < 23) return false
+        val connectivityManager = getSystemService(android.net.ConnectivityManager::class.java) ?: return false
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)
+    }
+
+    private fun checkMobileDataForDownload(onProceed: () -> Unit) {
+        if (allowMobileDataDownload || !isOnMobileData()) {
+            onProceed()
+        } else {
+            dialogBuilder()
+                .setTitle("流量提醒")
+                .setMessage("当前正在使用移动数据，下载可能消耗较多流量。是否继续？")
+                .setPositiveButton("继续下载") { _, _ -> onProceed() }
+                .setNegativeButton("取消", null)
+                .show()
         }
     }
 
@@ -5871,7 +6044,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             val normalized = downloaded.map { track ->
                 if (track.artworkPath.isBlank() && albumCoverPath.isNotBlank()) track.copy(artworkPath = albumCoverPath) else track
             }
-            allTracks = (allTracks + normalized).distinctBy { it.id }.sortedWith(MusicScanner.trackComparator)
+            val sourcePaths = normalized.map { it.sourcePath }.toSet()
+            allTracks = (allTracks.filter { it.sourcePath !in sourcePaths } + normalized).sortedWith(MusicScanner.trackComparator)
             store.saveTracks(allTracks)
             store.createAlbumPlaylistsIfNeeded(allTracks)
             store.saveAlbumPlaylistMeta(details.album.title, details.description, details.tags)
@@ -6578,7 +6752,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val LYRICS_NOTIFICATION_ID = 31
         private const val FLOATING_LYRICS_NOTIFICATION_ID = 41
         private const val TAG = "SMP"
-        private const val APP_VERSION = "beta1.1.2"
+        private const val APP_VERSION = "1.5.3"
         private const val REPO_URL = "https://github.com/SuperMite233/Simple-Music-Player"
         private const val ISSUES_URL = "$REPO_URL/issues"
         private const val AUTHOR_URL = "https://space.bilibili.com/287415007"

@@ -17,6 +17,7 @@ import java.util.Locale
 class MusicScanner(private val context: Context) {
     private val resolver: ContentResolver = context.contentResolver
     var skipNoMediaFolders: Boolean = false
+    var excludedPaths: List<String> = emptyList()
 
     fun scanMediaStore(): List<Track> {
         val lyricsByBaseName = scanLyricFiles()
@@ -72,6 +73,7 @@ class MusicScanner(private val context: Context) {
         if (!current.exists()) return
         if (current.isDirectory) {
             if (skipNoMediaFolders && File(current, ".nomedia").exists()) return
+            if (excludedPaths.any { current.absolutePath.startsWith(it) }) return
             current.listFiles()?.sortedBy { it.name.lowercase(Locale.ROOT) }?.forEach { child ->
                 collectFileDocuments(root, child, documents)
             }

@@ -1,6 +1,7 @@
 package com.supermite.smp.stream
 
 import java.io.ByteArrayOutputStream
+import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -64,9 +65,21 @@ class WebDavClient(
     fun download(path: String): ByteArray {
         val cleanPath = path.trimStart('/')
         val url = "${baseUrl.trimEnd('/')}/${encodePath(cleanPath)}"
-        val result = executeDavRequestWithAuthNegotiation(url, "GET", null, null, withAuth = true)
+        val result = executeDavRequest(url, "GET", null, null, withAuth = true)
         if (result.code in 200..299) {
             return result.bodyBytes ?: result.body.toByteArray(Charsets.UTF_8)
+        }
+        if (result.code == 401) {
+            val challenge = executeDavRequest(url, "GET", null, null, withAuth = false)
+            val authHeader = getHeaderIgnoreCase(challenge.headers, "WWW-Authenticate").orEmpty()
+            if (authHeader.isNotBlank() || challenge.code == 401) {
+                if (authHeader.contains("Basic", ignoreCase = true) || authHeader.contains("Digest", ignoreCase = true)) {
+                    val retry = executeDavRequest(url, "GET", null, null, withAuth = true)
+                    if (retry.code in 200..299) {
+                        return retry.bodyBytes ?: retry.body.toByteArray(Charsets.UTF_8)
+                    }
+                }
+            }
         }
         throw Exception("HTTP ${result.code}${result.body.takeIf { it.isNotBlank() }?.let { ": ${it.take(300)}" } ?: ""}")
     }
@@ -124,6 +137,24 @@ class WebDavClient(
         }
         val selected = preferred ?: images.first()
         return "${baseUrl.trimEnd('/')}/${encodePath("${dirPath.trimEnd('/')}/${selected.path.substringAfterLast('/')}")}"
+    }
+
+    fun fetchRangeBytes(path: String, offset: Long, length: Long): ByteArray? {
+        val encodedPath = encodePath(path.trimStart('/'))
+        val url = "${baseUrl.trimEnd('/')}/$encodedPath"
+        return try {
+            val connection = URL(url).openConnection() as HttpURLConnection
+            connection.instanceFollowRedirects = true
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 10_000
+            connection.setRequestProperty("User-Agent", USER_AGENT)
+            connection.setRequestProperty("Range", "bytes=$offset-${offset + length - 1}")
+            val auth = buildAuthHeader("GET", URL(url))
+            if (auth.isNotBlank()) connection.setRequestProperty("Authorization", auth)
+            connection.inputStream.use { it.readBytes() }
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private data class DavResponse(
