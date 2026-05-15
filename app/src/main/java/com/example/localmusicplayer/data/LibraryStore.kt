@@ -149,7 +149,7 @@ class LibraryStore(context: Context) {
             .filter { it.album.isNotBlank() }
             .groupBy { it.displayAlbum }
             .toSortedMap(String.CASE_INSENSITIVE_ORDER)
-            .map { (album, albumTracks) -> "专辑：$album" to albumTracks.map { it.id }.distinct() }
+            .map { (album, albumTracks) -> "专辑：$album" to albumTracks.sortedWith(compareBy<Track> { it.trackNumber.takeIf { n -> n > 0 } ?: Int.MAX_VALUE }.thenBy { it.displayTitle.lowercase() }).map { it.id }.distinct() }
         val existingByName = playlists.filter { it.systemType == "album" }.groupBy { it.name }
         existingByName.values.forEach { duplicates ->
             duplicates.drop(1).forEach { duplicate -> playlists.remove(duplicate) }

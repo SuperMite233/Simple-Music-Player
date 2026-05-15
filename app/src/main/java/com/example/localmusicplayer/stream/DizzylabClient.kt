@@ -508,7 +508,7 @@ class DizzylabClient(private val cookie: String) {
 
     companion object {
         private const val BASE = "https://www.dizzylab.net"
-        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android) SMP/1.5.3"
+        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android) SMP/beta1.1.3"
     }
 }
 

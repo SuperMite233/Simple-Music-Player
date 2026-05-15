@@ -218,6 +218,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var appInForeground: Boolean = false
     private var loadingOverlay: View? = null
     private var loadingCount: Int = 0
+    private val downloadQueue = mutableListOf<DownloadTask>()
+    private var downloadExecutor: java.util.concurrent.ExecutorService? = null
+    private var downloadRefreshHandler: android.os.Handler? = null
+    private var downloadRefreshRunnable: Runnable? = null
+    private var downloadListDialogBox: LinearLayout? = null
+    private var downloadNotifyTotal: Int = 0
+    private var downloadNotifyDone: Int = 0
     private var updateCheckStarted: Boolean = false
     private var equalizerPreset: String = "默认"
     private var equalizerLevels: MutableList<Int> = MutableList(5) { 0 }
@@ -1613,6 +1620,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(settingCard("存储设置", "扫描、串流下载/缓存、配置文件和音乐格式转换") {
             showStorageSettingsDialog()
         })
+        box.addView(settingCard("下载列表", if (downloadQueue.isEmpty()) "无下载任务" else "${downloadQueue.size} 个任务" + if (downloadNotifyTotal > 0) " ($downloadNotifyDone/$downloadNotifyTotal)" else "") {
+            showDownloadListDialog()
+        })
+
         box.addView(settingCard("软件详情", "版本号、作者、构建说明、软件介绍和 GitHub 仓库") {
             showSoftwareDetailsDialog()
         })
@@ -4613,6 +4624,110 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         } catch (_: Exception) {}
     }
 
+    private data class DownloadTask(
+        val id: String = UUID.randomUUID().toString(),
+        val source: String,
+        val title: String,
+        val totalBytes: Long = 0,
+        var downloadedBytes: Long = 0,
+        var progressPercent: Int = 0,
+        var status: String = "排队中",
+        val timestamp: Long = System.currentTimeMillis()
+    )
+
+    private fun enqueueDownload(source: String, title: String, totalBytes: Long = 0, block: (DownloadTask) -> Unit) {
+        synchronized(downloadQueue) { downloadQueue.removeAll { it.status == "完成" } }
+        downloadNotifyDone = 0
+        val task = DownloadTask(source = source, title = title, totalBytes = totalBytes)
+        synchronized(downloadQueue) { downloadQueue.add(0, task) }
+        startDownloadRefresh()
+        val executor = downloadExecutor ?: Executors.newSingleThreadExecutor().also { downloadExecutor = it }
+        executor.execute {
+            task.status = "下载中"
+            block(task)
+            task.status = "完成"
+            synchronized(downloadQueue) { downloadQueue.remove(task) }
+            runOnUiThread {
+                downloadNotifyDone++
+                updateDownloadNotificationFromQueue()
+                if (downloadQueue.isEmpty()) {
+                    stopDownloadRefresh()
+                    finishDownloadNotification("下载完成", downloadNotifyDone, downloadNotifyTotal)
+                }
+            }
+        }
+    }
+
+    private fun startDownloadRefresh() {
+        if (downloadRefreshRunnable != null) return
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        downloadRefreshHandler = handler
+        downloadRefreshRunnable = object : Runnable {
+            override fun run() {
+                updateDownloadNotificationFromQueue()
+                refreshDownloadListDialog()
+                if (downloadQueue.any { it.status != "完成" }) handler.postDelayed(this, 1000)
+                else stopDownloadRefresh()
+            }
+        }
+        handler.postDelayed(downloadRefreshRunnable!!, 1000)
+    }
+
+    private fun stopDownloadRefresh() {
+        downloadRefreshHandler?.removeCallbacks(downloadRefreshRunnable ?: return)
+        downloadRefreshRunnable = null
+        downloadRefreshHandler = null
+    }
+
+    private fun updateDownloadNotificationFromQueue() {
+        if (downloadNotifyTotal <= 0) return
+        updateDownloadNotification("下载队列 $downloadNotifyDone/$downloadNotifyTotal", downloadNotifyDone, downloadNotifyTotal)
+    }
+
+    private fun getDownloadQueueSnapshot(): List<DownloadTask> = synchronized(downloadQueue) { downloadQueue.toList() }
+
+    private fun showDownloadListDialog() {
+        val scroll = ScrollView(this)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(8)) }
+        downloadListDialogBox = box
+        buildDownloadListContent(box)
+        scroll.addView(box)
+        dialogBuilder().setTitle("下载列表").setView(scroll).setOnDismissListener { downloadListDialogBox = null }.setPositiveButton("关闭", null).show()
+    }
+
+    private fun refreshDownloadListDialog() {
+        val box = downloadListDialogBox ?: return
+        box.removeAllViews()
+        buildDownloadListContent(box)
+    }
+
+    private fun buildDownloadListContent(box: LinearLayout) {
+        val tasks = getDownloadQueueSnapshot().sortedByDescending { it.timestamp }
+        if (tasks.isEmpty()) {
+            box.addView(TextView(this).apply { text = "暂无下载任务"; bodyStyle(14f, Palette.MUTED); setPadding(dp(8), dp(16), dp(8), dp(16)) })
+        } else {
+            tasks.forEach { task ->
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL; setPadding(dp(10), dp(10), dp(10), dp(10))
+                    background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(6) }
+                }
+                row.addView(TextView(this).apply { text = "${task.title} (${task.progressPercent}%)"; titleStyle(14f); maxLines = 1 })
+                row.addView(TextView(this).apply { text = "[${task.source}] ${task.status}" + if (task.totalBytes > 0) " · ${formatFileSize(task.totalBytes)}" else ""; bodyStyle(11.5f, Palette.MUTED) })
+                if (task.progressPercent in 1..99) {
+                    val pb = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; progress = task.progressPercent }
+                    row.addView(pb, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(4)).apply { topMargin = dp(4) })
+                }
+                box.addView(row)
+            }
+        }
+    }
+
+    private fun mimeForName(name: String): String {
+        val lower = name.lowercase()
+        return when { lower.endsWith(".png") -> "image/png"; lower.endsWith(".jpg") || lower.endsWith(".jpeg") -> "image/jpeg"; else -> "text/plain" }
+    }
+
     private fun loadWebDavCache(serverId: String): MutableMap<String, List<WebDavItem>> {
         try {
             val dir = File(streamCacheDir(), "webdav_index")
@@ -5004,36 +5119,20 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun downloadWebDavTrack(track: Track, item: WebDavItem) {
         val server = webDavCurrentServer ?: return
         if (!ensureStreamDownloadFolderReady { downloadWebDavTrack(track, item) }) return
+        checkMobileDataForDownload {
         val folderName = item.path.substringBeforeLast('/').substringAfterLast('/').ifBlank {
             webDavCurrentPath.substringAfterLast('/').ifBlank { server.name.ifBlank { server.url.substringAfterLast('/').trimEnd('/').ifBlank { "webdav" } } }
         }
         writeDebugLog("DOWNLOAD", "下载文件夹: $folderName, 文件: ${item.name}")
-        checkMobileDataForDownload {
-        setStatus("正在下载：${track.displayTitle}"); writeDebugLog("DOWNLOAD", "开始下载: ${item.path}")
-        Thread {
-            val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert)
-            runCatching {
-                val ext = item.name.substringAfterLast('.', "mp3")
-                val cacheFile = File(streamCacheDir(), "webdav_stream/${item.path.hashCode()}_${safeFileName(track.displayTitle)}.$ext")
-                val bytes = if (cacheFile.exists()) cacheFile.readBytes() else { val b = client.download(item.path); cacheFile.parentFile?.mkdirs(); cacheFile.writeBytes(b); b }
-                val fileName = safeFileName("${track.displayTitle}.$ext")
-                val lyricsBytes = tryDownloadWebDavLyrics(client, item)
-                val lyricsUri = if (lyricsBytes != null) { writeStreamDownloadBytes("webdav", folderName, safeFileName("${track.displayTitle}.lrc"), "text/plain", lyricsBytes) } else ""
-                val uri = writeStreamDownloadBytes("webdav", folderName, fileName, track.mimeType.ifBlank { "audio/mpeg" }, bytes)
-                val scanned = rescanMetadata(uri, track)
-                val downloaded = scanned.copy(id = "download:webdav:${uri.hashCode()}", uri = uri, lyricsUri = lyricsUri, sourcePath = localPathForUriString(uri).ifBlank { fileName })
-                downloadWebDavExtraFiles(client, item, folderName)
-                runOnUiThread {
-                    allTracks = (allTracks.filter { it.sourcePath != downloaded.sourcePath || it.id.startsWith("download:") != downloaded.id.startsWith("download:") } + downloaded).distinctBy { it.id }.sortedWith(MusicScanner.trackComparator)
-                    store.saveTracks(allTracks)
-                    store.createAlbumPlaylistsIfNeeded(allTracks)
-                    renderIfLibraryVisible()
-                    writeDebugLog("DOWNLOAD", "下载完成: ${track.displayTitle}")
-                    Toast.makeText(this, "下载完成：${track.displayTitle}", Toast.LENGTH_SHORT).show()
-                    setStatus("下载完成：${track.displayTitle}")
-                }
-            }.onFailure { error -> runOnUiThread { writeDebugLog("DOWNLOAD", "下载失败: ${error.message}"); Toast.makeText(this, "下载失败：${error.message}", Toast.LENGTH_SHORT).show(); setStatus("下载失败") } }
-        }.start()
+        downloadNotifyTotal = 1; downloadNotifyDone = 0
+        setStatus("已加入下载队列...")
+        updateDownloadNotification("下载队列 0/1", 0, 1)
+        enqueueDownload("webdav", track.displayTitle, item.size) { task ->
+            downloadWebDavTrackInternal(track, item, server, folderName, skipExtra = false, onProgress = { progress, totalB ->
+                task.progressPercent = if (totalB > 0) (progress * 100L / totalB).toInt() else 50
+                task.downloadedBytes = progress
+            })
+        }
         }
     }
 
@@ -5042,7 +5141,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         if (dirPath.isBlank()) return
         runCatching {
             val items = client.listDirectory(dirPath)
-            items.filter { it.name.endsWith(".cue", ignoreCase = true) || it.name.endsWith(".jpg", ignoreCase = true) || it.name.endsWith(".jpeg", ignoreCase = true) || it.name.endsWith(".png", ignoreCase = true) }.forEach { extra ->
+            items.filter { it.name.endsWith(".cue", ignoreCase = true) || it.name.endsWith(".jpg", ignoreCase = true) || it.name.endsWith(".jpeg", ignoreCase = true) || it.name.endsWith(".png", ignoreCase = true) }.distinctBy { it.name.lowercase() }.forEach { extra ->
                 val extraBytes = client.download(extra.path)
                 if (extraBytes.isNotEmpty()) {
                     val mime = when { extra.name.lowercase().endsWith(".png") -> "image/png"; extra.name.lowercase().endsWith(".jpg") || extra.name.lowercase().endsWith(".jpeg") -> "image/jpeg"; else -> "text/plain" }
@@ -5093,36 +5192,50 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         if (allFiles.isEmpty()) { Toast.makeText(this, "当前目录没有音乐文件", Toast.LENGTH_SHORT).show(); return }
         if (!ensureStreamDownloadFolderReady { downloadWebDavAlbum() }) return
         checkMobileDataForDownload {
-        val folderName = webDavCurrentPath.substringAfterLast('/').ifBlank { server.name }
         val total = allFiles.size
-        setStatus("正在下载专辑 (0/$total)...")
-        updateDownloadNotification("下载专辑", 0, total)
-        Thread {
-            val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert)
-            val downloaded = mutableListOf<Track>()
-            allFiles.forEachIndexed { index, item ->
-                runCatching {
-                    val bytes = client.download(item.path)
-                    val track = webDavItemToTrack(item, server)
-                    val fileName = safeFileName("${track.displayTitle}.${track.uri.substringBefore("?").substringAfterLast('.', "mp3")}")
-                    val lyricsBytes = tryDownloadWebDavLyrics(client, item)
-                    val lyricsUri = if (lyricsBytes != null) { val lrcName = safeFileName("${track.displayTitle}.lrc"); writeStreamDownloadBytes("webdav", folderName, lrcName, "text/plain", lyricsBytes) } else ""
-                    val uri = writeStreamDownloadBytes("webdav", folderName, fileName, track.mimeType.ifBlank { "audio/mpeg" }, bytes)
-                    val scanned = rescanMetadata(uri, track)
-                    downloaded += scanned.copy(id = "download:webdav:${uri.hashCode()}", uri = uri, lyricsUri = lyricsUri, sourcePath = localPathForUriString(uri).ifBlank { fileName })
+        downloadNotifyTotal = total
+        downloadNotifyDone = 0
+        setStatus("已加入下载队列 ($total 首)...")
+        updateDownloadNotification("下载队列 0/$total", 0, total)
+        var albumFolder: String? = null
+        allFiles.forEachIndexed { index, item ->
+            val track = webDavItemToTrack(item, server)
+            val isFirst = index == 0
+            enqueueDownload("webdav", track.displayTitle, item.size) { task ->
+                val folder = albumFolder ?: item.path.substringBeforeLast('/').substringAfterLast('/').ifBlank {
+                    webDavCurrentPath.substringAfterLast('/').ifBlank { server.name.ifBlank { "webdav" } }
                 }
-                runOnUiThread { updateDownloadNotification("下载专辑", index + 1, total); setStatus("正在下载专辑 (${index + 1}/$total)...") }
+                albumFolder = folder
+                downloadWebDavTrackInternal(track, item, server, folder, skipExtra = !isFirst, onProgress = { progress, totalB ->
+                    task.progressPercent = if (totalB > 0) (progress * 100L / totalB).toInt() else 50
+                    task.downloadedBytes = progress
+                })
             }
-            if (downloaded.isNotEmpty()) {
-                addDownloadedTracksToLibrary(downloaded, StreamAlbumDetails(album = StreamAlbum(server.name, server.name, server.url), tracks = downloaded, circle = server.name))
-            }
-            runOnUiThread {
-                finishDownloadNotification("下载完成", downloaded.size, total)
-                Toast.makeText(this, "专辑下载完成：${downloaded.size} / $total", Toast.LENGTH_LONG).show()
-                setStatus("下载完成：${downloaded.size} / $total")
-            }
-        }.start()
         }
+        }
+    }
+
+    private fun downloadWebDavTrackInternal(track: Track, item: WebDavItem, server: WebDavServer, folderName: String, skipExtra: Boolean = false, onProgress: (progress: Long, total: Long) -> Unit) {
+        val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert)
+        val totalBytes = item.size.coerceAtLeast(1)
+        runCatching {
+            val ext = item.name.substringAfterLast('.', "mp3")
+            val cacheFile = File(streamCacheDir(), "webdav_stream/${item.path.hashCode()}_${safeFileName(track.displayTitle)}.$ext")
+            val bytes = if (cacheFile.exists()) { onProgress(totalBytes, totalBytes); cacheFile.readBytes() } else { val b = client.download(item.path); cacheFile.parentFile?.mkdirs(); cacheFile.writeBytes(b); b }
+            onProgress(totalBytes / 2, totalBytes)
+            val fileName = safeFileName("${track.displayTitle}.$ext")
+            val lyricsBytes = tryDownloadWebDavLyrics(client, item)
+            val lyricsUri = if (lyricsBytes != null) { writeStreamDownloadBytes("webdav", folderName, safeFileName("${track.displayTitle}.lrc"), "text/plain", lyricsBytes) } else ""
+            val uri = writeStreamDownloadBytes("webdav", folderName, fileName, track.mimeType.ifBlank { "audio/mpeg" }, bytes)
+            val scanned = rescanMetadata(uri, track)
+            val downloaded = scanned.copy(id = "download:webdav:${uri.hashCode()}", uri = uri, lyricsUri = lyricsUri, sourcePath = localPathForUriString(uri).ifBlank { fileName })
+            if (!skipExtra) downloadWebDavExtraFiles(client, item, folderName)
+            onProgress(totalBytes, totalBytes)
+            runOnUiThread {
+                allTracks = (allTracks.filter { it.sourcePath != downloaded.sourcePath } + downloaded).distinctBy { it.id }.sortedWith(MusicScanner.trackComparator)
+                store.saveTracks(allTracks); store.createAlbumPlaylistsIfNeeded(allTracks); renderIfLibraryVisible()
+            }
+        }.onFailure { error -> runOnUiThread { writeDebugLog("DOWNLOAD", "下载失败: ${track.displayTitle} - ${error.message}") } }
     }
 
     private fun readBundledReadme(): String {
@@ -5845,41 +5958,44 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             return
         }
         if (!ensureStreamDownloadFolderReady { downloadStreamAlbum(details) }) return
-        setStatus("正在下载专辑：${details.album.title}")
+        val total = details.tracks.size
+        downloadNotifyTotal = total; downloadNotifyDone = 0
+        setStatus("已加入下载队列 ($total 首)...")
+        updateDownloadNotification("下载队列 0/$total", 0, total)
         Thread {
-            val downloaded = mutableListOf<Track>()
-            updateDownloadNotification("下载 ${details.album.title}", 0, details.tracks.size)
             val coverPath = downloadStreamCover(details)
-            details.tracks.forEachIndexed { index, track ->
-                downloadStreamTrackSync(track, details, coverPath)?.let { downloaded += it }
-                updateDownloadNotification("下载 ${details.album.title}", index + 1, details.tracks.size)
-            }
-            addDownloadedTracksToLibrary(downloaded, details)
-            finishDownloadNotification("下载完成：${details.album.title}", downloaded.size, details.tracks.size)
-            runOnUiThread {
-                Toast.makeText(this, "专辑下载完成：${downloaded.size} / ${details.tracks.size}", Toast.LENGTH_LONG).show()
-                setStatus("下载完成：${downloaded.size} / ${details.tracks.size}")
+            details.tracks.forEach { track ->
+                enqueueDownload("dizzylab", track.displayTitle) { task ->
+                    runCatching {
+                        val result = downloadStreamTrackSync(track, details, coverPath)
+                        if (result != null) {
+                            runOnUiThread { addDownloadedTracksToLibrary(listOf(result), details) }
+                        }
+                        task.progressPercent = 100
+                    }.onFailure { task.status = "失败" }
+                }
             }
         }.start()
     }
 
     private fun downloadStreamTrack(track: Track) {
         if (!ensureStreamDownloadFolderReady { downloadStreamTrack(track) }) return
-        setStatus("正在下载：${displayTitle(track)}")
+        val details = openedDizzylabAlbum ?: StreamAlbumDetails(
+            album = StreamAlbum(track.displayAlbum, track.displayAlbum, "", track.artworkPath),
+            tracks = listOf(track), circle = track.displayArtist
+        )
+        downloadNotifyTotal = 1; downloadNotifyDone = 0
+        updateDownloadNotification("下载队列 0/1", 0, 1)
         Thread {
-            val details = openedDizzylabAlbum ?: StreamAlbumDetails(
-                album = StreamAlbum(track.displayAlbum, track.displayAlbum, "", track.artworkPath),
-                tracks = listOf(track),
-                circle = track.displayArtist
-            )
-            updateDownloadNotification("下载 ${displayTitle(track)}", 0, 1)
             val coverPath = downloadStreamCover(details)
-            val downloaded = downloadStreamTrackSync(track, details, coverPath)
-            if (downloaded != null) addDownloadedTracksToLibrary(listOf(downloaded), details)
-            finishDownloadNotification("下载完成：${displayTitle(track)}", if (downloaded == null) 0 else 1, 1)
-            runOnUiThread {
-                Toast.makeText(this, if (downloaded != null) "下载完成" else "下载失败", Toast.LENGTH_SHORT).show()
-                setStatus(if (downloaded != null) "下载完成：${displayTitle(track)}" else "下载失败：${displayTitle(track)}")
+            enqueueDownload("dizzylab", track.displayTitle) { task ->
+                runCatching {
+                    val result = downloadStreamTrackSync(track, details, coverPath)
+                    if (result != null) {
+                        runOnUiThread { addDownloadedTracksToLibrary(listOf(result), details) }
+                    }
+                    task.progressPercent = 100
+                }.onFailure { task.status = "失败" }
             }
         }.start()
     }
