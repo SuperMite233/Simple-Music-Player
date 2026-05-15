@@ -89,3 +89,15 @@ data class WebDavServer(
     val displayName: String get() = alias.ifBlank { name.ifBlank { url } }
 }
 
+data class SubsonicServer(
+    val id: String,
+    val name: String,
+    val url: String,
+    val username: String = "",
+    val password: String = "",
+    val port: Int = 0,
+    val ignoreCert: Boolean = false
+) {
+    val displayName: String get() = name.ifBlank { url }
+}
+

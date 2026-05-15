@@ -1,4 +1,4 @@
-﻿package com.supermite.smp
+package com.supermite.smp
 
 import android.Manifest
 import android.app.Activity
@@ -78,10 +78,12 @@ import com.supermite.smp.stream.StreamAlbumDetails
 import com.supermite.smp.stream.WebDavClient
 import com.supermite.smp.stream.WebDavItem
 import com.supermite.smp.data.WebDavServer
+import com.supermite.smp.data.SubsonicServer
 import java.util.UUID
 import com.supermite.smp.ui.Palette
 import com.supermite.smp.ui.PlaylistAdapter
 import com.supermite.smp.ui.TrackAdapter
+import com.supermite.smp.ui.Lang
 import com.supermite.smp.ui.bodyStyle
 import com.supermite.smp.ui.contrastTextColor
 import com.supermite.smp.ui.dp
@@ -145,6 +147,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var selectionCountText: TextView? = null
     private var pendingListFirstVisible: Int = -1
     private var pendingListTopOffset: Int = 0
+    private var pendingPlaylistScrollY: Int = -1
     private var libraryQuery: String = ""
     private var selectedTag: String = ""
     private var minRating: Int = 0
@@ -157,6 +160,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var pseudoShufflePosition = -1
     private var themeColor: Int = Palette.ACCENT
     private var darkMode: DarkMode = DarkMode.SYSTEM
+    private var language: String = "system"
     private var includeBetaUpdates: Boolean = false
     private var autoCheckUpdates: Boolean = true
     private var notificationEnabled: Boolean = false
@@ -223,6 +227,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var downloadRefreshHandler: android.os.Handler? = null
     private var downloadRefreshRunnable: Runnable? = null
     private var downloadListDialogBox: LinearLayout? = null
+    private var subsonicDialog: AlertDialog? = null
     private var downloadNotifyTotal: Int = 0
     private var downloadNotifyDone: Int = 0
     private var updateCheckStarted: Boolean = false
@@ -277,6 +282,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(startupThemeStyle())
         super.onCreate(savedInstanceState)
+        val prefs = getSharedPreferences("settings", MODE_PRIVATE)
+        if (!prefs.contains("language")) {
+            language = if (Locale.getDefault().language == "zh") "zh" else "en"
+            prefs.edit().putString("language", language).apply()
+        }
+        Lang.language = language
         appInForeground = true
         store = LibraryStore(this)
         scanner = MusicScanner(this)
@@ -388,15 +399,15 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 dizzylabAlbums = emptyList()
                 render(Page.STREAMING)
             }
+            page == Page.SUBSONIC -> render(Page.PLAYLISTS)
             page == Page.SCAN -> render(Page.LIBRARY)
             page == Page.LIBRARY -> render(Page.PLAYLISTS)
             page == Page.PLAYLISTS && openedPlaylist != null -> {
                 openedPlaylist = null
                 render(Page.PLAYLISTS)
             }
-            page == Page.PLAYLISTS || page == Page.SETTINGS -> render(Page.NOW_PLAYING)
-            page == Page.NOW_PLAYING -> super.onBackPressed()
-            else -> render(Page.NOW_PLAYING)
+            page == Page.SETTINGS || page == Page.NOW_PLAYING -> render(Page.PLAYLISTS)
+            else -> super.onBackPressed()
         }
     }
 
@@ -568,7 +579,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
         abandonPlaybackFocus()
         miniPlayButton.text = ""
-        nowPagePlayButton?.text = "播放"
+        nowPagePlayButton?.text = Lang.get("play")
         updateFloatingLyrics()
         updatePlaybackNotification()
         broadcastPlaybackState("com.android.music.playstatechanged")
@@ -823,9 +834,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         bottomNavigationPanel = row
         listOf(
-            Triple(Page.NOW_PLAYING, "正在播放", R.drawable.ic_music_disc),
-            Triple(Page.PLAYLISTS, "音乐列表", R.drawable.ic_musiclist),
-            Triple(Page.SETTINGS, "设置", R.drawable.ic_menu)
+            Triple(Page.SUBSONIC, Lang.get("nav_subs"), R.drawable.ic_music_disc),
+            Triple(Page.PLAYLISTS, Lang.get("nav_library"), R.drawable.ic_musiclist),
+            Triple(Page.SETTINGS, Lang.get("nav_settings"), R.drawable.ic_menu)
         ).forEach { (target, label, iconRes) ->
             val button = navButton(label, iconRes) { render(target) }
             navButtons[target] = button
@@ -847,7 +858,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 nowPagePlayButton = null; nowPageSeek = null; nowPageTime = null
                 nowPageLyrics = null; nowPageLyricsScroll = null; nowPageLyricsBox = null
                 miniPlayerPanel.visibility = if (target == Page.NOW_PLAYING || target == Page.SETTINGS) View.GONE else View.VISIBLE
-                headerTitle.text = if (target == Page.SETTINGS) "SMP" else ""
+        headerTitle.text = if (target == Page.SETTINGS) Lang.get("nav_settings") else ""
                 updateNavButtons(target)
                 buildPageContent(target)
                 if (content.childCount > 0) {
@@ -885,45 +896,46 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             Page.PLAYLISTS -> renderPlaylistsPage()
             Page.NOW_PLAYING -> renderNowPlayingPage()
             Page.SETTINGS -> renderSettingsPage()
+            Page.SUBSONIC -> renderSubsonicPage()
             Page.STREAMING -> renderStreamingPage()
         }
     }
 
     private fun renderScanPage() {
-        content.addView(sectionTitle("扫描"))
-        content.addView(scanAction("自动扫描系统音乐库", "读取系统媒体库、CUE 文件、同名 LRC 歌词，并提取内嵌封面。") {
+        content.addView(sectionTitle(Lang.get("scan_page")))
+        content.addView(scanAction(Lang.get("scan_media"), Lang.get("scan_media_desc")) {
             if (hasAudioPermission()) scanMediaStore() else requestAudioPermission()
         })
-        content.addView(scanAction("选择文件夹扫描", "授权一个音乐目录，递归扫描音频、CUE 和歌词文件。") {
+        content.addView(scanAction(Lang.get("scan_folder"), Lang.get("scan_folder_desc")) {
             openTreePicker()
         })
-        content.addView(scanAction("手动导入文件", "选择一个或多个音频、CUE 或 LRC 文件，适合补充单曲。") {
+        content.addView(scanAction(Lang.get("scan_import"), Lang.get("scan_import_desc")) {
             openManualImport()
         })
-        content.addView(scanAction("尝试通过 LrcLib 获取歌词", "为音乐库中具备曲名、作者和专辑元数据的音乐匹配带时间轴的 LRC 歌词。") {
+        content.addView(scanAction(Lang.get("lrclib_lyrics"), Lang.get("lrclib_desc")) {
             matchLyricsForTracks(allTracks, "全库歌词匹配")
         })
-        content.addView(scanAction("通过 Last.fm 获取音频元数据", "为音乐库中缺少元数据的曲目获取标题、歌手、专辑等信息。部分情况需要手动剔除错误元数据才能匹配到正确数据。") {
+        content.addView(scanAction(Lang.get("lastfm_meta"), Lang.get("lastfm_desc")) {
             fetchLastFmMetadata()
         })
         content.addView(TextView(this).apply {
-            text = "当前音乐库：${allTracks.size} 首；已识别歌词：${allTracks.count { it.hasLyrics }} 首。"
+            text = Lang.get("library_count").format(allTracks.size, allTracks.count { it.hasLyrics })
             bodyStyle(14f)
             setPadding(0, dp(12), 0, 0)
         })
     }
 
     private fun renderLibraryPage() {
-        content.addView(sectionTitle("音乐库"))
+        content.addView(sectionTitle(Lang.get("library")))
         val toolRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        toolRow.addView(actionButton(if (libraryFiltersExpanded) "收起搜索筛选" else "搜索筛选") {
+        toolRow.addView(actionButton(if (libraryFiltersExpanded) Lang.get("collapse_filter") else Lang.get("search_filter")) {
             libraryFiltersExpanded = !libraryFiltersExpanded
             render(Page.LIBRARY)
         }, LinearLayout.LayoutParams(0, dp(44), 1f))
-        toolRow.addView(iconActionButton("扫描", R.drawable.ic_checkmore) { render(Page.SCAN) }, LinearLayout.LayoutParams(dp(86), dp(44)).apply {
+        toolRow.addView(iconActionButton(Lang.get("scan"), R.drawable.ic_checkmore) { render(Page.SCAN) }, LinearLayout.LayoutParams(dp(86), dp(44)).apply {
             leftMargin = dp(8)
         })
         content.addView(toolRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
@@ -988,7 +1000,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             }
         }
         searchRow.addView(search, LinearLayout.LayoutParams(0, dp(56), 1f))
-        searchRow.addView(iconActionButton("扫描", R.drawable.ic_checkmore) { render(Page.SCAN) }, LinearLayout.LayoutParams(dp(82), dp(48)).apply {
+        searchRow.addView(iconActionButton(Lang.get("scan"), R.drawable.ic_checkmore) { render(Page.SCAN) }, LinearLayout.LayoutParams(dp(82), dp(48)).apply {
             leftMargin = dp(8)
         })
         filterBox.addView(searchRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -1016,17 +1028,17 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             return
         }
 
-        content.addView(titleActionRow("播放列表", "+") { showCreatePlaylistDialog() })
+        content.addView(titleActionRow(Lang.get("playlist_list"), "+") { showCreatePlaylistDialog() })
         val modeRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        modeRow.addView(actionButton("本地音乐") {
+        modeRow.addView(actionButton(Lang.get("music_list")) {
             openedPlaylist = null
             clearSelection()
             render(Page.LIBRARY)
         }, LinearLayout.LayoutParams(0, dp(42), 1f))
-        modeRow.addView(actionButton("流媒体模式") {
+        modeRow.addView(actionButton(Lang.get("streaming_mode")) {
             openedPlaylist = null
             clearSelection()
             render(Page.STREAMING)
@@ -1059,6 +1071,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                     openedPlaylist = null
                     render(Page.LIBRARY)
                 } else {
+                    pendingPlaylistScrollY = this@apply.firstVisiblePosition
                     openedPlaylist = playlist
                     clearSelection()
                     render(Page.PLAYLISTS)
@@ -1082,8 +1095,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         attachPlaylistCategorySwipe(list)
         playlistAdapter.playlists = categorizedPlaylists()
+        if (pendingPlaylistScrollY >= 0 && openedPlaylist == null) {
+            val restorePos = pendingPlaylistScrollY
+            pendingPlaylistScrollY = -1
+            list.post { list.setSelection(restorePos) }
+        }
         content.addView(list, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(10) })
-        setStatus("播放列表：${playlistCategory.label}")
+        setStatus("${Lang.get("playlist_list")}：${if (playlistCategory == PlaylistCategory.COMMON) Lang.get("common_playlists") else Lang.get("auto_playlists")}")
     }
 
     private fun categorizedPlaylists(): List<Playlist> {
@@ -1183,15 +1201,30 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .show()
     }
 
+    private fun renderSubsonicPage() {
+        content.addView(sectionTitle("Subsonic 服务器"))
+        val scroll = ScrollView(this)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        box.addView(TextView(this).apply {
+            text = "请等待更新"
+            bodyStyle(18f, Palette.MUTED)
+            gravity = Gravity.CENTER
+            setPadding(dp(12), dp(120), dp(12), dp(120))
+        })
+        scroll.addView(box)
+        content.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        setStatus("Subsonic 服务器（开发中）")
+    }
+
     private fun renderStreamingPage() {
-        content.addView(actionButton("返回音乐列表") {
+        content.addView(actionButton(Lang.get("back_to_library")) {
             streamSource = null
             openedDizzylabAlbum = null
             streamScrollView = null
             streamContentBox = null
             render(Page.PLAYLISTS)
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)))
-        content.addView(sectionTitle("流媒体模式"))
+        content.addView(sectionTitle(Lang.get("streaming_mode")))
         val scroll = ScrollView(this)
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1201,7 +1234,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         } else if (streamSource == StreamSource.DIZZYLAB && dizzylabAlbums.isNotEmpty()) {
             streamScrollView = scroll
             streamContentBox = box
-            box.addView(actionButton("返回流媒体来源") {
+            box.addView(actionButton(Lang.get("return_to_stream")) {
                 streamSource = null
                 dizzylabAlbums = emptyList()
                 dizzylabQuery = ""
@@ -1214,13 +1247,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
-            val search = editText("搜索已购专辑", dizzylabQuery) { value ->
+            val search = editText(Lang.get("search_purchased"), dizzylabQuery) { value ->
                 dizzylabQuery = value
                 filterStreamingAlbums()
             }
             streamSearchEdit = search
             searchRow.addView(search, LinearLayout.LayoutParams(0, dp(54), 1f))
-            searchRow.addView(actionButton("在线搜索") { loadDizzylabAlbums(dizzylabQuery) }, LinearLayout.LayoutParams(dp(92), dp(48)).apply {
+            searchRow.addView(actionButton(Lang.get("online_search")) { loadDizzylabAlbums(dizzylabQuery) }, LinearLayout.LayoutParams(dp(92), dp(48)).apply {
                 leftMargin = dp(8)
             })
             box.addView(searchRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8); bottomMargin = dp(8) })
@@ -1234,7 +1267,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 })
             }
             if (filteredAlbums.size > dizzylabVisibleAlbumCount) {
-                box.addView(actionButton("加载更多（${dizzylabVisibleAlbumCount}/${filteredAlbums.size}）") {
+                box.addView(actionButton("${Lang.get("load_more")}（${dizzylabVisibleAlbumCount}/${filteredAlbums.size}）") {
                     loadMoreStreamingAlbums()
                 }.apply { tag = "load_more" }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
                     topMargin = dp(8)
@@ -1244,13 +1277,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         } else if (streamSource == StreamSource.WEBDAV && webDavCurrentServer != null) {
             renderWebDavBrowser(box)
         } else {
-            box.addView(streamSourceCard("DizzyLab", if (dizzylabCookie.isBlank()) "未登录，点击登录或加载账户专辑" else "已登录，点击加载账户专辑", R.drawable.ic_dizzylab) {
+            box.addView(streamSourceCard(Lang.get("dizzylab_card"), if (dizzylabCookie.isBlank()) Lang.get("dizzylab_not_logged") else Lang.get("dizzylab_logged"), R.drawable.ic_dizzylab) {
                 if (dizzylabCookie.isBlank()) showDizzylabLogin() else loadDizzylabAlbums()
             })
-            box.addView(streamSourceCard("Navidrome 服务器", "待后续更新", R.drawable.ic_navidrome) {
-                Toast.makeText(this, "Navidrome 暂待后续更新", Toast.LENGTH_SHORT).show()
-            })
-            box.addView(streamSourceCard("WebDav 服务器", if (store.webDavServers.isEmpty()) "未添加服务器，请在设置中添加" else "已添加 ${store.webDavServers.size} 台服务器", R.drawable.ic_dav) {
+
+            box.addView(streamSourceCard(Lang.get("webdav_card"), if (store.webDavServers.isEmpty()) "未添加服务器，请在设置中添加" else "已添加 ${store.webDavServers.size} 台服务器", R.drawable.ic_dav) {
                 if (store.webDavServers.isEmpty()) {
                     Toast.makeText(this, "请先在设置-用户帐号-流媒体账号凭证中添加 WebDav 服务器", Toast.LENGTH_SHORT).show()
                 } else {
@@ -1265,7 +1296,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             pendingStreamScrollY = -1
             scroll.post { scroll.scrollTo(0, restoreY) }
         }
-        setStatus("流媒体模式")
+        setStatus(Lang.get("streaming_mode"))
     }
 
     private fun loadMoreStreamingAlbums() {
@@ -1285,7 +1316,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             })
         }
         if (filteredAlbums.size > dizzylabVisibleAlbumCount) {
-            box.addView(actionButton("加载更多（${dizzylabVisibleAlbumCount}/${filteredAlbums.size}）") {
+            box.addView(actionButton("${Lang.get("load_more")}（${dizzylabVisibleAlbumCount}/${filteredAlbums.size}）") {
                 loadMoreStreamingAlbums()
             }.apply { tag = "load_more" }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
                 topMargin = dp(8)
@@ -1320,7 +1351,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val isLoadMore = (lastChild?.tag as? String)?.startsWith("load_more") == true
         if (visibleTotal > visibleCount) {
             if (isLoadMore) box.removeViewAt(box.childCount - 1)
-            box.addView(actionButton("加载更多（${visibleCount}/${visibleTotal}）") {
+            box.addView(actionButton("${Lang.get("load_more")}（${visibleCount}/${visibleTotal}）") {
                 loadMoreStreamingAlbums()
             }.apply { tag = "load_more" }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
                 topMargin = dp(8)
@@ -1472,7 +1503,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun renderNowPlayingPage() {
         val track = player.currentTrack
-        content.addView(sectionTitle("正在播放"))
+        content.addView(sectionTitle(Lang.get("playing")))
         if (track == null) {
             content.addView(TextView(this).apply {
                 text = "还没有正在播放的音乐。"
@@ -1575,13 +1606,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        controls.addView(iconActionButton("上一首", R.drawable.ic_previous_track) { playPrevious() }, weightedParams())
-        nowPagePlayButton = iconActionButton(if (player.isPlaying()) "暂停" else "播放", if (player.isPlaying()) R.drawable.ic_pause_circle else R.drawable.ic_play_block) {
+        controls.addView(iconActionButton(Lang.get("prev_track"), R.drawable.ic_previous_track) { playPrevious() }, weightedParams())
+        nowPagePlayButton = iconActionButton(if (player.isPlaying()) Lang.get("pause") else Lang.get("play"), if (player.isPlaying()) R.drawable.ic_pause_circle else R.drawable.ic_play_block) {
             toggleOrPlayFirst()
         }
         controls.addView(nowPagePlayButton, weightedParams())
-        controls.addView(iconActionButton("下一首", R.drawable.ic_next_track) { playNext() }, weightedParams())
-        controls.addView(iconActionButton("菜单", R.drawable.ic_menu) { showNowPlayingMenu(track) }, weightedParams())
+        controls.addView(iconActionButton(Lang.get("next_track"), R.drawable.ic_next_track) { playNext() }, weightedParams())
+        controls.addView(iconActionButton(Lang.get("menu"), R.drawable.ic_menu) { showNowPlayingMenu(track) }, weightedParams())
         box.addView(controls)
 
         val bottomBlankGestureArea = View(this).apply {
@@ -1597,34 +1628,33 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         content.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         updateLyricView(track)
         updateSeek(nowPageSeek, nowPageTime)
-        setStatus("正在播放：${displayTitle(track)}")
+        setStatus("${Lang.get("playing")}：${displayTitle(track)}")
     }
 
     private fun renderSettingsPage() {
-        content.addView(sectionTitle("设置"))
+        content.addView(sectionTitle(Lang.get("nav_settings")))
         val scroll = ScrollView(this)
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
         box.addView(profileHeaderCard())
-        box.addView(settingCard("用户帐号", "查看或编辑本地账号，管理流媒体账号凭证") { showAccountDialog() })
-        box.addView(settingCard("外观设置", "配色、深色模式和背景图片") {
+        box.addView(settingCard(Lang.get("account"), Lang.get("account_desc")) { showAccountDialog() })
+        box.addView(settingCard(Lang.get("appearance"), Lang.get("color_dark_bg")) {
             showAppearanceSettingsDialog()
         })
-        box.addView(settingCard("权限", permissionSummary()) {
+        box.addView(settingCard(Lang.get("permission_card"), permissionSummary()) {
             showPermissionSettingsDialog()
         })
-        box.addView(settingCard("播放设置", "启动恢复：${if (restorePlaybackOnLaunch) "继续播放" else "保持暂停"}；其他音乐：${audioFocusBehavior.label}") {
+        box.addView(settingCard(Lang.get("playback_settings"), "启动恢复：${if (restorePlaybackOnLaunch) "继续播放" else "保持暂停"}；其他音乐：${audioFocusBehavior.label}") {
             showPlaybackSettingsDialog()
         })
-        box.addView(settingCard("存储设置", "扫描、串流下载/缓存、配置文件和音乐格式转换") {
+        box.addView(settingCard(Lang.get("storage"), Lang.get("storage_desc")) {
             showStorageSettingsDialog()
         })
-        box.addView(settingCard("下载列表", if (downloadQueue.isEmpty()) "无下载任务" else "${downloadQueue.size} 个任务" + if (downloadNotifyTotal > 0) " ($downloadNotifyDone/$downloadNotifyTotal)" else "") {
+        box.addView(settingCard(Lang.get("download_list"), if (downloadQueue.isEmpty()) Lang.get("no_download") else "${downloadQueue.size} 个任务" + if (downloadNotifyTotal > 0) " ($downloadNotifyDone/$downloadNotifyTotal)" else "") {
             showDownloadListDialog()
         })
-
-        box.addView(settingCard("软件详情", "版本号、作者、构建说明、软件介绍和 GitHub 仓库") {
+        box.addView(settingCard(Lang.get("about"), Lang.get("about_desc")) {
             showSoftwareDetailsDialog()
         })
         scroll.addView(box)
@@ -1803,8 +1833,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 confirmClearDizzylabCookie()
             }
         })
-        box.addView(streamSourceCard("Navidrome 服务器", "待后续更新", R.drawable.ic_navidrome) {
-            Toast.makeText(this, "Navidrome 暂待后续更新", Toast.LENGTH_SHORT).show()
+        box.addView(streamSourceCard("Subsonic 服务器", "支持 Navidrome 等兼容 SubSonic API 的服务器", R.drawable.ic_navidrome) {
+            showSubsonicManagementDialog()
         })
         box.addView(streamSourceCard("WebDav 服务器", if (store.webDavServers.isEmpty()) "未添加服务器" else "已添加 ${store.webDavServers.size} 台服务器", R.drawable.ic_dav) {
             showWebDavManagementDialog()
@@ -1987,6 +2017,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         })
         box.addView(settingCard("深色模式", darkMode.label) {
             showDarkModeDialog()
+        })
+        box.addView(settingCard("语言", if (language == "zh") "中文" else "English") {
+            language = if (language == "zh") "en" else "zh"
+            Lang.language = language
+            saveSettings()
+            rebuildShell(page)
+            Toast.makeText(this, if (language == "zh") "已切换为中文" else "Switched to English", Toast.LENGTH_SHORT).show()
         })
         box.addView(settingCard("背景图片", "透明度：${(backgroundAlpha * 100).toInt()}%；当前：${if (backgroundImageUri.isBlank()) "未设置" else "已设置"}") {
             showBackgroundSettingsDialog()
@@ -2311,7 +2348,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         var selectedRestore = if (restorePlaybackOnLaunch) 1 else 0
         var selectedFocus = audioFocusBehavior.ordinal
         box.addView(TextView(this).apply {
-            text = "退出前未暂停播放时"
+            text = Lang.get("restore_playback")
             titleStyle(15f)
             setPadding(0, 0, 0, dp(6))
         })
@@ -2330,7 +2367,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         box.addView(restoreSpinner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)))
         box.addView(TextView(this).apply {
-            text = "设备播放其他音乐时"
+            text = Lang.get("audio_focus")
             titleStyle(15f)
             setPadding(0, dp(12), 0, dp(6))
         })
@@ -2348,7 +2385,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             }
         }
         box.addView(focusSpinner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)))
-        box.addView(actionButton("串流预加载：$streamPreloadCount 首") {
+        box.addView(actionButton("${Lang.get("stream_preload")}：$streamPreloadCount 首") {
             showStreamingSettingsDialog()
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
             topMargin = dp(12)
@@ -2358,11 +2395,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         ) { showFloatingLyricsSettingsDialog() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
             topMargin = dp(12)
         })
-        box.addView(actionButton("音效调整器：$equalizerPreset") { showEqualizerDialog() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
+        box.addView(actionButton("${Lang.get("eq_preset")}：$equalizerPreset") { showEqualizerDialog() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
             topMargin = dp(12)
         })
         dialogBuilder()
-            .setTitle("播放设置")
+            .setTitle(Lang.get("playback_settings"))
             .setView(box)
             .setPositiveButton("保存") { _, _ ->
                 restorePlaybackOnLaunch = selectedRestore == 1
@@ -4181,6 +4218,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val prefs = getSharedPreferences("settings", MODE_PRIVATE)
         themeColor = prefs.getInt("themeColor", Palette.ACCENT)
         darkMode = DarkMode.entries.getOrElse(prefs.getInt("darkMode", DarkMode.SYSTEM.ordinal)) { DarkMode.SYSTEM }
+        language = prefs.getString("language", "system") ?: "system"
+        Lang.language = language
         includeBetaUpdates = if (prefs.contains("includeBetaUpdates")) {
             prefs.getBoolean("includeBetaUpdates", false)
         } else {
@@ -4235,6 +4274,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         getSharedPreferences("settings", MODE_PRIVATE).edit()
             .putInt("themeColor", themeColor)
             .putInt("darkMode", darkMode.ordinal)
+            .putString("language", language)
             .putBoolean("includeBetaUpdates", includeBetaUpdates)
             .putBoolean("autoCheckUpdates", autoCheckUpdates)
             .putBoolean("notificationEnabled", notificationEnabled)
@@ -4770,6 +4810,88 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             }
             File(dir, "${serverId}.json").writeText(root.toString())
         } catch (_: Exception) {}
+    }
+
+    private fun showSubsonicManagementDialog() {
+        subsonicDialog?.dismiss()
+        val scroll = ScrollView(this)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(8)) }
+        box.addView(TextView(this).apply {
+            text = Lang.get("subsonic_info")
+            bodyStyle(13f, Palette.MUTED); setPadding(dp(8), dp(4), dp(8), dp(12))
+        })
+        store.subsonicServers.forEach { server ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(12), dp(10), dp(12), dp(10))
+                background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
+                setOnClickListener {
+                    store.selectedSubsonicServerId = if (store.selectedSubsonicServerId == server.id) "" else server.id
+                    store.save()
+                    showSubsonicManagementDialog()
+                }
+            }
+            val textBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            val isSelected = server.id == store.selectedSubsonicServerId
+            textBox.addView(TextView(this).apply {
+                text = server.displayName; titleStyle(15f); maxLines = 1
+                setTextColor(if (isSelected) Palette.ACCENT else Palette.TEXT)
+            })
+            textBox.addView(TextView(this).apply { text = server.url; bodyStyle(12f); maxLines = 1 })
+            row.addView(textBox, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(actionButton(Lang.get("edit")) { showSubsonicEditDialog(server) }, LinearLayout.LayoutParams(dp(60), dp(38)).apply { rightMargin = dp(4) })
+            row.setOnLongClickListener {
+                dialogBuilder().setTitle(Lang.get("delete_server")).setMessage(Lang.get("confirm_delete").replace("%s", server.displayName))
+                    .setPositiveButton(Lang.get("delete")) { _, _ -> store.subsonicServers.removeAll { it.id == server.id }; store.save(); showSubsonicManagementDialog() }
+                    .setNegativeButton(Lang.get("cancel"), null).show()
+                true
+            }
+            box.addView(row)
+        }
+        box.addView(actionButton(Lang.get("add_server")) { showSubsonicEditDialog(null) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply { topMargin = dp(4) })
+        scroll.addView(box)
+        subsonicDialog = dialogBuilder().setTitle(Lang.get("subsonic_mgmt")).setView(scroll).setPositiveButton(Lang.get("close")) { d, _ -> subsonicDialog = null }.show()
+    }
+
+    private fun showSubsonicEditDialog(existing: SubsonicServer?) {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(8), dp(18), dp(2)) }
+        val urlInput = dialogInput("${Lang.get("domain")} (https://...)", existing?.url.orEmpty())
+        box.addView(TextView(this).apply { text = Lang.get("domain"); bodyStyle(12f, Palette.MUTED) })
+        box.addView(urlInput)
+        val portInput = dialogInput(Lang.get("port"), if (existing?.port ?: 0 > 0) existing!!.port.toString() else "")
+        box.addView(TextView(this).apply { text = Lang.get("port"); bodyStyle(12f, Palette.MUTED); setPadding(0, dp(8), 0, 0) })
+        box.addView(portInput)
+        val userInput = dialogInput(Lang.get("username"), existing?.username.orEmpty())
+        box.addView(TextView(this).apply { text = Lang.get("username"); bodyStyle(12f, Palette.MUTED); setPadding(0, dp(8), 0, 0) })
+        box.addView(userInput)
+        val passInput = dialogInput(Lang.get("password"), existing?.password.orEmpty())
+        box.addView(TextView(this).apply { text = Lang.get("password"); bodyStyle(12f, Palette.MUTED); setPadding(0, dp(8), 0, 0) })
+        box.addView(passInput)
+        val nameInput = dialogInput(Lang.get("server_note"), existing?.name.orEmpty())
+        box.addView(TextView(this).apply { text = Lang.get("server_note"); bodyStyle(12f, Palette.MUTED); setPadding(0, dp(8), 0, 0) })
+        box.addView(nameInput)
+        val certCheck = CheckBox(this).apply { text = Lang.get("ignore_cert"); isChecked = existing?.ignoreCert ?: false; setTextColor(Palette.TEXT); setPadding(0, dp(8), 0, 0) }
+        box.addView(certCheck)
+        dialogBuilder()
+            .setTitle(if (existing == null) Lang.get("subsonic_add") else Lang.get("subsonic_edit"))
+            .setView(box)
+            .setPositiveButton(Lang.get("save")) { _, _ ->
+                val server = SubsonicServer(
+                    id = existing?.id ?: UUID.randomUUID().toString(),
+                    name = nameInput.text.toString().trim(),
+                    url = urlInput.text.toString().trimEnd('/'),
+                    username = userInput.text.toString().trim(),
+                    password = passInput.text.toString().trim(),
+                    port = portInput.text.toString().trim().toIntOrNull() ?: 0,
+                    ignoreCert = certCheck.isChecked
+                )
+                if (existing != null) store.subsonicServers.removeAll { it.id == server.id }
+                store.subsonicServers.add(server)
+                store.save()
+                showSubsonicManagementDialog()
+            }
+            .setNegativeButton(Lang.get("cancel"), null).show()
     }
 
     private fun showWebDavManagementDialog() {
@@ -6809,6 +6931,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         LIBRARY,
         PLAYLISTS,
         NOW_PLAYING,
+        SUBSONIC,
         SETTINGS,
         STREAMING
     }

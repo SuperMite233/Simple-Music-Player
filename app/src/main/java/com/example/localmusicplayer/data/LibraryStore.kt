@@ -19,6 +19,8 @@ class LibraryStore(context: Context) {
         private set
 
     val webDavServers: MutableList<WebDavServer> = mutableListOf()
+    val subsonicServers: MutableList<SubsonicServer> = mutableListOf()
+    var selectedSubsonicServerId: String = ""
 
     init {
         load()
@@ -411,6 +413,19 @@ class LibraryStore(context: Context) {
                 ignoreCert = obj.optBoolean("ignoreCert", false)
             )
         }
+
+        root.optJSONArray("subsonicServers").forEachObject { obj ->
+            subsonicServers += SubsonicServer(
+                id = obj.optString("id"),
+                name = obj.optString("name"),
+                url = obj.optString("url"),
+                username = obj.optString("username"),
+                password = obj.optString("password"),
+                port = obj.optInt("port", 0),
+                ignoreCert = obj.optBoolean("ignoreCert", false)
+            )
+        }
+        selectedSubsonicServerId = root.optString("selectedSubsonicServerId", "")
     }
 
     fun save() {
@@ -461,6 +476,18 @@ class LibraryStore(context: Context) {
                 .put("port", server.port)
                 .put("ignoreCert", server.ignoreCert)
         }))
+
+        root.put("subsonicServers", JSONArray(subsonicServers.map { server ->
+            JSONObject()
+                .put("id", server.id)
+                .put("name", server.name)
+                .put("url", server.url)
+                .put("username", server.username)
+                .put("password", server.password)
+                .put("port", server.port)
+                .put("ignoreCert", server.ignoreCert)
+        }))
+        root.put("selectedSubsonicServerId", selectedSubsonicServerId)
 
         file.writeText(root.toString(2))
     }

@@ -11,8 +11,8 @@ android {
         applicationId = "com.supermite.smp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 25
-        versionName = "beta1.1.3"
+        versionCode = 26
+        versionName = "beta1.1.4"
     }
 
     kotlinOptions {
