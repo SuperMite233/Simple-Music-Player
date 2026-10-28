@@ -1,0 +1,15 @@
+{
+  "auth": "app-token",
+  "content_type": "application/json",
+  "name": "track-download-128",
+  "path": "/apis/gettrackdownloadurl/?discid=Meteor-EP&trackid=1&packtype=128",
+  "safe_flags": {},
+  "shape": {
+    "track": {
+      "ext": "string",
+      "trackid": "string",
+      "url": "string"
+    }
+  },
+  "status": 200
+}

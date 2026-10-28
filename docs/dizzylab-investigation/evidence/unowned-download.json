@@ -1,0 +1,11 @@
+{
+  "auth": "app-token",
+  "content_type": "text/html; charset=utf-8",
+  "name": "unowned-download",
+  "path": "/apis/gettrackdownloadurl/?discid=TND-Y004&trackid=1&packtype=320",
+  "safe_flags": null,
+  "shape": {
+    "text_length": 11423
+  },
+  "status": 200
+}

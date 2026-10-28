@@ -1,0 +1,37 @@
+{
+  "source": "https://cdn.dizzylab.net/static/assets/js/dizzz.js?version=105",
+  "sha256": "4521caae003a1f794ef4180c6ebedbd92db6d35012595eda5b733defd02bd6d1",
+  "request_sites": [
+    {
+      "route_expression_prefix": "https://www.dizzylab.net/albums/getbuyers/?discid=<value>",
+      "method": "GET",
+      "observed_body_keys": [],
+      "source_context_anchor_line": 405
+    },
+    {
+      "route_expression_prefix": "https://www.dizzylab.net/albums/getdisccomment/?discid=<value>",
+      "method": "GET",
+      "observed_body_keys": [],
+      "source_context_anchor_line": 472
+    },
+    {
+      "route_expression_prefix": "https://www.dizzylab.net/albums/ajaxcheckpay/?discid=<value>",
+      "method": "GET",
+      "observed_body_keys": [],
+      "source_context_anchor_line": 560
+    },
+    {
+      "route_expression_prefix": "https://www.dizzylab.net/albums/ajaxcheckpay_pack/?pk=<value>",
+      "method": "GET",
+      "observed_body_keys": [],
+      "source_context_anchor_line": 604
+    },
+    {
+      "route_expression_prefix": "/albums/ajaxcheckpay_cart/?g=<value>",
+      "method": "GET",
+      "observed_body_keys": [],
+      "source_context_anchor_line": 645
+    }
+  ],
+  "evidence_type": "current-public-javascript-static-extraction"
+}

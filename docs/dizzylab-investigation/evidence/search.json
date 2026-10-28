@@ -1,0 +1,11 @@
+{
+  "auth": "web-cookie-only",
+  "content_type": "text/html; charset=utf-8",
+  "name": "search",
+  "path": "/apis/search/?l=0&r=2&keyword=Meteor",
+  "semantics": null,
+  "shape": {
+    "text_length": 11423
+  },
+  "status": 200
+}

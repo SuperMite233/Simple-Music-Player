@@ -1,0 +1,38 @@
+{
+  "auth": "app-token",
+  "content_type": "application/json",
+  "name": "token-tags",
+  "path": "/apis/tags/?l=0&r=2&tag=东方",
+  "safe_flags": {
+    "canshowmore": true
+  },
+  "shape": {
+    "allcount": "number",
+    "alltagslist": {
+      "array_count": 6,
+      "items": [
+        "string",
+        "string"
+      ]
+    },
+    "canshowmore": "boolean",
+    "discs": {
+      "array_count": 2,
+      "items": [
+        {
+          "cover": "string",
+          "id": "string",
+          "label": "string",
+          "title": "string"
+        },
+        {
+          "cover": "string",
+          "id": "string",
+          "label": "string",
+          "title": "string"
+        }
+      ]
+    }
+  },
+  "status": 200
+}

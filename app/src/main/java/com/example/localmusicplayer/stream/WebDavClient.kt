@@ -251,13 +251,13 @@ class WebDavClient(
             val code = response.code
             val responseBody = response.body
 
-                if (method.equals("GET", ignoreCase = true) && code in 200..299) {
-                    val bytes = responseBody?.bytes() ?: ByteArray(0)
-                    return DavResponse(code, "", headersMap, bytes)
-                }
+            if (method.equals("GET", ignoreCase = true) && code in 200..299) {
+                val bytes = responseBody?.bytes() ?: ByteArray(0)
+                return DavResponse(code, "", headersMap, bytes)
+            }
 
-                val text = responseBody?.string().orEmpty()
-                return DavResponse(code, text, headersMap)
+            val text = responseBody?.string().orEmpty()
+            return DavResponse(code, text, headersMap)
         }
     }
 

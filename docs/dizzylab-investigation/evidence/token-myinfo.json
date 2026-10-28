@@ -1,0 +1,17 @@
+{
+  "auth": "app-token",
+  "content_type": "application/json",
+  "name": "token-myinfo",
+  "path": "/apis/getmyinfo/",
+  "semantics": {},
+  "shape": {
+    "user": {
+      "cover": "string",
+      "mail": "string",
+      "uid": "number",
+      "user_group": "string",
+      "username": "string"
+    }
+  },
+  "status": 200
+}

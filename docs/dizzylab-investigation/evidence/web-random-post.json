@@ -1,0 +1,39 @@
+[
+  {
+    "content_type": "text/html; charset=utf-8",
+    "csrf_supplied": false,
+    "method": "POST",
+    "path": "/getatrack/",
+    "shape": {
+      "text_length": 962
+    },
+    "status": 403
+  },
+  {
+    "content_type": "application/json",
+    "csrf_supplied": true,
+    "method": "POST",
+    "path": "/getatrack/",
+    "shape": {
+      "disccover": "string",
+      "discdesc": "string",
+      "discid": "string",
+      "disclabel": "string",
+      "disctitle": "string",
+      "full": "boolean",
+      "gotourl": "string",
+      "rndnum": "number",
+      "taglist": {
+        "array_count": 2,
+        "items": [
+          "string",
+          "string"
+        ]
+      },
+      "thisauther": "string",
+      "thistrack": "string",
+      "thisurl": "string"
+    },
+    "status": 200
+  }
+]

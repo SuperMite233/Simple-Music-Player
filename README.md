@@ -19,8 +19,9 @@ Simple Music Player，简称 SMP，是一款使用 Kotlin 开发的 Android 音�
 - 支持蓝牙耳机控制、状态栏播放控制、锁屏播放控制和系统媒体广播。
 - 支持悬浮歌词，可设置透明度、字号、位置和描边。
 - 支持浅色、深色、跟随系统三种模式，支持主题色和背景图片设置。
-- 支持配置 JSON 导入/导出，包含设置、本地账号、头像、流媒体 Cookie 和用户歌单。
-- 支持 DizzyLab 登录、已购专辑加载、专辑详情解析、串流播放和下载。
+- 支持配置 JSON 导入/导出，包含设置、本地账号、头像、服务器配置和用户歌单；Dizzylab 登录凭证独立加密保存，不随配置导出。
+- 在线音乐支持通过顶部下拉列表切换 Subsonic / Dizzylab；Dizzylab 支持发现、搜索、社团、已购和喜欢的专辑，复用原播放器及下载队列。
+- Dizzylab 账户页提供账户管理、消息、关注动态、关注社团、订单与 CDK 兑换；付费购买仅在站内 WebView 完成，免费领取提供原生确认流程。
 - 支持 Subsonic/Navidrome 兼容服务器登录、搜索、艺术家/歌曲/专辑/歌单浏览、随机音乐、串流播放与下载。
 - 支持 WebDav 服务器连接与浏览，支持 Basic/Digest 认证，目录索引缓存，串流缓存。
 - 支持 WebDav 在线播放（自动缓存、文件夹播放列表、同目录封面匹配）和下载（整张专辑下载、元数据自动重扫描）。
@@ -30,7 +31,13 @@ Simple Music Player，简称 SMP，是一款使用 Kotlin 开发的 Android 音�
 
 ## 流媒体支持
 
-SMP 当前已经支持 DizzyLab 作为流媒体来源。用户可以通过应用内 WebView 登录 DizzyLab，应用会在本地保存 Cookie，用于加载已购专辑、读取专辑详情、播放串流音频和下载音乐。
+SMP 的“在线音乐”页面通过顶部下拉列表切换 Subsonic / Dizzylab。Dizzylab 提供音乐发现、搜索、社团、已购/喜欢列表和专辑播放，使用服务端稳定曲目标识，并在播放前重新取得资源地址。单曲和逐曲整专辑下载通过原下载队列、目录设置、元数据写入及本地入库流程完成，支持 MP3 128/320；网页提供的 ZIP 文件包也进入同一队列，流式保存但不自动解压。
+
+Dizzylab 的账户功能位于“设置 > 用户帐号 > 流媒体账号凭证 > Dizzylab”独立页面。关注动态、关注列表、免费领取和 CDK 预检/确认提供原生界面；资料修改、消息、订单与付费购买使用站内 WebView。项目不接入原生付费订单或支付 SDK。旧“流媒体模式”仅保留 WebDAV 入口。
+
+Dizzylab Cookie/Token 使用 Android Keystore 加密保存，并排除在配置导出及系统备份之外。已有 Cookie 配置可迁移；退出 Dizzylab 不清理其他来源账号或已下载音乐。
+
+Dizzylab 接口调查和后续实现状态见 [调查文档](docs/dizzylab-investigation/README.md)及[实现与验证记录](docs/dizzylab-investigation/implementation-status.md)。
 
 SMP 当前也已经支持 Subsonic 兼容服务器，包括 Navidrome 等实现。应用支持：
 
@@ -62,18 +69,30 @@ SMP 默认使用 Android 的媒体专用权限，这是正常音乐播放器推�
 
 当前构建配置：
 
-- Android Gradle Plugin 8.11.1
-- Kotlin Android Plugin 2.0.21
-- Gradle 8.14.5
-- compileSdk 35
+- Android Gradle Plugin 9.1.1，使用其内置 Kotlin 2.2.10
+- Gradle Wrapper 9.3.1，发行包 SHA-256 固定
+- compileSdk 36 / targetSdk 35
 - minSdk 26
-- Gradle daemon 使用 JDK 17
+- Gradle 使用 `D:\Android\Android Studio\jbr` 的 JBR 25，Java/Kotlin 字节码目标仍为 17
+- SDK：`D:\Android\SDK`；AVD：`D:\Android\AVD`
 
-如果本机 Android SDK 不在 `D:\Android`，请修改 `local.properties` 中的 `sdk.dir`。
+构建、测试和 lint：
+
+```powershell
+.\tools\android.ps1 -Task Check
+# 本机启用了 Windows 系统代理时，可为本次 Gradle 进程显式读取代理：
+.\tools\android.ps1 -Task Check -UseSystemProxy
+.\tools\android.ps1 -Task Emulator
+.\tools\android.ps1 -Task Install -UseSystemProxy
+```
+
+也可直接使用 `gradlew.bat`。`local.properties` 的 `sdk.dir` 应指向 `D:\Android\SDK`；其他机器同时调整 `gradle.properties` 的 JBR 路径。兼容关系参考 [AGP 9.1 官方说明](https://developer.android.com/build/releases/agp-9-1-0-release-notes)和 [Gradle Java 兼容表](https://docs.gradle.org/current/userguide/compatibility.html)。
+
+Debug 包使用 `com.supermite.smp.debug`，可与正式版并行安装，便于在模拟器中隔离测试账号；正式版 applicationId 仍为 `com.supermite.smp`。
 
 ## 发布版本
 
-当前发布版本：`2.0.0`
+当前预发行版本：`2.1.0-beta.1`；现有正式版本：`2.0.0`。
 
 ## 待办事项
 

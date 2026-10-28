@@ -1,0 +1,60 @@
+{
+  "auth": "app-token",
+  "content_type": "application/json",
+  "name": "label-info",
+  "path": "/apis/gethislabelinfo/?l=0&r=2&labelid=612",
+  "safe_flags": {
+    "canshowmore": true,
+    "following": true
+  },
+  "shape": {
+    "canshowmore": "boolean",
+    "cover": "string",
+    "description": "string",
+    "description_2": "string",
+    "disc": {
+      "array_count": 2,
+      "items": [
+        {
+          "cover": "string",
+          "id": "string",
+          "ihavethis": "boolean",
+          "ispreselling": "boolean",
+          "label": "string",
+          "likes": "number",
+          "onsell": "boolean",
+          "price": "number",
+          "title": "string"
+        },
+        {
+          "cover": "string",
+          "id": "string",
+          "ihavethis": "boolean",
+          "ispreselling": "boolean",
+          "label": "string",
+          "likes": "number",
+          "onsell": "boolean",
+          "price": "number",
+          "title": "string"
+        }
+      ]
+    },
+    "following": "boolean",
+    "labelid": "number",
+    "members": {
+      "array_count": 4,
+      "items": [
+        {
+          "cover": "string",
+          "id": "number"
+        },
+        {
+          "cover": "string",
+          "id": "number"
+        }
+      ]
+    },
+    "title": "string"
+  },
+  "status": 200
+}

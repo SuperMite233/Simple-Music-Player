@@ -1,0 +1,11 @@
+{
+  "auth": "web-cookie-only",
+  "content_type": "text/html; charset=utf-8",
+  "name": "tags",
+  "path": "/apis/tags/?l=0&r=2&tag=东方",
+  "semantics": null,
+  "shape": {
+    "text_length": 11423
+  },
+  "status": 200
+}

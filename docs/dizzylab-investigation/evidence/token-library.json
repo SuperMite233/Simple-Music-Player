@@ -1,0 +1,38 @@
+{
+  "auth": "app-token",
+  "content_type": "application/json",
+  "name": "token-library",
+  "path": "/apis/getmydisc/?l=0&r=2&sort=ad",
+  "semantics": {
+    "canshowmore": true
+  },
+  "shape": {
+    "canshowmore": "boolean",
+    "discs": {
+      "array_count": 2,
+      "items": [
+        {
+          "boost": "null",
+          "cover": "string",
+          "id": "string",
+          "ispreselling": "boolean",
+          "label": "string",
+          "onsell": "boolean",
+          "price": "number",
+          "title": "string"
+        },
+        {
+          "boost": "null",
+          "cover": "string",
+          "id": "string",
+          "ispreselling": "boolean",
+          "label": "string",
+          "onsell": "boolean",
+          "price": "number",
+          "title": "string"
+        }
+      ]
+    }
+  },
+  "status": 200
+}

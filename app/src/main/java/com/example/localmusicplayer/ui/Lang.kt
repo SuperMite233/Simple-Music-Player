@@ -20,6 +20,7 @@ object Lang {
     }
 
     private val zh = mapOf(
+        "nav_online" to "在线音乐",
         "nav_subs" to "Subsonic服务器",
         "nav_library" to "音乐列表",
         "nav_settings" to "设置",
@@ -138,9 +139,19 @@ object Lang {
         "true_random" to "真随机",
         "pseudo_random" to "伪随机",
         "speed" to "倍速",
+        "subsonic_create_playlist" to "创建歌单",
+        "subsonic_playlist_name" to "歌单名称",
+        "subsonic_name_required" to "名称不能为空",
+        "subsonic_created" to "歌单已创建",
+        "subsonic_create_failed" to "创建歌单失败",
+        "subsonic_no_server" to "未选择 Subsonic 服务器",
+        "subsonic_select_server" to "请先在 设置 > 用户帐号 > 流媒体账号凭证 中添加并选择 Subsonic 服务器。",
+        "subsonic_not_configured" to "Subsonic 未配置",
+        "subsonic_status" to "Subsonic",
     )
 
     private val en = mapOf(
+        "nav_online" to "Online music",
         "nav_subs" to "Subsonic",
         "nav_library" to "Library",
         "nav_settings" to "Settings",
@@ -259,5 +270,14 @@ object Lang {
         "true_random" to "True Random",
         "pseudo_random" to "Pseudo Random",
         "speed" to "Speed",
+        "subsonic_create_playlist" to "Create Playlist",
+        "subsonic_playlist_name" to "Playlist Name",
+        "subsonic_name_required" to "Name cannot be empty",
+        "subsonic_created" to "Playlist created",
+        "subsonic_create_failed" to "Failed to create playlist",
+        "subsonic_no_server" to "No Subsonic server selected",
+        "subsonic_select_server" to "Add and select a Subsonic server in Settings > Account > Streaming Credentials.",
+        "subsonic_not_configured" to "Subsonic Not Configured",
+        "subsonic_status" to "Subsonic",
     )
 }

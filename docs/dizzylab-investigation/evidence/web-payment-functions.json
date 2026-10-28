@@ -1,0 +1,32 @@
+{
+  "evidence_type": "current-page-static-function-extraction",
+  "source_page": "/d/<discid>/",
+  "functions": {
+    "addtocart": {
+      "navigation_targets": [
+        "/albums/addtocart/?id=<value>&q=<value>&type=<value>&price=<value>",
+        "/albums/checkout_alipay/?id=<value>&q=<value>&type=<value>&price=<value>"
+      ]
+    },
+    "checkout": {
+      "navigation_targets": [
+        "/albums/checkout_alipay/?id=<value>&q=<value>&type=<value>&price=<value>"
+      ]
+    },
+    "checkout_paypal": {
+      "navigation_targets": [
+        "/albums/checkout_paypal/?id=<value>&q=<value>&type=<value>&price=<value>"
+      ]
+    },
+    "checkout_paypal_boost": {
+      "navigation_targets": [
+        "/albums/checkout_paypal/?id=<value>&q=<value>&type=<value>&price=<value>"
+      ]
+    },
+    "checkoutboost": {
+      "navigation_targets": [
+        "/albums/checkout_alipay/?id=<value>&q=<value>&type=<value>&price=<value>"
+      ]
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "auth": "app-token",
+  "content_type": "application/json",
+  "name": "label-discs",
+  "path": "/apis/getlabeldiscs/?l=0&r=2&labelid=612",
+  "safe_flags": {
+    "canshowmore": true
+  },
+  "shape": {
+    "canshowmore": "boolean",
+    "discs": {
+      "array_count": 2,
+      "items": [
+        {
+          "cover": "string",
+          "id": "string",
+          "ispreselling": "boolean",
+          "label": "string",
+          "onsell": "boolean",
+          "price": "number",
+          "title": "string"
+        },
+        {
+          "cover": "string",
+          "id": "string",
+          "ispreselling": "boolean",
+          "label": "string",
+          "onsell": "boolean",
+          "price": "number",
+          "title": "string"
+        }
+      ]
+    }
+  },
+  "status": 200
+}

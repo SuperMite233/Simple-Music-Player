@@ -1,0 +1,33 @@
+{
+  "content_type": "application/json",
+  "name": "web-comments",
+  "path": "/albums/getdisccomment/?discid=Meteor-EP&l=0&r=2",
+  "shape": {
+    "avatar_url": {
+      "array_count": 0,
+      "items": []
+    },
+    "canshowmore": "boolean",
+    "disc_comment": {
+      "array_count": 0,
+      "items": []
+    },
+    "prebuyer": {
+      "array_count": 0,
+      "items": []
+    },
+    "redeemit": {
+      "array_count": 0,
+      "items": []
+    },
+    "user_names": {
+      "array_count": 0,
+      "items": []
+    },
+    "user_url": {
+      "array_count": 0,
+      "items": []
+    }
+  },
+  "status": 200
+}

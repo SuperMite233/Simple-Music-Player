@@ -1,0 +1,64 @@
+{
+  "auth": "web-cookie-only",
+  "content_type": "application/json",
+  "name": "catalog",
+  "path": "/apis/getdiscs/?l=0&r=2&sort=ad&type=album",
+  "semantics": {
+    "canshowmore": true,
+    "total_count": 1591
+  },
+  "shape": {
+    "canshowmore": "boolean",
+    "discs": {
+      "array_count": 2,
+      "items": [
+        {
+          "cover": "string",
+          "id": "string",
+          "ihavethis": "boolean",
+          "ishires": "boolean",
+          "ispreselling": "boolean",
+          "label": "string",
+          "labelcover": "string",
+          "labelid": "number",
+          "likes": "number",
+          "onlyhavegift": "boolean",
+          "onsell": "boolean",
+          "price": "number",
+          "tags": {
+            "array_count": 3,
+            "items": [
+              "string",
+              "string"
+            ]
+          },
+          "title": "string"
+        },
+        {
+          "cover": "string",
+          "id": "string",
+          "ihavethis": "boolean",
+          "ishires": "boolean",
+          "ispreselling": "boolean",
+          "label": "string",
+          "labelcover": "string",
+          "labelid": "number",
+          "likes": "number",
+          "onlyhavegift": "boolean",
+          "onsell": "boolean",
+          "price": "number",
+          "tags": {
+            "array_count": 8,
+            "items": [
+              "string",
+              "string"
+            ]
+          },
+          "title": "string"
+        }
+      ]
+    },
+    "total_count": "number"
+  },
+  "status": 200
+}

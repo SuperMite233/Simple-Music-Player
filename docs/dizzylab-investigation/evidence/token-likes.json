@@ -1,0 +1,17 @@
+{
+  "auth": "app-token",
+  "content_type": "application/json",
+  "name": "token-likes",
+  "path": "/apis/getmylike/?l=0&r=2&sort=ad",
+  "semantics": {
+    "canshowmore": false
+  },
+  "shape": {
+    "canshowmore": "boolean",
+    "discs": {
+      "array_count": 0,
+      "items": []
+    }
+  },
+  "status": 200
+}

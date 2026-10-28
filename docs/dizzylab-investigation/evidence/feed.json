@@ -1,0 +1,74 @@
+{
+  "auth": "app-token",
+  "content_type": "application/json",
+  "name": "feed",
+  "path": "/apis/getfeed/?l=0&r=2&sort=ad",
+  "safe_flags": {
+    "canshowmore": true
+  },
+  "shape": {
+    "canshowmore": "boolean",
+    "labels": {
+      "array_count": 2,
+      "items": [
+        {
+          "add_date": "string",
+          "discs": {
+            "array_count": 1,
+            "items": [
+              {
+                "add_date": "string",
+                "cover": "string",
+                "description": "string",
+                "id": "string",
+                "onlyhavegift": "boolean",
+                "price": "number",
+                "release_date": "string",
+                "tags": {
+                  "array_count": 3,
+                  "items": [
+                    "string",
+                    "string"
+                  ]
+                },
+                "title": "string"
+              }
+            ]
+          },
+          "labelcover": "string",
+          "labelid": "number",
+          "title": "string"
+        },
+        {
+          "add_date": "string",
+          "discs": {
+            "array_count": 1,
+            "items": [
+              {
+                "add_date": "string",
+                "cover": "string",
+                "description": "string",
+                "id": "string",
+                "onlyhavegift": "boolean",
+                "price": "number",
+                "release_date": "string",
+                "tags": {
+                  "array_count": 3,
+                  "items": [
+                    "string",
+                    "string"
+                  ]
+                },
+                "title": "string"
+              }
+            ]
+          },
+          "labelcover": "string",
+          "labelid": "number",
+          "title": "string"
+        }
+      ]
+    }
+  },
+  "status": 200
+}

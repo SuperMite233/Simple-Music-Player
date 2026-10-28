@@ -1,0 +1,65 @@
+{
+  "content_type": "application/json",
+  "name": "web-reviews",
+  "path": "/getreviews/?discid=Meteor-EP&l=0&r=2",
+  "shape": {
+    "add_date": {
+      "array_count": 0,
+      "items": []
+    },
+    "canshowmore": "boolean",
+    "detail_pic_1": {
+      "array_count": 0,
+      "items": []
+    },
+    "detail_pic_2": {
+      "array_count": 0,
+      "items": []
+    },
+    "detail_pic_3": {
+      "array_count": 0,
+      "items": []
+    },
+    "detail_pic_4": {
+      "array_count": 0,
+      "items": []
+    },
+    "dislike": {
+      "array_count": 0,
+      "items": []
+    },
+    "like": {
+      "array_count": 0,
+      "items": []
+    },
+    "review_comment": {
+      "array_count": 0,
+      "items": []
+    },
+    "review_desc": {
+      "array_count": 0,
+      "items": []
+    },
+    "review_id": {
+      "array_count": 0,
+      "items": []
+    },
+    "review_title": {
+      "array_count": 0,
+      "items": []
+    },
+    "user_avatar": {
+      "array_count": 0,
+      "items": []
+    },
+    "user_id": {
+      "array_count": 0,
+      "items": []
+    },
+    "user_name": {
+      "array_count": 0,
+      "items": []
+    }
+  },
+  "status": 200
+}

@@ -226,6 +226,17 @@ class LibraryStore(context: Context) {
                     .put("port", server.port)
                     .put("ignoreCert", server.ignoreCert)
             }))
+            .put("subsonicServers", JSONArray(subsonicServers.map { server ->
+                JSONObject()
+                    .put("id", server.id)
+                    .put("name", server.name)
+                    .put("url", server.url)
+                    .put("username", server.username)
+                    .put("password", server.password)
+                    .put("port", server.port)
+                    .put("ignoreCert", server.ignoreCert)
+            }))
+            .put("selectedSubsonicServerId", selectedSubsonicServerId)
     }
 
     fun importUserConfig(root: JSONObject): JSONObject {
@@ -272,6 +283,21 @@ class LibraryStore(context: Context) {
                 webDavServers += server
             }
         }
+        root.optJSONArray("subsonicServers").forEachObject { obj ->
+            val server = SubsonicServer(
+                id = obj.optString("id", UUID.randomUUID().toString()),
+                name = obj.optString("name"),
+                url = obj.optString("url"),
+                username = obj.optString("username"),
+                password = obj.optString("password"),
+                port = obj.optInt("port", 0),
+                ignoreCert = obj.optBoolean("ignoreCert", false)
+            )
+            if (subsonicServers.none { it.url == server.url && it.username == server.username }) {
+                subsonicServers += server
+            }
+        }
+        selectedSubsonicServerId = root.optString("selectedSubsonicServerId", selectedSubsonicServerId)
         ensureSystemPlaylists()
         save()
         return root.optJSONObject("settings") ?: JSONObject()

@@ -3,6 +3,7 @@ package com.supermite.smp
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.Dialog
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -47,6 +48,16 @@ import android.view.inputmethod.EditorInfo
 import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebResourceRequest
+import android.widget.PopupMenu
+import com.supermite.smp.stream.OnlineMusicSource
+import com.supermite.smp.stream.DizzylabApiClient
+import com.supermite.smp.stream.DizzylabTrackRef
+import com.supermite.smp.stream.DizzylabSessionStore
+import com.supermite.smp.stream.DizzylabSection
+import com.supermite.smp.stream.DizzylabUser
+import com.supermite.smp.stream.DizzylabCircle
+import com.supermite.smp.stream.DizzylabFeedEntry
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -75,6 +86,12 @@ import com.supermite.smp.playback.MusicPlayer
 import com.supermite.smp.stream.DizzylabClient
 import com.supermite.smp.stream.StreamAlbum
 import com.supermite.smp.stream.StreamAlbumDetails
+import com.supermite.smp.stream.SubsonicAlbum
+import com.supermite.smp.stream.SubsonicArtist
+import com.supermite.smp.stream.SubsonicClient
+import com.supermite.smp.stream.SubsonicPlaylist
+import com.supermite.smp.stream.SubsonicSong
+import com.supermite.smp.stream.SubsonicTranscodeMode
 import com.supermite.smp.stream.WebDavClient
 import com.supermite.smp.stream.WebDavItem
 import com.supermite.smp.data.WebDavServer
@@ -139,6 +156,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var currentQueue: List<Track> = emptyList()
     private var currentIndex: Int = -1
     private var page: Page = Page.SCAN
+    private var pageRenderGeneration = 0
     private var openedPlaylist: Playlist? = null
     private var selectionMode: Boolean = false
     private var selectionFromLibrary: Boolean = false
@@ -182,18 +200,46 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var libraryFiltersExpanded: Boolean = false
     private var profileName: String = "profile"
     private var profileAvatarUri: String = ""
-    private var dizzylabCookie: String = ""
+    @Volatile private var dizzylabCookie: String = ""
     private var dizzylabUserId: String = ""
+    @Volatile private var dizzylabToken: String = ""
+    @Volatile private var dizzySessionRevision = 0
+    private val dizzySessionLock = Any()
+    private val dizzylabSessionStore by lazy { DizzylabSessionStore(this) }
+    private var onlineMusicSource = OnlineMusicSource.SUBSONIC
+    private var dizzySection = DizzylabSection.DISCOVER
+    private var dizzyOffset = 0
+    private var dizzyHasMore = false
+    private var dizzyMusicLoaded = false
+    private var dizzyMusicLoading = false
+    private var dizzyMusicError = ""
+    private var dizzyMusicRequest = 0
+    private var dizzyCircles: List<DizzylabCircle> = emptyList()
+    private var dizzyCircle: DizzylabCircle? = null
+    private var dizzyUser: DizzylabUser? = null
+    private var dizzyAccountSection = "home"
+    private var dizzyAccountLoading = false
+    private var dizzyAccountRequest = 0
+    private var dizzyAccountError = ""
+    private var dizzyAccountOffset = 0
+    private var dizzyAccountHasMore = false
+    private var dizzyFeed: List<DizzylabFeedEntry> = emptyList()
+    private var dizzyFollowing: List<DizzylabCircle> = emptyList()
+    private var dizzyAlbumReturnToAccount = false
+    private var dizzyMutationInFlight = false
+    private var dizzyDownloadBitrate = 320
+    private var playbackRequestGeneration = 0
     private var streamPreloadCount: Int = 1
     private var streamDownloadFolderUri: String = ""
     private var streamCacheLimitGb: Float = 2.0f
     private var streamCacheFolderUri: String = ""
+    private var weakNetworkMode: Boolean = false
+    private var subsonicTranscodeMode: SubsonicTranscodeMode = SubsonicTranscodeMode.LOSSLESS
     private var outputDirectoryMode: OutputDirectoryMode = OutputDirectoryMode.INTERNAL
     private var restorePlaybackOnLaunch: Boolean = false
     private var audioFocusBehavior: AudioFocusBehavior = AudioFocusBehavior.PAUSE
     private var streamSource: StreamSource? = null
     private var dizzylabQuery: String = ""
-    private var dizzylabVisibleAlbumCount: Int = 40
     private var pendingStreamScrollY: Int = -1
     private var streamScrollView: ScrollView? = null
     private var streamContentBox: LinearLayout? = null
@@ -206,6 +252,23 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var webDavCurrentItems: List<WebDavItem> = emptyList()
     private var webDavCache: MutableMap<String, List<WebDavItem>> = mutableMapOf()
     private var webDavSearchQuery: String = ""
+    private var subsonicSearchQuery: String = ""
+    private var subsonicRandomSongs: List<SubsonicSong> = emptyList()
+    private var subsonicRandomRequested: Boolean = false
+    private var subsonicArtists: List<SubsonicArtist> = emptyList()
+    private var subsonicAlbums: List<SubsonicAlbum> = emptyList()
+    private var subsonicPlaylists: List<SubsonicPlaylist> = emptyList()
+    private var subsonicSongs: List<SubsonicSong> = emptyList()
+    private var subsonicSectionTitle: String = ""
+    private var subsonicScreen: SubsonicScreen = SubsonicScreen.HOME
+    private val subsonicBackStack = mutableListOf<SubsonicScreen>()
+    private var subsonicCurrentArtistName: String = ""
+    private var subsonicCurrentAlbum: SubsonicAlbum? = null
+    private var subsonicCurrentPlaylist: SubsonicPlaylist? = null
+    private var subsonicVisibleArtistCount: Int = 0
+    private var subsonicVisibleAlbumCount: Int = 0
+    private var subsonicVisibleSongCount: Int = 0
+    private var subsonicVisiblePlaylistCount: Int = 0
     private var nowPageLyrics: TextView? = null
     private var nowPageLyricsScroll: ScrollView? = null
     private var nowPageLyricsBox: LinearLayout? = null
@@ -292,13 +355,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         store = LibraryStore(this)
         scanner = MusicScanner(this)
         player = MusicPlayer(this).apply { listener = this@MainActivity }
-        player.headersForTrack = { track ->
-            if (track.id.startsWith("stream:dizzylab:") && dizzylabCookie.isNotBlank()) {
-                DizzylabClient(dizzylabCookie).streamHeaders()
-            } else {
-                emptyMap()
-            }
-        }
+        player.headersForTrack = ::streamHeadersForTrack
         trackAdapter = TrackAdapter(this, store.edits)
         trackAdapter.onMoreClick = { track -> showTrackActions(track) }
         trackAdapter.onTrackClick = { track ->
@@ -363,6 +420,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     override fun onDestroy() {
+        playbackRequestGeneration++
+        dizzyMusicRequest++; dizzyAccountRequest++
         savePlaybackState()
         abandonPlaybackFocus()
         removeFloatingLyrics()
@@ -378,7 +437,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     override fun onBackPressed() {
         when {
             page == Page.STREAMING && streamSource == StreamSource.WEBDAV && webDavCurrentPath.isNotBlank() -> {
-                val parent = webDavCurrentPath.substringBeforeLast('/').ifBlank { "" }
+                val parent = webDavParentPath(webDavCurrentPath)
                 navigateWebDavDir(parent)
             }
             page == Page.STREAMING && streamSource == StreamSource.WEBDAV -> {
@@ -390,16 +449,32 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 webDavSearchQuery = ""
                 render(Page.STREAMING)
             }
-            page == Page.STREAMING && openedDizzylabAlbum != null -> {
-                openedDizzylabAlbum = null
-                render(Page.STREAMING)
-            }
             page == Page.STREAMING && streamSource != null -> {
                 streamSource = null
-                dizzylabAlbums = emptyList()
                 render(Page.STREAMING)
             }
-            page == Page.SUBSONIC -> render(Page.PLAYLISTS)
+            page == Page.DIZZYLAB_ACCOUNT -> {
+                if (dizzyAccountSection != "home") { dizzyAccountRequest++; dizzyAccountLoading = false; dizzyAccountSection = "home"; render(Page.DIZZYLAB_ACCOUNT) }
+                else render(Page.SETTINGS)
+            }
+            page == Page.ONLINE && onlineMusicSource == OnlineMusicSource.DIZZYLAB && openedDizzylabAlbum != null -> {
+                openedDizzylabAlbum = null
+                if (dizzyAlbumReturnToAccount) { dizzyAlbumReturnToAccount = false; render(Page.DIZZYLAB_ACCOUNT) }
+                else render(Page.ONLINE)
+            }
+            page == Page.ONLINE && onlineMusicSource == OnlineMusicSource.DIZZYLAB -> {
+                if (dizzySection != DizzylabSection.DISCOVER) selectDizzylabSection(DizzylabSection.DISCOVER)
+                else render(Page.PLAYLISTS)
+            }
+            page == Page.ONLINE && subsonicBackStack.isNotEmpty() -> {
+                subsonicScreen = subsonicBackStack.removeAt(subsonicBackStack.lastIndex)
+                render(Page.ONLINE)
+            }
+            page == Page.ONLINE && subsonicScreen != SubsonicScreen.HOME -> {
+                subsonicScreen = SubsonicScreen.HOME
+                render(Page.ONLINE)
+            }
+            page == Page.ONLINE -> render(Page.PLAYLISTS)
             page == Page.SCAN -> render(Page.LIBRARY)
             page == Page.LIBRARY -> render(Page.PLAYLISTS)
             page == Page.PLAYLISTS && openedPlaylist != null -> {
@@ -567,6 +642,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     override fun onCompleted() {
+        player.currentTrack?.let { submitSubsonicScrobble(it) }
         trackAdapter.currentTrackId = null
         if (playbackMode == PlaybackMode.REPEAT_ONE && currentIndex in currentQueue.indices) {
             playTrack(currentQueue[currentIndex], currentQueue, countPlay = false)
@@ -724,6 +800,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         statusText = TextView(this).apply {
             text = "准备扫描或导入本地音乐"
             bodyStyle(13f)
+            setPadding(0, dp(8), 0, dp(8))
+            setOnClickListener { if (page == Page.ONLINE) showOnlineSourceMenu(this) }
         }
         header.addView(statusText)
         return header
@@ -834,7 +912,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         bottomNavigationPanel = row
         listOf(
-            Triple(Page.SUBSONIC, Lang.get("nav_subs"), R.drawable.ic_music_disc),
+            Triple(Page.ONLINE, Lang.get("nav_online"), R.drawable.ic_music_disc),
             Triple(Page.PLAYLISTS, Lang.get("nav_library"), R.drawable.ic_musiclist),
             Triple(Page.SETTINGS, Lang.get("nav_settings"), R.drawable.ic_menu)
         ).forEach { (target, label, iconRes) ->
@@ -849,16 +927,19 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun render(target: Page) {
+        val renderId = ++pageRenderGeneration
         if (target != Page.LIBRARY && target != Page.PLAYLISTS) clearSelection()
         page = target
         if (content.childCount > 0) {
             val old = content.getChildAt(0)
+            old.animate().cancel()
             old.animate().alpha(0f).setDuration(120).withEndAction {
+                if (renderId != pageRenderGeneration || isDestroyed) return@withEndAction
                 content.removeAllViews()
                 nowPagePlayButton = null; nowPageSeek = null; nowPageTime = null
                 nowPageLyrics = null; nowPageLyricsScroll = null; nowPageLyricsBox = null
-                miniPlayerPanel.visibility = if (target == Page.NOW_PLAYING || target == Page.SETTINGS) View.GONE else View.VISIBLE
-        headerTitle.text = if (target == Page.SETTINGS) Lang.get("nav_settings") else ""
+                miniPlayerPanel.visibility = if (target == Page.NOW_PLAYING || target == Page.SETTINGS || target == Page.DIZZYLAB_ACCOUNT) View.GONE else View.VISIBLE
+                headerTitle.text = if (target == Page.SETTINGS) Lang.get("nav_settings") else ""
                 updateNavButtons(target)
                 buildPageContent(target)
                 if (content.childCount > 0) {
@@ -870,7 +951,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             content.removeAllViews()
             nowPagePlayButton = null; nowPageSeek = null; nowPageTime = null
             nowPageLyrics = null; nowPageLyricsScroll = null; nowPageLyricsBox = null
-            miniPlayerPanel.visibility = if (target == Page.NOW_PLAYING || target == Page.SETTINGS) View.GONE else View.VISIBLE
+            miniPlayerPanel.visibility = if (target == Page.NOW_PLAYING || target == Page.SETTINGS || target == Page.DIZZYLAB_ACCOUNT) View.GONE else View.VISIBLE
             headerTitle.text = if (target == Page.SETTINGS) "SMP" else ""
             updateNavButtons(target)
             buildPageContent(target)
@@ -884,8 +965,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun updateNavButtons(target: Page) {
         navButtons.forEach { (navPage, button) ->
             button.background = ColorDrawable(Color.TRANSPARENT)
-            button.setTextColor(if (navPage == target) Palette.TEXT else Palette.MUTED)
-            tintTextViewDrawables(button, if (navPage == target) Palette.TEXT else Palette.MUTED)
+            button.setTextColor(if (navPage == target || (target == Page.DIZZYLAB_ACCOUNT && navPage == Page.SETTINGS)) Palette.TEXT else Palette.MUTED)
+            tintTextViewDrawables(button, if (navPage == target || (target == Page.DIZZYLAB_ACCOUNT && navPage == Page.SETTINGS)) Palette.TEXT else Palette.MUTED)
         }
     }
 
@@ -896,7 +977,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             Page.PLAYLISTS -> renderPlaylistsPage()
             Page.NOW_PLAYING -> renderNowPlayingPage()
             Page.SETTINGS -> renderSettingsPage()
-            Page.SUBSONIC -> renderSubsonicPage()
+            Page.ONLINE -> renderOnlineMusicPage()
+            Page.DIZZYLAB_ACCOUNT -> renderDizzylabAccountPage()
             Page.STREAMING -> renderStreamingPage()
         }
     }
@@ -1201,181 +1283,1404 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .show()
     }
 
-    private fun renderSubsonicPage() {
-        content.addView(sectionTitle("Subsonic 服务器"))
+    private fun onlineSourceLabel(): String = when (onlineMusicSource) {
+        OnlineMusicSource.SUBSONIC -> "Subsonic：${selectedSubsonicServer()?.displayName ?: "未配置服务器"}"
+        OnlineMusicSource.DIZZYLAB -> "Dizzylab：${dizzyUser?.name ?: if (hasDizzylabSession()) "待验证" else "游客"}"
+    }
+
+    private fun showOnlineSourceMenu(anchor: View) {
+        PopupMenu(this, anchor).apply {
+            OnlineMusicSource.entries.forEachIndexed { index, source ->
+                menu.add(0, index, index, source.title).apply { isCheckable = true; isChecked = source == onlineMusicSource }
+            }
+            menu.setGroupCheckable(0, true, true)
+            setOnMenuItemClickListener { item ->
+                onlineMusicSource = OnlineMusicSource.entries[item.itemId]
+                saveSettings()
+                render(Page.ONLINE)
+                true
+            }
+        }.show()
+    }
+
+    private fun renderOnlineMusicPage() {
+        when (onlineMusicSource) {
+            OnlineMusicSource.SUBSONIC -> renderSubsonicPage()
+            OnlineMusicSource.DIZZYLAB -> renderDizzylabMusicPage()
+        }
+        setStatus(onlineSourceLabel())
+    }
+
+    private fun hasDizzylabSession() = dizzylabToken.isNotBlank() || dizzylabCookie.split(';').any {
+        val value = it.trim()
+        value.startsWith("sessionid=") && value.substringAfter('=').isNotBlank()
+    }
+
+    private fun dizzylabApi(requireLogin: Boolean): DizzylabApiClient {
+        val snapshot = synchronized(dizzySessionLock) { Triple(dizzylabToken, dizzylabCookie, dizzySessionRevision) }
+        var token = snapshot.first
+        if (token.isBlank() && snapshot.second.isNotBlank()) {
+            val resolved = runCatching { DizzylabApiClient(cookie = snapshot.second).sessionFromWebsite() }
+            if (resolved.isSuccess) {
+                val (value, user) = resolved.getOrThrow()
+                synchronized(dizzySessionLock) {
+                    check(snapshot.third == dizzySessionRevision) { "账号已切换，请重试" }
+                    token = value
+                    dizzylabToken = value
+                    dizzylabUserId = user.id
+                    dizzyUser = user
+                    dizzylabSessionStore.save(snapshot.second, value, user.id)
+                }
+            } else if (requireLogin) throw resolved.exceptionOrNull()!!
+        }
+        if (requireLogin) check(token.isNotBlank()) { "请先登录 Dizzylab" }
+        check(snapshot.third == dizzySessionRevision) { "账号已切换，请重试" }
+        return DizzylabApiClient(token, snapshot.second)
+    }
+
+    private fun selectDizzylabSection(section: DizzylabSection) {
+        if (section != DizzylabSection.DISCOVER && section != DizzylabSection.CIRCLES && !hasDizzylabSession()) {
+            showDizzylabLogin { selectDizzylabSection(section) }
+            return
+        }
+        onlineMusicSource = OnlineMusicSource.DIZZYLAB
+        dizzySection = section
+        openedDizzylabAlbum = null
+        dizzyAlbumReturnToAccount = false
+        dizzyMusicLoading = false
+        loadDizzylabMusic(reset = true)
+    }
+
+    private fun renderDizzylabMusicPage() {
+        content.addView(sectionTitle("Dizzylab"))
         val scroll = ScrollView(this)
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        box.addView(TextView(this).apply {
-            text = "请等待更新"
-            bodyStyle(18f, Palette.MUTED)
-            gravity = Gravity.CENTER
-            setPadding(dp(12), dp(120), dp(12), dp(120))
-        })
+        val details = openedDizzylabAlbum
+        if (details != null) renderDizzylabAlbum(box, details) else {
+            val searchRow = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            val search = editText("搜索 Dizzylab 专辑", dizzylabQuery) { dizzylabQuery = it }
+            val submit = { selectDizzylabSection(if (dizzylabQuery.isBlank()) DizzylabSection.DISCOVER else DizzylabSection.SEARCH) }
+            search.imeOptions = EditorInfo.IME_ACTION_SEARCH
+            search.setOnEditorActionListener { _, action, _ -> if (action == EditorInfo.IME_ACTION_SEARCH) { submit(); true } else false }
+            searchRow.addView(search, LinearLayout.LayoutParams(0, dp(52), 1f))
+            searchRow.addView(actionButton("搜索", submit), LinearLayout.LayoutParams(dp(78), dp(46)).apply { leftMargin = dp(8) })
+            box.addView(searchRow)
+            val row = LinearLayout(this)
+            listOf(DizzylabSection.DISCOVER, DizzylabSection.PURCHASED, DizzylabSection.LIKED, DizzylabSection.CIRCLES).forEach { section ->
+                val icon = if (section == DizzylabSection.CIRCLES) R.drawable.ic_artist else R.drawable.ic_collection
+                row.addView(subsonicFeatureButton(when (section) {
+                    DizzylabSection.DISCOVER -> "发现"; DizzylabSection.PURCHASED -> "已购"; DizzylabSection.LIKED -> "喜欢"; else -> "社团"
+                }, icon) { selectDizzylabSection(section) }, LinearLayout.LayoutParams(0, dp(76), 1f).apply { setMargins(dp(3), dp(10), dp(3), dp(8)) })
+            }
+            box.addView(row)
+            box.addView(sectionTitle(if (dizzySection == DizzylabSection.CIRCLE) dizzyCircle?.name ?: "社团作品" else dizzySection.title))
+            if (dizzyMusicError.isNotBlank()) box.addView(settingCard("加载失败", dizzyMusicError + " · 点击重试") { loadDizzylabMusic(dizzyOffset == 0) })
+            if (dizzySection == DizzylabSection.CIRCLES) dizzyCircles.forEach { circle ->
+                box.addView(streamAlbumCard(StreamAlbum(circle.id, circle.name, "", circle.cover), plainDizzylabText(circle.description)) {
+                    dizzyCircle = circle
+                    selectDizzylabSection(DizzylabSection.CIRCLE)
+                })
+            } else dizzylabAlbums.forEach { album ->
+                box.addView(streamAlbumCard(album, listOf(album.circle, when {
+                    album.purchased || dizzySection == DizzylabSection.PURCHASED -> "已购"
+                    album.price == 0.0 -> "免费"
+                    album.price != null -> "¥ ${album.price}"
+                    else -> "Dizzylab 专辑"
+                }).filter { it.isNotBlank() }.joinToString(" · ")) { loadDizzylabAlbum(album) })
+            }
+            if (dizzyMusicLoading) box.addView(TextView(this).apply { text = "正在加载…"; bodyStyle(14f); setPadding(0, dp(16), 0, dp(16)) })
+            else if (dizzyHasMore) box.addView(actionButton("加载更多") { loadDizzylabMusic(false) })
+            else if (dizzyMusicLoaded && dizzylabAlbums.isEmpty() && dizzyCircles.isEmpty() && dizzyMusicError.isBlank())
+                box.addView(settingCard("暂无内容", "切换分类或试试其他关键词。"))
+            if (!dizzyMusicLoaded && !dizzyMusicLoading) loadDizzylabMusic(true, renderNow = false)
+        }
         scroll.addView(box)
         content.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        setStatus("Subsonic 服务器（开发中）")
+    }
+
+    private data class DizzyMusicResult(val albums: List<StreamAlbum>, val circles: List<DizzylabCircle>, val offset: Int, val more: Boolean)
+
+    private fun loadDizzylabMusic(reset: Boolean, renderNow: Boolean = true) {
+        if (dizzyMusicLoading) return
+        val request = ++dizzyMusicRequest
+        val revision = dizzySessionRevision
+        val section = dizzySection
+        val query = dizzylabQuery.trim()
+        val circle = dizzyCircle
+        if (reset) { dizzyOffset = 0; dizzylabAlbums = emptyList(); dizzyCircles = emptyList(); dizzyHasMore = false }
+        val offset = dizzyOffset
+        dizzyMusicLoading = true; dizzyMusicLoaded = true; dizzyMusicError = ""
+        if (renderNow) render(Page.ONLINE)
+        Thread {
+            val result = runCatching {
+                val api = dizzylabApi(section != DizzylabSection.DISCOVER && section != DizzylabSection.CIRCLES)
+                if (section == DizzylabSection.CIRCLES) {
+                    val p = api.circles(offset)
+                    DizzyMusicResult(emptyList(), p.items, p.nextOffset, p.hasMore)
+                } else {
+                    val p = if (section == DizzylabSection.CIRCLE) api.circleAlbums(circle ?: error("请选择社团"), offset) else api.albums(section, offset, query)
+                    DizzyMusicResult(p.items, emptyList(), p.nextOffset, p.hasMore)
+                }
+            }
+            runOnUiThread {
+                if (isDestroyed || request != dizzyMusicRequest || revision != dizzySessionRevision) return@runOnUiThread
+                dizzyMusicLoading = false
+                result.onSuccess { p ->
+                    dizzylabAlbums = (dizzylabAlbums + p.albums).distinctBy { it.id }
+                    dizzyCircles = (dizzyCircles + p.circles).distinctBy { it.id }
+                    dizzyOffset = p.offset; dizzyHasMore = p.more
+                }.onFailure { dizzyMusicError = it.message ?: "网络请求失败" }
+                if (page == Page.ONLINE && onlineMusicSource == OnlineMusicSource.DIZZYLAB) render(Page.ONLINE)
+            }
+        }.start()
+    }
+
+    private fun plainDizzylabText(value: String): String = android.text.Html.fromHtml(value, android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim()
+
+    private fun renderDizzylabAccountPage() {
+        content.addView(actionButton(if (dizzyAccountSection == "home") "返回设置" else "返回 Dizzylab 账户") {
+            if (dizzyAccountSection == "home") render(Page.SETTINGS)
+            else { dizzyAccountRequest++; dizzyAccountLoading = false; dizzyAccountSection = "home"; render(Page.DIZZYLAB_ACCOUNT) }
+        })
+        content.addView(sectionTitle("Dizzylab 账户"))
+        val scroll = ScrollView(this)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        if (!hasDizzylabSession()) {
+            box.addView(streamSourceCard("登录 Dizzylab", "管理账户、消息、关注动态与 CDK 兑换", R.drawable.ic_dizzylab) { showDizzylabLogin() })
+        } else if (dizzyAccountSection == "home") {
+            val user = dizzyUser
+            box.addView(streamSourceCard(user?.name ?: "Dizzylab", user?.let { "${it.email}\nUID ${it.id} · ${it.group}" } ?: "正在验证登录状态…", R.drawable.ic_dizzylab) { loadDizzylabAccount() })
+            if (dizzyAccountError.isNotBlank()) box.addView(settingCard("账户验证失败", "$dizzyAccountError · 点击重试") { loadDizzylabAccount() })
+            box.addView(settingCard("账户资料与设置", "头像、昵称、简介、邮箱及其他账户设置") {
+                if (dizzylabUserId.isBlank()) Toast.makeText(this, "请先完成账户验证", Toast.LENGTH_SHORT).show()
+                else showDizzylabWebPage("${DizzylabApiClient.BASE}/u/$dizzylabUserId/options/", "账户管理")
+            })
+            box.addView(settingCard("收件箱", "查看消息与在网页中回复") { showDizzylabWebPage("${DizzylabApiClient.BASE}/albums/msgbox/", "Dizzylab 收件箱") })
+            box.addView(settingCard("关注动态", "关注社团的最新发布") { openDizzylabAccountList("feed") })
+            box.addView(settingCard("关注社团", "查看关注的社团及其作品") { openDizzylabAccountList("following") })
+            box.addView(settingCard("CDK 兑换", "输入兑换码，确认专辑后兑换") { showDizzylabRedemption() })
+            box.addView(settingCard("我的订单", "在网页中查看数字商品和 BOOST 记录") { showDizzylabWebPage("${DizzylabApiClient.BASE}/albums/purchases/", "Dizzylab 订单") })
+            box.addView(settingCard("下载音质", "MP3 $dizzyDownloadBitrate kbps · 使用播放器现有下载队列") {
+                dialogBuilder().setTitle("Dizzylab 下载音质").setSingleChoiceItems(arrayOf("MP3 128 kbps", "MP3 320 kbps"), if (dizzyDownloadBitrate == 128) 0 else 1) { d, which ->
+                    dizzyDownloadBitrate = if (which == 0) 128 else 320; saveSettings(); d.dismiss(); render(Page.DIZZYLAB_ACCOUNT)
+                }.show()
+            })
+            box.addView(settingCard("重新登录", "更新本机 Dizzylab 登录状态") { showDizzylabLogin() })
+            box.addView(settingCard("退出 Dizzylab", "保留已下载音乐和其他来源的账号") { confirmClearDizzylabCookie() })
+            if (user == null && !dizzyAccountLoading && dizzyAccountError.isBlank()) loadDizzylabAccount()
+        } else {
+            box.addView(sectionTitle(if (dizzyAccountSection == "feed") "关注动态" else "关注社团"))
+            box.addView(actionButton("刷新") { loadDizzylabAccountList(true) })
+            if (dizzyAccountError.isNotBlank()) box.addView(settingCard("加载失败", dizzyAccountError) { loadDizzylabAccountList(true) })
+            if (dizzyAccountSection == "feed") dizzyFeed.forEach { entry ->
+                box.addView(sectionTitle(entry.circle.name))
+                entry.albums.forEach { album -> box.addView(streamAlbumCard(album, entry.date) { loadDizzylabAlbum(album, fromAccount = true) }) }
+            } else dizzyFollowing.forEach { circle ->
+                box.addView(streamAlbumCard(StreamAlbum(circle.id, circle.name, "", circle.cover), "查看社团作品") {
+                    dizzyCircle = circle; selectDizzylabSection(DizzylabSection.CIRCLE)
+                })
+            }
+            if (dizzyAccountLoading) box.addView(TextView(this).apply { text = "正在加载…"; bodyStyle(14f) })
+            else if (dizzyAccountHasMore) box.addView(actionButton("加载更多") { loadDizzylabAccountList(false) })
+            else if (dizzyFeed.isEmpty() && dizzyFollowing.isEmpty() && dizzyAccountError.isBlank()) box.addView(settingCard("暂无内容", "关注社团后可在此查看更新。"))
+        }
+        scroll.addView(box)
+        content.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        setStatus("Dizzylab 账户")
+    }
+
+    private fun loadDizzylabAccount(onSuccess: (() -> Unit)? = null) {
+        if (dizzyAccountLoading) return
+        val revision = dizzySessionRevision
+        val request = ++dizzyAccountRequest
+        dizzyAccountLoading = true; dizzyAccountError = ""
+        Thread {
+            val result = runCatching { dizzylabApi(true).user() }
+            runOnUiThread {
+                if (isDestroyed || revision != dizzySessionRevision || request != dizzyAccountRequest) return@runOnUiThread
+                dizzyAccountLoading = false
+                result.onSuccess { user -> dizzyUser = user; dizzylabUserId = user.id; saveSettings(); onSuccess?.invoke() }
+                    .onFailure { dizzyAccountError = it.message ?: "账户验证失败" }
+                if (page == Page.DIZZYLAB_ACCOUNT) render(Page.DIZZYLAB_ACCOUNT)
+                else if (page == Page.ONLINE) setStatus(onlineSourceLabel())
+            }
+        }.start()
+    }
+
+    private fun openDizzylabAccountList(section: String) {
+        dizzyAccountRequest++; dizzyAccountLoading = false
+        dizzyAccountSection = section
+        dizzyAccountHasMore = false
+        loadDizzylabAccountList(true)
+    }
+
+    private fun loadDizzylabAccountList(reset: Boolean) {
+        if (dizzyAccountLoading) return
+        val request = ++dizzyAccountRequest
+        val revision = dizzySessionRevision
+        val section = dizzyAccountSection
+        if (reset) { dizzyAccountOffset = 0; dizzyFeed = emptyList(); dizzyFollowing = emptyList() }
+        val offset = dizzyAccountOffset
+        dizzyAccountLoading = true; dizzyAccountError = ""
+        render(Page.DIZZYLAB_ACCOUNT)
+        Thread {
+            val result = runCatching {
+                val api = dizzylabApi(true)
+                if (section == "feed") {
+                    val p = api.feed(offset)
+                    Triple(p.items, emptyList<DizzylabCircle>(), p.nextOffset to p.hasMore)
+                } else {
+                    val p = api.circles(offset, following = true)
+                    Triple(emptyList<DizzylabFeedEntry>(), p.items, p.nextOffset to p.hasMore)
+                }
+            }
+            runOnUiThread {
+                if (isDestroyed || request != dizzyAccountRequest || revision != dizzySessionRevision) return@runOnUiThread
+                dizzyAccountLoading = false
+                result.onSuccess { (feed, following, next) ->
+                    dizzyFeed = (dizzyFeed + feed).distinctBy { it.circle.id + it.date }
+                    dizzyFollowing = (dizzyFollowing + following).distinctBy { it.id }
+                    dizzyAccountOffset = next.first; dizzyAccountHasMore = next.second
+                }.onFailure { dizzyAccountError = it.message ?: "加载失败" }
+                if (page == Page.DIZZYLAB_ACCOUNT && dizzyAccountSection == section) render(Page.DIZZYLAB_ACCOUNT)
+            }
+        }.start()
+    }
+
+    private fun <T> performDizzylabAction(action: (DizzylabApiClient) -> T, success: (T) -> Unit) {
+        if (!hasDizzylabSession()) { showDizzylabLogin(); return }
+        if (dizzyMutationInFlight) return
+        dizzyMutationInFlight = true
+        val revision = dizzySessionRevision
+        showLoading()
+        Thread {
+            val result = runCatching { action(dizzylabApi(true)) }
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                hideLoading(); dizzyMutationInFlight = false
+                if (revision != dizzySessionRevision) return@runOnUiThread
+                result.onSuccess(success).onFailure { Toast.makeText(this, it.message ?: "操作未完成，请刷新后确认状态", Toast.LENGTH_LONG).show() }
+            }
+        }.start()
+    }
+
+    private fun showDizzylabRedemption() {
+        val input = editText("输入兑换码", "") { }
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(8), dp(18), 0); addView(input) }
+        val dialog = dialogBuilder().setTitle("兑换 CDK").setView(box).setPositiveButton("检查兑换码", null).setNegativeButton("取消", null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val code = input.text.toString().trim()
+                if (code.isBlank()) { input.error = "请输入兑换码"; return@setOnClickListener }
+                input.text.clear(); dialog.dismiss()
+                performDizzylabAction({ it.redeem(code) }) { preview ->
+                    when (preview.result) {
+                        "4" -> dialogBuilder().setTitle("确认兑换")
+                            .setMessage(preview.album?.title ?: "兑换码有效，确认将对应内容加入你的账号？")
+                            .setPositiveButton("确认兑换") { _, _ ->
+                                performDizzylabAction({ it.redeem(code, confirm = true) }) { response ->
+                                    if (response.result == "1") {
+                                        dizzyMusicLoaded = false
+                                        Toast.makeText(this, "兑换成功，可在已购音乐中查看", Toast.LENGTH_LONG).show()
+                                    } else showDizzylabRedeemResult(response.result, confirmation = true)
+                                }
+                            }.setNegativeButton("取消", null).show()
+                        else -> showDizzylabRedeemResult(preview.result)
+                    }
+                }
+            }
+        }
+        dialog.setOnDismissListener { input.text.clear() }
+        dialog.show()
+    }
+
+    private fun showDizzylabRedeemResult(result: String, confirmation: Boolean = false) {
+        if (result == "6") {
+            dialogBuilder().setTitle("需要网页兑换").setMessage("该兑换码需要在 Dizzylab 网页中完成。").setPositiveButton("打开网页") { _, _ ->
+                showDizzylabWebPage("${DizzylabApiClient.BASE}/redeem/", "CDK 兑换")
+            }.setNegativeButton("关闭", null).show()
+        } else Toast.makeText(this, when {
+            !confirmation && result == "1" -> "兑换码无效或已被使用"
+            !confirmation && result == "2" -> "你已经拥有该专辑"
+            else -> "兑换尚未确认，请刷新已购音乐或在网页检查结果"
+        }, Toast.LENGTH_LONG).show()
+    }
+
+    private fun renderSubsonicPage() {
+        val server = selectedSubsonicServer()
+        content.addView(sectionTitle(Lang.get("subsonic_status")))
+        val scroll = ScrollView(this)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        if (server == null) {
+            box.addView(settingCard(Lang.get("subsonic_no_server"), Lang.get("subsonic_select_server")) {
+                showSubsonicManagementDialog()
+            })
+            scroll.addView(box)
+            content.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+            setStatus(Lang.get("subsonic_not_configured"))
+            return
+        }
+        renderSubsonicTopBar(box)
+        when (subsonicScreen) {
+            SubsonicScreen.HOME -> renderSubsonicHome(box)
+            SubsonicScreen.SEARCH -> renderSubsonicSearchResults(box)
+            SubsonicScreen.ARTISTS -> renderSubsonicArtistList(box)
+            SubsonicScreen.SONGS -> renderSubsonicSongList(box, subsonicSectionTitle.ifBlank { "歌曲" }, subsonicSongs)
+            SubsonicScreen.ALBUMS -> renderSubsonicAlbumList(box, subsonicSectionTitle.ifBlank { "专辑" }, subsonicAlbums)
+            SubsonicScreen.PLAYLISTS -> renderSubsonicPlaylistList(box)
+            SubsonicScreen.ARTIST_DETAIL -> renderSubsonicAlbumList(box, subsonicSectionTitle.ifBlank { subsonicCurrentArtistName.ifBlank { "艺术家" } }, subsonicAlbums)
+            SubsonicScreen.ALBUM_DETAIL -> renderSubsonicAlbumDetail(box)
+            SubsonicScreen.PLAYLIST_DETAIL -> renderSubsonicPlaylistDetail(box)
+        }
+        scroll.addView(box)
+        content.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        setStatus(Lang.get("subsonic_status") + "：" + server.displayName)
+    }
+
+    private fun selectedSubsonicServer(): SubsonicServer? {
+        return store.subsonicServers.firstOrNull { it.id == store.selectedSubsonicServerId }
+    }
+
+    private fun subsonicClient(server: SubsonicServer): SubsonicClient {
+        return SubsonicClient(server, weakNetworkMode)
+    }
+
+    private fun effectiveSubsonicTranscodeMode(): SubsonicTranscodeMode {
+        return if (weakNetworkMode) SubsonicTranscodeMode.KBPS_96 else subsonicTranscodeMode
+    }
+
+    private fun effectiveSubsonicMimeType(song: SubsonicSong): String {
+        return if (effectiveSubsonicTranscodeMode().maxBitRate != null) "audio/mpeg" else song.contentType.ifBlank { "audio/mpeg" }
+    }
+
+    private fun effectiveSubsonicSuffix(song: SubsonicSong): String {
+        return if (effectiveSubsonicTranscodeMode().maxBitRate != null) "mp3" else song.suffix.ifBlank { song.contentType.substringAfterLast('/', "mp3") }.ifBlank { "mp3" }
+    }
+
+    private fun clearSubsonicPageState() {
+        subsonicSearchQuery = ""
+        subsonicRandomSongs = emptyList()
+        subsonicRandomRequested = false
+        subsonicArtists = emptyList()
+        subsonicAlbums = emptyList()
+        subsonicPlaylists = emptyList()
+        subsonicSongs = emptyList()
+        subsonicSectionTitle = ""
+        subsonicScreen = SubsonicScreen.HOME
+        subsonicBackStack.clear()
+        subsonicCurrentArtistName = ""
+        subsonicCurrentAlbum = null
+        subsonicCurrentPlaylist = null
+        subsonicVisibleArtistCount = 0
+        subsonicVisibleAlbumCount = 0
+        subsonicVisibleSongCount = 0
+        subsonicVisiblePlaylistCount = 0
+    }
+
+    private fun subsonicFeatureButton(text: String, iconRes: Int, onClick: () -> Unit): View {
+        return TextView(this).apply {
+            this.text = text
+            titleStyle(13f)
+            gravity = Gravity.CENTER
+            setCompoundDrawables(null, tintedDrawable(iconRes, Palette.TEXT, 26), null, null)
+            compoundDrawablePadding = dp(6)
+            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            setPadding(dp(4), dp(8), dp(4), dp(8))
+            setOnClickListener { onClick() }
+            applyCardPressEffect(this)
+        }
+    }
+
+    private fun renderSubsonicTopBar(box: LinearLayout) {
+        val searchRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val search = editText("搜索 Subsonic 音乐", subsonicSearchQuery) { subsonicSearchQuery = it }
+        searchRow.addView(search, LinearLayout.LayoutParams(0, dp(52), 1f))
+        searchRow.addView(iconActionButton("搜索", R.drawable.ic_checkmore) {
+            loadSubsonicSearch(subsonicSearchQuery)
+        }, LinearLayout.LayoutParams(dp(78), dp(46)).apply { leftMargin = dp(8) })
+        box.addView(searchRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = dp(10)
+        })
+        if (subsonicScreen != SubsonicScreen.HOME) {
+            box.addView(actionButton("返回上一层") {
+                if (subsonicBackStack.isNotEmpty()) {
+                    subsonicScreen = subsonicBackStack.removeAt(subsonicBackStack.lastIndex)
+                } else {
+                    subsonicScreen = SubsonicScreen.HOME
+                }
+                render(Page.ONLINE)
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply {
+                bottomMargin = dp(8)
+            })
+        }
+    }
+
+    private fun renderSubsonicHome(box: LinearLayout) {
+        val featureRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        featureRow.addView(subsonicFeatureButton("艺术家", R.drawable.ic_artist) {
+            pushSubsonicScreen(SubsonicScreen.ARTISTS)
+            loadSubsonicArtists()
+        }, LinearLayout.LayoutParams(0, dp(76), 1f).apply { rightMargin = dp(5) })
+        featureRow.addView(subsonicFeatureButton("歌曲", R.drawable.ic_song) {
+            pushSubsonicScreen(SubsonicScreen.SONGS)
+            loadSubsonicSongs()
+        }, LinearLayout.LayoutParams(0, dp(76), 1f).apply { leftMargin = dp(5); rightMargin = dp(5) })
+        featureRow.addView(subsonicFeatureButton("专辑", R.drawable.ic_collection) {
+            pushSubsonicScreen(SubsonicScreen.ALBUMS)
+            loadSubsonicAlbums()
+        }, LinearLayout.LayoutParams(0, dp(76), 1f).apply { leftMargin = dp(5); rightMargin = dp(5) })
+        featureRow.addView(subsonicFeatureButton("歌单", R.drawable.ic_collection) {
+            pushSubsonicScreen(SubsonicScreen.PLAYLISTS)
+            loadSubsonicPlaylists()
+        }, LinearLayout.LayoutParams(0, dp(76), 1f).apply { leftMargin = dp(5) })
+        box.addView(featureRow)
+
+        val randomHeader = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(12), 0, dp(6))
+        }
+        randomHeader.addView(TextView(this).apply { text = "随机音乐"; titleStyle(18f) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        randomHeader.addView(iconActionButton("刷新", R.drawable.ic_refresh) { loadSubsonicRandom(force = true) }, LinearLayout.LayoutParams(dp(86), dp(40)))
+        box.addView(randomHeader)
+        if (subsonicRandomSongs.isEmpty()) {
+            box.addView(settingCard("暂无随机音乐", "点击刷新获取 4 首音乐。") { loadSubsonicRandom(force = true) })
+            if (!subsonicRandomRequested) loadSubsonicRandom(force = false)
+        } else {
+            val randomQueue = subsonicRandomSongs.take(4)
+            randomQueue.forEach { song -> box.addView(subsonicSongCard(song, randomQueue)) }
+        }
+    }
+
+    private fun renderSubsonicSearchResults(box: LinearLayout) {
+        box.addView(sectionTitle(subsonicSectionTitle.ifBlank { "搜索结果" }))
+        if (subsonicArtists.isEmpty() && subsonicAlbums.isEmpty() && subsonicSongs.isEmpty()) {
+            box.addView(settingCard("暂无结果", "没有匹配到艺术家、专辑或歌曲。"))
+            return
+        }
+        if (subsonicArtists.isNotEmpty()) {
+            box.addView(TextView(this).apply { text = "艺术家"; titleStyle(17f); setPadding(0, dp(8), 0, dp(6)) })
+            subsonicArtists.forEach { artist -> box.addView(subsonicArtistCard(artist)) }
+        }
+        if (subsonicAlbums.isNotEmpty()) {
+            box.addView(TextView(this).apply { text = "专辑"; titleStyle(17f); setPadding(0, dp(8), 0, dp(6)) })
+            subsonicAlbums.forEach { album -> box.addView(subsonicAlbumCard(album)) }
+        }
+        if (subsonicSongs.isNotEmpty()) {
+            box.addView(TextView(this).apply { text = "歌曲"; titleStyle(17f); setPadding(0, dp(8), 0, dp(6)) })
+            subsonicSongs.forEach { song -> box.addView(subsonicSongCard(song, subsonicSongs)) }
+        }
+    }
+
+    private fun renderSubsonicArtistList(box: LinearLayout) {
+        box.addView(sectionTitle(subsonicSectionTitle.ifBlank { "艺术家" }))
+        if (subsonicArtists.isEmpty()) {
+            box.addView(settingCard("暂无艺术家", "下拉刷新或重新进入后重试。"))
+            return
+        }
+        val visibleCount = subsonicVisibleCount(subsonicArtists.size, subsonicVisibleArtistCount)
+        subsonicArtists.take(visibleCount).forEach { artist -> box.addView(subsonicArtistCard(artist)) }
+        if (visibleCount < subsonicArtists.size) {
+            box.addView(subsonicLoadMoreButton("艺术家", visibleCount, subsonicArtists.size) {
+                subsonicVisibleArtistCount = minOf(subsonicArtists.size, visibleCount + SUBSONIC_PAGE_SIZE)
+                render(Page.ONLINE)
+            })
+        }
+    }
+
+    private fun renderSubsonicAlbumList(box: LinearLayout, title: String, albums: List<SubsonicAlbum>) {
+        box.addView(sectionTitle(title))
+        if (albums.isEmpty()) {
+            box.addView(settingCard("暂无专辑", "当前没有可显示的专辑。"))
+            return
+        }
+        val visibleCount = subsonicVisibleCount(albums.size, subsonicVisibleAlbumCount)
+        albums.take(visibleCount).forEach { album -> box.addView(subsonicAlbumCard(album)) }
+        if (visibleCount < albums.size) {
+            box.addView(subsonicLoadMoreButton("专辑", visibleCount, albums.size) {
+                subsonicVisibleAlbumCount = minOf(albums.size, visibleCount + SUBSONIC_PAGE_SIZE)
+                selectedSubsonicServer()?.let { cacheSubsonicArtwork(it, albums = albums.drop(visibleCount).take(SUBSONIC_PAGE_SIZE)) }
+                render(Page.ONLINE)
+            })
+        }
+    }
+
+    private fun renderSubsonicSongList(box: LinearLayout, title: String, songs: List<SubsonicSong>) {
+        box.addView(sectionTitle(title))
+        if (songs.isEmpty()) {
+            box.addView(settingCard("暂无歌曲", "当前没有可显示的歌曲。"))
+            return
+        }
+        val visibleCount = subsonicVisibleCount(songs.size, subsonicVisibleSongCount)
+        songs.take(visibleCount).forEach { song -> box.addView(subsonicSongCard(song, songs)) }
+        if (visibleCount < songs.size) {
+            box.addView(subsonicLoadMoreButton("歌曲", visibleCount, songs.size) {
+                subsonicVisibleSongCount = minOf(songs.size, visibleCount + SUBSONIC_PAGE_SIZE)
+                selectedSubsonicServer()?.let { cacheSubsonicArtwork(it, songs = songs.drop(visibleCount).take(SUBSONIC_PAGE_SIZE)) }
+                render(Page.ONLINE)
+            })
+        }
+    }
+
+    private fun renderSubsonicPlaylistList(box: LinearLayout) {
+        box.addView(sectionTitle(subsonicSectionTitle.ifBlank { "歌单" }))
+        val addRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
+        }
+        addRow.addView(TextView(this).apply { text = "+"; titleStyle(22f); setTextColor(Palette.ACCENT) }, LinearLayout.LayoutParams(dp(40), dp(40)))
+        addRow.addView(TextView(this).apply { text = Lang.get("subsonic_create_playlist"); titleStyle(15f) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        addRow.setOnClickListener {
+            showCreateSubsonicPlaylistDialog()
+        }
+        box.addView(addRow)
+        box.addView(subsonicPlaylistCard(
+            playlist = SubsonicPlaylist(
+                id = "__favorites__",
+                name = "喜爱的音乐"
+            ),
+            description = "Subsonic 收藏歌曲",
+            onClick = { openSubsonicFavoritesPlaylist() },
+            onLongClick = { openSubsonicFavoritesPlaylistAndDownload() }
+        ))
+        if (subsonicPlaylists.isEmpty()) {
+            box.addView(settingCard("暂无服务器歌单", "当前账号没有其他歌单。"))
+            return
+        }
+        val visibleCount = subsonicVisibleCount(subsonicPlaylists.size, subsonicVisiblePlaylistCount)
+        subsonicPlaylists.take(visibleCount).forEach { playlist ->
+            box.addView(subsonicPlaylistCard(
+                playlist = playlist,
+                onClick = { openSubsonicPlaylist(playlist) },
+                onLongClick = { openSubsonicPlaylist(playlist, downloadAfterLoad = true) }
+            ))
+        }
+        if (visibleCount < subsonicPlaylists.size) {
+            box.addView(subsonicLoadMoreButton("歌单", visibleCount, subsonicPlaylists.size) {
+                subsonicVisiblePlaylistCount = minOf(subsonicPlaylists.size, visibleCount + SUBSONIC_PAGE_SIZE)
+                selectedSubsonicServer()?.let { cacheSubsonicArtwork(it, playlists = subsonicPlaylists.drop(visibleCount).take(SUBSONIC_PAGE_SIZE)) }
+                render(Page.ONLINE)
+            })
+        }
+    }
+
+    private fun renderSubsonicAlbumDetail(box: LinearLayout) {
+        val album = subsonicCurrentAlbum
+        box.addView(sectionTitle(subsonicSectionTitle.ifBlank { album?.title ?: "专辑" }))
+        if (album != null) {
+            box.addView(settingCard(
+                album.title,
+                listOf(album.artist, "${subsonicSongs.size} 首", album.year.takeIf { it > 0 }?.toString())
+                    .filterNotNull()
+                    .filter { it.isNotBlank() }
+                    .joinToString(" · ")
+            ))
+            box.addView(actionButton("下载整张专辑") {
+                downloadSubsonicAlbum(album, subsonicSongs)
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply {
+                bottomMargin = dp(8)
+            })
+        }
+        renderSubsonicSongList(box, "专辑歌曲", subsonicSongs)
+    }
+
+    private fun renderSubsonicPlaylistDetail(box: LinearLayout) {
+        val playlist = subsonicCurrentPlaylist
+        box.addView(sectionTitle(subsonicSectionTitle.ifBlank { playlist?.name ?: "歌单" }))
+        if (playlist != null) {
+            box.addView(settingCard(
+                playlist.name,
+                listOf(playlist.comment.ifBlank { "暂无简介" }, playlist.owner, "${subsonicSongs.size} 首", if (playlist.public) "公开歌单" else "")
+                    .filter { it.isNotBlank() }
+                    .joinToString(" · ")
+            ))
+            box.addView(actionButton("下载整个歌单") {
+                downloadSubsonicPlaylist(playlist, subsonicSongs)
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply {
+                bottomMargin = dp(8)
+            })
+        }
+        renderSubsonicSongList(box, "歌单歌曲", subsonicSongs)
+    }
+
+    private fun pushSubsonicScreen(target: SubsonicScreen) {
+        if (subsonicScreen != target) {
+            subsonicBackStack += subsonicScreen
+            subsonicScreen = target
+        }
+    }
+
+    private fun resetSubsonicVisibleCounts() {
+        subsonicVisibleArtistCount = 0
+        subsonicVisibleAlbumCount = 0
+        subsonicVisibleSongCount = 0
+        subsonicVisiblePlaylistCount = 0
+    }
+
+    private fun subsonicVisibleCount(total: Int, current: Int): Int {
+        if (total <= 0) return 0
+        return if (current <= 0) minOf(total, SUBSONIC_PAGE_SIZE) else minOf(total, current)
+    }
+
+    private fun subsonicLoadMoreButton(label: String, current: Int, total: Int, onClick: () -> Unit): View {
+        return actionButton("加载更多 $label（$current/$total）") { onClick() }.apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply {
+                topMargin = dp(8)
+            }
+        }
+    }
+
+    private fun cacheSubsonicArtwork(
+        server: SubsonicServer,
+        albums: List<SubsonicAlbum> = emptyList(),
+        songs: List<SubsonicSong> = emptyList(),
+        playlists: List<SubsonicPlaylist> = emptyList()
+    ) {
+        val client = subsonicClient(server)
+        val urls = buildList {
+            addAll(albums.map { client.coverArtUrl(it.coverArt) })
+            addAll(songs.map { client.coverArtUrl(it.coverArt) })
+            addAll(playlists.map { client.coverArtUrl(it.coverArt) })
+        }.filter { it.isNotBlank() }.distinct()
+        urls.forEach { cacheRemoteArtwork(it, true) }
+    }
+
+    private fun loadSubsonicRandom(force: Boolean) {
+        val server = selectedSubsonicServer() ?: return
+        if (!force && subsonicRandomSongs.isNotEmpty()) return
+        subsonicRandomRequested = true
+        setStatus("正在获取 Subsonic 随机音乐...")
+        Thread {
+            val songs = runCatching { subsonicClient(server).randomSongs(4) }.getOrElse {
+                runOnUiThread { Toast.makeText(this, "Subsonic 随机音乐获取失败：${it.message}", Toast.LENGTH_SHORT).show() }
+                emptyList()
+            }
+            cacheSubsonicArtwork(server, songs = songs)
+            runOnUiThread {
+                subsonicRandomSongs = songs
+                if (page == Page.ONLINE) render(Page.ONLINE)
+            }
+        }.start()
+    }
+
+    private fun loadSubsonicSearch(query: String) {
+        val server = selectedSubsonicServer() ?: return
+        val q = query.trim()
+        if (q.isBlank()) {
+            Toast.makeText(this, "请输入搜索内容", Toast.LENGTH_SHORT).show()
+            return
+        }
+        setStatus("正在搜索 Subsonic...")
+        pushSubsonicScreen(SubsonicScreen.SEARCH)
+        Thread {
+            val result = runCatching { subsonicClient(server).search(q) }
+            result.getOrNull()?.let { cacheSubsonicArtwork(server, albums = it.albums, songs = it.songs) }
+            runOnUiThread {
+                resetSubsonicVisibleCounts()
+                result.onSuccess {
+                    subsonicSectionTitle = "搜索：$q"
+                    subsonicArtists = it.artists
+                    subsonicAlbums = it.albums
+                    subsonicPlaylists = emptyList()
+                    subsonicSongs = it.songs
+                    subsonicCurrentAlbum = null
+                    subsonicCurrentPlaylist = null
+                    subsonicVisibleArtistCount = minOf(it.artists.size, SUBSONIC_PAGE_SIZE)
+                    subsonicVisibleAlbumCount = minOf(it.albums.size, SUBSONIC_PAGE_SIZE)
+                    subsonicVisibleSongCount = minOf(it.songs.size, SUBSONIC_PAGE_SIZE)
+                    render(Page.ONLINE)
+                }.onFailure {
+                    Toast.makeText(this, "Subsonic 搜索失败：${it.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun loadSubsonicArtists() {
+        val server = selectedSubsonicServer() ?: return
+        setStatus("正在加载 Subsonic 艺术家...")
+        Thread {
+            val artists = runCatching { subsonicClient(server).artists() }.getOrElse {
+                runOnUiThread { Toast.makeText(this, "艺术家加载失败：${it.message}", Toast.LENGTH_SHORT).show() }
+                emptyList()
+            }
+            runOnUiThread {
+                resetSubsonicVisibleCounts()
+                subsonicScreen = SubsonicScreen.ARTISTS
+                subsonicSectionTitle = "艺术家"
+                subsonicArtists = artists
+                subsonicVisibleArtistCount = minOf(artists.size, SUBSONIC_PAGE_SIZE)
+                subsonicAlbums = emptyList()
+                subsonicPlaylists = emptyList()
+                subsonicSongs = emptyList()
+                render(Page.ONLINE)
+            }
+        }.start()
+    }
+
+    private fun loadSubsonicSongs() {
+        val server = selectedSubsonicServer() ?: return
+        setStatus("正在加载 Subsonic 歌曲...")
+        Thread {
+            val songs = runCatching { subsonicClient(server).randomSongs(80) }.getOrElse {
+                runOnUiThread { Toast.makeText(this, "歌曲加载失败：${it.message}", Toast.LENGTH_SHORT).show() }
+                emptyList()
+            }
+            cacheSubsonicArtwork(server, songs = songs.take(SUBSONIC_PAGE_SIZE))
+            runOnUiThread {
+                resetSubsonicVisibleCounts()
+                subsonicScreen = SubsonicScreen.SONGS
+                subsonicSectionTitle = "歌曲"
+                subsonicArtists = emptyList()
+                subsonicAlbums = emptyList()
+                subsonicPlaylists = emptyList()
+                subsonicSongs = songs
+                subsonicVisibleSongCount = minOf(songs.size, SUBSONIC_PAGE_SIZE)
+                render(Page.ONLINE)
+            }
+        }.start()
+    }
+
+    private fun loadSubsonicAlbums() {
+        val server = selectedSubsonicServer() ?: return
+        setStatus("正在加载 Subsonic 专辑...")
+        Thread {
+            val albums = runCatching { subsonicClient(server).albums() }.getOrElse {
+                runOnUiThread { Toast.makeText(this, "专辑加载失败：${it.message}", Toast.LENGTH_SHORT).show() }
+                emptyList()
+            }
+            cacheSubsonicArtwork(server, albums = albums.take(SUBSONIC_PAGE_SIZE))
+            runOnUiThread {
+                resetSubsonicVisibleCounts()
+                subsonicScreen = SubsonicScreen.ALBUMS
+                subsonicSectionTitle = "专辑"
+                subsonicArtists = emptyList()
+                subsonicAlbums = albums
+                subsonicVisibleAlbumCount = minOf(albums.size, SUBSONIC_PAGE_SIZE)
+                subsonicPlaylists = emptyList()
+                subsonicSongs = emptyList()
+                subsonicCurrentAlbum = null
+                render(Page.ONLINE)
+            }
+        }.start()
+    }
+
+    private fun loadSubsonicPlaylists() {
+        val server = selectedSubsonicServer() ?: return
+        setStatus("正在加载 Subsonic 歌单...")
+        Thread {
+            val playlists = runCatching { subsonicClient(server).playlists() }.getOrElse {
+                runOnUiThread { Toast.makeText(this, "歌单加载失败：${it.message}", Toast.LENGTH_SHORT).show() }
+                emptyList()
+            }
+            cacheSubsonicArtwork(server, playlists = playlists.take(SUBSONIC_PAGE_SIZE))
+            runOnUiThread {
+                resetSubsonicVisibleCounts()
+                subsonicScreen = SubsonicScreen.PLAYLISTS
+                subsonicSectionTitle = "歌单"
+                subsonicPlaylists = playlists
+                subsonicVisiblePlaylistCount = minOf(playlists.size, SUBSONIC_PAGE_SIZE)
+                render(Page.ONLINE)
+            }
+        }.start()
+    }
+
+    private fun subsonicArtistCard(artist: SubsonicArtist): View {
+        return settingCard(artist.name, "${artist.albumCount} 张专辑") { openSubsonicArtist(artist.id, artist.name) }
+    }
+
+    private fun subsonicAlbumCard(album: SubsonicAlbum): View {
+        val server = selectedSubsonicServer() ?: return settingCard(album.title)
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
+            setOnClickListener { openSubsonicAlbum(album) }
+            applyCardPressEffect(this)
+        }
+        val cover = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            setImageResource(R.drawable.ic_cover_placeholder)
+        }
+        subsonicClient(server).coverArtUrl(album.coverArt).takeIf { it.isNotBlank() }?.let { loadRemoteImage(it, cover) }
+        row.addView(cover, LinearLayout.LayoutParams(dp(58), dp(58)))
+        val textBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), 0, 0, 0) }
+        textBox.addView(TextView(this).apply { text = album.title; titleStyle(15f); maxLines = 2 })
+        textBox.addView(TextView(this).apply {
+            text = listOf(album.artist, "${album.songCount} 首", album.year.takeIf { it > 0 }?.toString()).filterNotNull().filter { it.isNotBlank() }.joinToString(" · ")
+            bodyStyle(12f, Palette.MUTED)
+        })
+        row.addView(textBox, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        return row
+    }
+
+    private fun subsonicPlaylistCard(
+        playlist: SubsonicPlaylist,
+        description: String = "",
+        onClick: () -> Unit,
+        onLongClick: (() -> Unit)? = null
+    ): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
+            setOnClickListener { onClick() }
+            if (onLongClick != null) {
+                setOnLongClickListener {
+                    onLongClick()
+                    true
+                }
+            }
+            applyCardPressEffect(this)
+        }
+        val cover = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            setImageResource(R.drawable.ic_collection)
+        }
+        selectedSubsonicServer()?.let { server ->
+            subsonicClient(server).coverArtUrl(playlist.coverArt).takeIf { it.isNotBlank() }?.let { loadRemoteImage(it, cover) }
+        }
+        row.addView(cover, LinearLayout.LayoutParams(dp(58), dp(58)))
+        val textBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), 0, 0, 0) }
+        val descText = playlist.comment.ifBlank { description }.ifBlank { "暂无简介" }
+        textBox.addView(TextView(this).apply {
+            text = playlist.name
+            titleStyle(15f)
+            maxLines = 2
+            if (onLongClick != null) {
+                setOnLongClickListener {
+                    onLongClick()
+                    true
+                }
+            }
+        })
+        textBox.addView(TextView(this).apply {
+            text = listOf(descText, playlist.owner, playlist.songCount.takeIf { it > 0 }?.let { "$it 首" }.orEmpty()).filter { it.isNotBlank() }.joinToString(" · ")
+            bodyStyle(12f, Palette.MUTED)
+        })
+        row.addView(textBox, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        return row
+    }
+
+    private fun subsonicSongCard(song: SubsonicSong, queueSongs: List<SubsonicSong> = listOf(song)): View {
+        val queue = queueSongs.ifEmpty { listOf(song) }
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
+            setOnClickListener { playSubsonicSong(song, queue) }
+            setOnLongClickListener {
+                showSubsonicSongActions(song, queue)
+                true
+            }
+        }
+        val cover = ImageView(this).apply {
+            setImageResource(R.drawable.ic_music_disc)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+        }
+        selectedSubsonicServer()?.let { server ->
+            subsonicClient(server).coverArtUrl(song.coverArt).takeIf { it.isNotBlank() }?.let { loadRemoteImage(it, cover) }
+        }
+        row.addView(cover, LinearLayout.LayoutParams(dp(46), dp(46)).apply { rightMargin = dp(10) })
+        val textBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        textBox.addView(TextView(this).apply { text = song.title; titleStyle(15f); maxLines = 2 })
+        textBox.addView(TextView(this).apply {
+            text = listOf(song.artist, song.album, formatDuration(song.durationSeconds * 1000L)).filter { it.isNotBlank() }.joinToString(" · ")
+            bodyStyle(12f, Palette.MUTED)
+        })
+        row.addView(textBox, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(iconActionButton("", R.drawable.ic_checkmore) { showSubsonicSongActions(song, queue) }, LinearLayout.LayoutParams(dp(46), dp(40)))
+        return row
+    }
+
+    private fun openSubsonicArtist(artistId: String, name: String = "") {
+        val server = selectedSubsonicServer() ?: return
+        setStatus("正在加载艺术家...")
+        pushSubsonicScreen(SubsonicScreen.ARTIST_DETAIL)
+        Thread {
+            val albums = runCatching { subsonicClient(server).artistAlbums(artistId) }.getOrElse {
+                runOnUiThread { Toast.makeText(this, "艺术家加载失败：${it.message}", Toast.LENGTH_SHORT).show() }
+                emptyList()
+            }
+            runOnUiThread {
+                resetSubsonicVisibleCounts()
+                subsonicScreen = SubsonicScreen.ARTIST_DETAIL
+                subsonicCurrentArtistName = name
+                subsonicSectionTitle = "艺术家：${name.ifBlank { artistId }}"
+                subsonicArtists = emptyList()
+                subsonicAlbums = albums
+                subsonicVisibleAlbumCount = minOf(albums.size, SUBSONIC_PAGE_SIZE)
+                subsonicPlaylists = emptyList()
+                subsonicSongs = emptyList()
+                render(Page.ONLINE)
+            }
+        }.start()
+    }
+
+    private fun openSubsonicAlbum(album: SubsonicAlbum) {
+        val server = selectedSubsonicServer() ?: return
+        setStatus("正在加载专辑...")
+        pushSubsonicScreen(SubsonicScreen.ALBUM_DETAIL)
+        Thread {
+            val songs = runCatching { subsonicClient(server).albumSongs(album.id) }.getOrElse {
+                runOnUiThread { Toast.makeText(this, "专辑加载失败：${it.message}", Toast.LENGTH_SHORT).show() }
+                emptyList()
+            }
+            cacheSubsonicArtwork(server, albums = listOf(album), songs = songs.take(SUBSONIC_PAGE_SIZE))
+            runOnUiThread {
+                resetSubsonicVisibleCounts()
+                subsonicScreen = SubsonicScreen.ALBUM_DETAIL
+                subsonicCurrentAlbum = album
+                subsonicSectionTitle = "专辑：${album.title.ifBlank { album.id }}"
+                subsonicArtists = emptyList()
+                subsonicAlbums = emptyList()
+                subsonicPlaylists = emptyList()
+                subsonicSongs = songs
+                subsonicVisibleSongCount = minOf(songs.size, SUBSONIC_PAGE_SIZE)
+                render(Page.ONLINE)
+            }
+        }.start()
+    }
+
+    private fun openSubsonicFavoritesPlaylist() {
+        val server = selectedSubsonicServer() ?: return
+        setStatus("正在加载 Subsonic 收藏歌曲...")
+        pushSubsonicScreen(SubsonicScreen.PLAYLIST_DETAIL)
+        Thread {
+            val songs = runCatching { subsonicClient(server).favoriteSongs() }.getOrElse {
+                runOnUiThread { Toast.makeText(this, "收藏歌曲加载失败：${it.message}", Toast.LENGTH_SHORT).show() }
+                emptyList()
+            }
+            cacheSubsonicArtwork(server, songs = songs.take(SUBSONIC_PAGE_SIZE))
+            runOnUiThread {
+                resetSubsonicVisibleCounts()
+                subsonicScreen = SubsonicScreen.PLAYLIST_DETAIL
+                subsonicCurrentPlaylist = SubsonicPlaylist(id = "__favorites__", name = "喜爱的音乐", songCount = songs.size)
+                subsonicSectionTitle = "歌单：喜爱的音乐"
+                subsonicSongs = songs
+                subsonicVisibleSongCount = minOf(songs.size, SUBSONIC_PAGE_SIZE)
+                render(Page.ONLINE)
+            }
+        }.start()
+    }
+
+    private fun openSubsonicFavoritesPlaylistAndDownload() {
+        val server = selectedSubsonicServer() ?: return
+        setStatus("正在加载 Subsonic 收藏歌曲...")
+        Thread {
+            val songs = runCatching { subsonicClient(server).favoriteSongs() }.getOrElse {
+                runOnUiThread { Toast.makeText(this, "收藏歌曲加载失败：${it.message}", Toast.LENGTH_SHORT).show() }
+                emptyList()
+            }
+            cacheSubsonicArtwork(server, songs = songs.take(SUBSONIC_PAGE_SIZE))
+            runOnUiThread {
+                resetSubsonicVisibleCounts()
+                subsonicScreen = SubsonicScreen.PLAYLIST_DETAIL
+                subsonicCurrentPlaylist = SubsonicPlaylist(id = "__favorites__", name = "喜爱的音乐", songCount = songs.size)
+                subsonicSectionTitle = "歌单：喜爱的音乐"
+                subsonicSongs = songs
+                subsonicVisibleSongCount = minOf(songs.size, SUBSONIC_PAGE_SIZE)
+                render(Page.ONLINE)
+                downloadSubsonicPlaylist(subsonicCurrentPlaylist!!, songs)
+            }
+        }.start()
+    }
+
+    private fun openSubsonicPlaylist(playlist: SubsonicPlaylist, downloadAfterLoad: Boolean = false) {
+        val server = selectedSubsonicServer() ?: return
+        setStatus("正在加载歌单...")
+        pushSubsonicScreen(SubsonicScreen.PLAYLIST_DETAIL)
+        Thread {
+            val result = runCatching { subsonicClient(server).playlistSongs(playlist.id) }
+            result.getOrNull()?.let { (info, songs) ->
+                cacheSubsonicArtwork(server, playlists = listOf(info ?: playlist), songs = songs.take(SUBSONIC_PAGE_SIZE))
+            }
+            runOnUiThread {
+                result.onSuccess { (info, songs) ->
+                    resetSubsonicVisibleCounts()
+                    subsonicScreen = SubsonicScreen.PLAYLIST_DETAIL
+                    subsonicCurrentPlaylist = info ?: playlist.copy(songCount = songs.size)
+                    subsonicSectionTitle = "歌单：${playlist.name}"
+                    subsonicSongs = songs
+                    subsonicVisibleSongCount = minOf(songs.size, SUBSONIC_PAGE_SIZE)
+                    render(Page.ONLINE)
+                    if (downloadAfterLoad) downloadSubsonicPlaylist(subsonicCurrentPlaylist ?: playlist, songs)
+                }.onFailure {
+                    Toast.makeText(this, "歌单加载失败：${it.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun showSubsonicSongActions(song: SubsonicSong, queueSongs: List<SubsonicSong> = listOf(song)) {
+        val queue = queueSongs.ifEmpty { listOf(song) }
+        val items = arrayOf("播放", "下载", "收藏到歌单", "歌曲详细信息")
+        dialogBuilder()
+            .setTitle(song.title)
+            .setItems(items) { _, which ->
+                when (items[which]) {
+                    "播放" -> playSubsonicSong(song, queue)
+                    "下载" -> downloadSubsonicSong(song)
+                    "收藏到歌单" -> showSubsonicAddToPlaylistDialog(song)
+                    "歌曲详细信息" -> showTrackDetailsDialog(subsonicSongToTrack(song, selectedSubsonicServer() ?: return@setItems))
+                }
+            }
+            .show()
+    }
+
+    private fun showSubsonicAddToPlaylistDialog(song: SubsonicSong) {
+        val server = selectedSubsonicServer() ?: return
+        Thread {
+            val playlists = runCatching {
+                if (subsonicPlaylists.isNotEmpty()) subsonicPlaylists else subsonicClient(server).playlists()
+            }.getOrElse {
+                runOnUiThread { Toast.makeText(this, "歌单读取失败：${it.message}", Toast.LENGTH_SHORT).show() }
+                emptyList()
+            }
+            runOnUiThread {
+                val names = listOf("喜爱的音乐") + playlists.map { it.name }
+                dialogBuilder()
+                    .setTitle("收藏到歌单")
+                    .setItems(names.toTypedArray()) { _, which ->
+                        if (which == 0) {
+                            updateSubsonicStar(song, true)
+                        } else {
+                            val playlist = playlists[which - 1]
+                            addSongToSubsonicPlaylist(server, playlist, song)
+                        }
+                    }
+                    .setPositiveButton("新建歌单") { _, _ ->
+                        showCreateSubsonicPlaylistDialog(song)
+                    }
+                    .setNegativeButton("取消", null)
+                    .show()
+            }
+        }.start()
+    }
+
+    private fun showCreateSubsonicPlaylistDialog(song: SubsonicSong? = null) {
+        val input = dialogInput(Lang.get("subsonic_playlist_name"), "")
+        dialogBuilder()
+            .setTitle(Lang.get("subsonic_create_playlist"))
+            .setView(input)
+            .setPositiveButton(Lang.get("create")) { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isBlank()) {
+                    Toast.makeText(this, Lang.get("subsonic_name_required"), Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                val server = selectedSubsonicServer() ?: return@setPositiveButton
+                Thread {
+                    val ok = runCatching {
+                        subsonicClient(server).createPlaylist(name, song?.id?.let { listOf(it) } ?: emptyList())
+                    }.getOrDefault(false)
+                    runOnUiThread {
+                        if (ok) {
+                            Toast.makeText(this, Lang.get("subsonic_created"), Toast.LENGTH_SHORT).show()
+                            loadSubsonicPlaylists()
+                        } else {
+                            Toast.makeText(this, Lang.get("subsonic_create_failed"), Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }.start()
+            }
+            .setNegativeButton(Lang.get("cancel"), null)
+            .show()
+    }
+
+    private fun addSongToSubsonicPlaylist(server: SubsonicServer, playlist: SubsonicPlaylist, song: SubsonicSong) {
+        Thread {
+            val result = runCatching { subsonicClient(server).addSongToPlaylist(playlist.id, song.id) }
+            runOnUiThread {
+                result.onSuccess {
+                    Toast.makeText(this, "已加入 ${playlist.name}", Toast.LENGTH_SHORT).show()
+                    if (subsonicScreen == SubsonicScreen.PLAYLIST_DETAIL && subsonicCurrentPlaylist?.id == playlist.id) {
+                        openSubsonicPlaylist(playlist)
+                    }
+                }.onFailure {
+                    Toast.makeText(this, "加入歌单失败：${it.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun playSubsonicSong(song: SubsonicSong, queueSongs: List<SubsonicSong>) {
+        val server = selectedSubsonicServer() ?: return
+        val client = subsonicClient(server)
+        val queue = queueSongs.ifEmpty { listOf(song) }.map { subsonicSongToTrack(it, server) }
+        val track = queue.firstOrNull { it.id == subsonicSongToTrack(song, server).id } ?: subsonicSongToTrack(song, server)
+        currentQueue = queue
+        client.scrobble(song.id, submission = false)
+        val cacheFile = subsonicCacheFile(song)
+        if (cacheFile.exists()) {
+            val cached = track.copy(uri = Uri.fromFile(cacheFile).toString(), sourcePath = cacheFile.absolutePath)
+            playTrack(cached, queue)
+        } else {
+            playTrack(track, queue)
+            cacheSubsonicSongAsync(song, client)
+        }
+        preloadSubsonicSongs(queueSongs, song, client)
+    }
+
+    private fun subsonicSongToTrack(song: SubsonicSong, server: SubsonicServer): Track {
+        val client = subsonicClient(server)
+        val coverUrl = client.coverArtUrl(song.coverArt)
+        return Track(
+            id = "stream:subsonic:${server.id}:${song.id}",
+            uri = client.streamUrl(song.id, effectiveSubsonicTranscodeMode()),
+            title = song.title,
+            artist = song.artist,
+            album = song.album,
+            durationMs = song.durationSeconds * 1000L,
+            trackNumber = song.track,
+            year = song.year,
+            mimeType = effectiveSubsonicMimeType(song),
+            sourcePath = "subsonic|${server.id}|${song.id}|${song.artistId}|${song.albumId}",
+            artworkPath = cachedRemoteArtworkPath(coverUrl).ifBlank { coverUrl }
+        )
+    }
+
+    private fun subsonicInfo(track: Track): List<String> {
+        if (!track.id.startsWith("stream:subsonic:")) return emptyList()
+        return track.sourcePath.split('|')
+    }
+
+    private fun subsonicCacheFile(song: SubsonicSong): File {
+        val ext = effectiveSubsonicSuffix(song)
+        return File(streamCacheDir(), "subsonic_stream/${song.id.hashCode()}_${safeFileName(song.title)}.$ext")
+    }
+
+    private fun cacheSubsonicSongAsync(song: SubsonicSong, client: SubsonicClient) {
+        Thread {
+            runCatching {
+                val file = subsonicCacheFile(song)
+                if (file.exists()) return@Thread
+                file.parentFile?.mkdirs()
+                file.writeBytes(client.downloadBytes(song.id, effectiveSubsonicTranscodeMode()))
+                enforceStreamCacheLimit()
+            }
+        }.start()
+    }
+
+    private fun preloadSubsonicSongs(queueSongs: List<SubsonicSong>, current: SubsonicSong, client: SubsonicClient) {
+        val count = streamPreloadCount.coerceIn(0, 5)
+        if (count <= 0) return
+        val start = queueSongs.indexOfFirst { it.id == current.id }
+        if (start < 0) return
+        queueSongs.drop(start + 1).take(count).forEach { cacheSubsonicSongAsync(it, client) }
+    }
+
+    private fun downloadSubsonicSong(song: SubsonicSong) {
+        val server = selectedSubsonicServer() ?: return
+        if (!ensureStreamDownloadFolderReady { downloadSubsonicSong(song) }) return
+        checkMobileDataForDownload {
+            downloadNotifyTotal = 1
+            downloadNotifyDone = 0
+            updateDownloadNotification("下载队列 0/1", 0, 1)
+            enqueueDownload("subsonic", song.title, song.size) { task ->
+                val downloaded = downloadSubsonicSongSync(song, server, task)
+                if (downloaded != null) {
+                    runOnUiThread { addDownloadedSubsonicTracksToLibrary(listOf(downloaded)) }
+                } else {
+                    task.status = "失败"
+                }
+            }
+        }
+    }
+
+    private fun downloadSubsonicAlbum(album: SubsonicAlbum, songs: List<SubsonicSong>) {
+        val server = selectedSubsonicServer() ?: return
+        if (songs.isEmpty()) {
+            Toast.makeText(this, "专辑内没有可下载的歌曲。", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!ensureStreamDownloadFolderReady { downloadSubsonicAlbum(album, songs) }) return
+        checkMobileDataForDownload {
+            downloadNotifyTotal = songs.size
+            downloadNotifyDone = 0
+            updateDownloadNotification("下载队列 0/${songs.size}", 0, songs.size)
+            songs.forEach { song ->
+                enqueueDownload("subsonic", song.title, song.size) { task ->
+                    val downloaded = downloadSubsonicSongSync(song, server, task, album)
+                    if (downloaded != null) {
+                        runOnUiThread { addDownloadedSubsonicTracksToLibrary(listOf(downloaded)) }
+                    } else {
+                        task.status = "失败"
+                    }
+                }
+            }
+        }
+    }
+
+    private fun downloadSubsonicPlaylist(playlist: SubsonicPlaylist, songs: List<SubsonicSong>) {
+        val server = selectedSubsonicServer() ?: return
+        if (songs.isEmpty()) {
+            Toast.makeText(this, "歌单内没有可下载的歌曲。", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!ensureStreamDownloadFolderReady { downloadSubsonicPlaylist(playlist, songs) }) return
+        checkMobileDataForDownload {
+            downloadNotifyTotal = songs.size
+            downloadNotifyDone = 0
+            updateDownloadNotification("下载队列 0/${songs.size}", 0, songs.size)
+            songs.forEach { song ->
+                enqueueDownload("subsonic", song.title, song.size) { task ->
+                    val downloaded = downloadSubsonicSongSync(song, server, task)
+                    if (downloaded != null) {
+                        runOnUiThread { addDownloadedSubsonicTracksToLibrary(listOf(downloaded)) }
+                    } else {
+                        task.status = "失败"
+                    }
+                }
+            }
+        }
+    }
+
+    private fun downloadSubsonicSongSync(
+        song: SubsonicSong,
+        server: SubsonicServer,
+        task: DownloadTask,
+        albumOverride: SubsonicAlbum? = null
+    ): Track? {
+        return runCatching {
+            val client = subsonicClient(server)
+            val coverUrl = client.coverArtUrl(song.coverArt.ifBlank { albumOverride?.coverArt.orEmpty() })
+            val coverPath = cacheRemoteArtwork(coverUrl, true)
+            val bytes = client.downloadBytes(song.id, effectiveSubsonicTranscodeMode()) { progress, total ->
+                task.progressPercent = if (total > 0) (progress * 100L / total).toInt() else 50
+                task.downloadedBytes = progress
+            }
+            val ext = effectiveSubsonicSuffix(song)
+            val fileName = safeFileName("${song.title}.$ext")
+            val taggedBytes = tagSubsonicDownloadBytes(fileName, bytes, song, albumOverride, coverPath)
+            val targetAlbum = albumOverride?.title ?: song.album.ifBlank { server.displayName }
+            val uri = writeStreamDownloadBytes("subsonic", targetAlbum, fileName, effectiveSubsonicMimeType(song), taggedBytes)
+            subsonicSongToTrack(song, server).copy(
+                id = "download:subsonic:${uri.hashCode()}",
+                uri = uri,
+                album = targetAlbum,
+                sourcePath = localPathForUriString(uri).ifBlank { fileName },
+                artworkPath = coverPath.ifBlank { cachedRemoteArtworkPath(coverUrl).ifBlank { coverUrl } }
+            )
+        }.getOrNull()
+    }
+
+    private fun tagSubsonicDownloadBytes(
+        fileName: String,
+        bytes: ByteArray,
+        song: SubsonicSong,
+        albumOverride: SubsonicAlbum?,
+        coverPath: String
+    ): ByteArray {
+        val dir = File(cacheDir, "stream_metadata").apply { mkdirs() }
+        val file = File(dir, safeFileName("${System.currentTimeMillis()}-$fileName"))
+        return runCatching {
+            file.writeBytes(bytes)
+            val coverBytes = coverPath.takeIf { it.isNotBlank() }?.let { File(it) }?.takeIf { it.isFile }?.readBytes()
+            AudioMetadataWriter().write(
+                file,
+                AudioMetadataUpdate(
+                    title = song.title,
+                    artist = song.artist,
+                    composer = song.artist,
+                    year = song.year.takeIf { it > 0 }?.toString().orEmpty(),
+                    album = albumOverride?.title ?: song.album,
+                    coverBytes = coverBytes
+                )
+            )
+            file.readBytes()
+        }.getOrElse { bytes }.also {
+            runCatching { file.delete() }
+        }
+    }
+
+    private fun addDownloadedSubsonicTracksToLibrary(downloaded: List<Track>) {
+        if (downloaded.isEmpty()) return
+        val normalized = downloaded.map { track ->
+            if (track.artworkPath.isBlank()) {
+                val sibling = siblingArtworkFile(track)?.absolutePath.orEmpty()
+                if (sibling.isNotBlank()) track.copy(artworkPath = sibling) else track
+            } else track
+        }
+        val sourcePaths = normalized.map { it.sourcePath }.toSet()
+        allTracks = (allTracks.filter { it.sourcePath !in sourcePaths } + normalized).sortedWith(MusicScanner.trackComparator)
+        store.saveTracks(allTracks)
+        store.createAlbumPlaylistsIfNeeded(allTracks)
+        renderIfLibraryVisible()
+    }
+
+    private fun updateSubsonicStar(song: SubsonicSong, star: Boolean) {
+        val server = selectedSubsonicServer() ?: return
+        Thread {
+            val result = runCatching { subsonicClient(server).starSong(song.id, star) }
+            runOnUiThread {
+                result.onSuccess {
+                    Toast.makeText(this, if (star) "已加入 Subsonic 喜爱" else "已取消 Subsonic 喜爱", Toast.LENGTH_SHORT).show()
+                    if (subsonicCurrentPlaylist?.id == "__favorites__") openSubsonicFavoritesPlaylist()
+                }.onFailure {
+                    Toast.makeText(this, "Subsonic 喜爱更新失败：${it.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
     }
 
     private fun renderStreamingPage() {
         content.addView(actionButton(Lang.get("back_to_library")) {
             streamSource = null
-            openedDizzylabAlbum = null
-            streamScrollView = null
-            streamContentBox = null
             render(Page.PLAYLISTS)
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)))
         content.addView(sectionTitle(Lang.get("streaming_mode")))
         val scroll = ScrollView(this)
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-        if (openedDizzylabAlbum != null) {
-            renderDizzylabAlbum(box, openedDizzylabAlbum!!)
-        } else if (streamSource == StreamSource.DIZZYLAB && dizzylabAlbums.isNotEmpty()) {
-            streamScrollView = scroll
-            streamContentBox = box
-            box.addView(actionButton(Lang.get("return_to_stream")) {
-                streamSource = null
-                dizzylabAlbums = emptyList()
-                dizzylabQuery = ""
-                dizzylabVisibleAlbumCount = 40
-                streamScrollView = null
-                streamContentBox = null
-                render(Page.STREAMING)
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)))
-            val searchRow = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-            }
-            val search = editText(Lang.get("search_purchased"), dizzylabQuery) { value ->
-                dizzylabQuery = value
-                filterStreamingAlbums()
-            }
-            streamSearchEdit = search
-            searchRow.addView(search, LinearLayout.LayoutParams(0, dp(54), 1f))
-            searchRow.addView(actionButton(Lang.get("online_search")) { loadDizzylabAlbums(dizzylabQuery) }, LinearLayout.LayoutParams(dp(92), dp(48)).apply {
-                leftMargin = dp(8)
-            })
-            box.addView(searchRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8); bottomMargin = dp(8) })
-            val filteredAlbums = dizzylabAlbums.filter { album ->
-                dizzylabQuery.isBlank() || album.title.contains(dizzylabQuery, ignoreCase = true)
-            }
-            filteredAlbums.take(dizzylabVisibleAlbumCount).forEach { album ->
-                box.addView(streamAlbumCard(album, "DizzyLab 专辑") {
-                    pendingStreamScrollY = streamScrollView?.scrollY ?: -1
-                    loadDizzylabAlbum(album)
-                })
-            }
-            if (filteredAlbums.size > dizzylabVisibleAlbumCount) {
-                box.addView(actionButton("${Lang.get("load_more")}（${dizzylabVisibleAlbumCount}/${filteredAlbums.size}）") {
-                    loadMoreStreamingAlbums()
-                }.apply { tag = "load_more" }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
-                    topMargin = dp(8)
-                    bottomMargin = dp(8)
-                })
-            }
-        } else if (streamSource == StreamSource.WEBDAV && webDavCurrentServer != null) {
-            renderWebDavBrowser(box)
-        } else {
-            box.addView(streamSourceCard(Lang.get("dizzylab_card"), if (dizzylabCookie.isBlank()) Lang.get("dizzylab_not_logged") else Lang.get("dizzylab_logged"), R.drawable.ic_dizzylab) {
-                if (dizzylabCookie.isBlank()) showDizzylabLogin() else loadDizzylabAlbums()
-            })
-
-            box.addView(streamSourceCard(Lang.get("webdav_card"), if (store.webDavServers.isEmpty()) "未添加服务器，请在设置中添加" else "已添加 ${store.webDavServers.size} 台服务器", R.drawable.ic_dav) {
-                if (store.webDavServers.isEmpty()) {
-                    Toast.makeText(this, "请先在设置-用户帐号-流媒体账号凭证中添加 WebDav 服务器", Toast.LENGTH_SHORT).show()
-                } else {
-                    showWebDavServerPicker()
-                }
-            })
-        }
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        if (streamSource == StreamSource.WEBDAV && webDavCurrentServer != null) renderWebDavBrowser(box)
+        else box.addView(streamSourceCard(Lang.get("webdav_card"),
+            if (store.webDavServers.isEmpty()) "未添加服务器，请在设置中添加" else "已添加 ${store.webDavServers.size} 台服务器", R.drawable.ic_dav) {
+            if (store.webDavServers.isEmpty()) showWebDavManagementDialog() else showWebDavServerPicker()
+        })
         scroll.addView(box)
         content.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        if (pendingStreamScrollY >= 0 && openedDizzylabAlbum == null) {
-            val restoreY = pendingStreamScrollY
-            pendingStreamScrollY = -1
-            scroll.post { scroll.scrollTo(0, restoreY) }
-        }
         setStatus(Lang.get("streaming_mode"))
     }
 
-    private fun loadMoreStreamingAlbums() {
-        val box = streamContentBox ?: return
-        val filteredAlbums = dizzylabAlbums.filter { album ->
-            dizzylabQuery.isBlank() || album.title.contains(dizzylabQuery, ignoreCase = true)
-        }
-        val oldCount = dizzylabVisibleAlbumCount
-        val newAlbums = filteredAlbums.drop(oldCount).take(40)
-        if (newAlbums.isEmpty()) return
-        dizzylabVisibleAlbumCount += 40
-        if (box.childCount > 0) box.removeViewAt(box.childCount - 1)
-        newAlbums.forEach { album ->
-            box.addView(streamAlbumCard(album, "DizzyLab 专辑") {
-                pendingStreamScrollY = streamScrollView?.scrollY ?: -1
-                loadDizzylabAlbum(album)
-            })
-        }
-        if (filteredAlbums.size > dizzylabVisibleAlbumCount) {
-            box.addView(actionButton("${Lang.get("load_more")}（${dizzylabVisibleAlbumCount}/${filteredAlbums.size}）") {
-                loadMoreStreamingAlbums()
-            }.apply { tag = "load_more" }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
-                topMargin = dp(8)
-                bottomMargin = dp(8)
-            })
-        }
-    }
-
-    private fun filterStreamingAlbums() {
-        val box = streamContentBox ?: return
-        var visibleCount = 0
-        var visibleTotal = 0
-        dizzylabAlbums.forEach { album ->
-            if (dizzylabQuery.isBlank() || album.title.contains(dizzylabQuery, ignoreCase = true)) {
-                visibleTotal++
-            }
-        }
-        for (i in 0 until box.childCount) {
-            val child = box.getChildAt(i)
-            val tag = child.tag as? String ?: continue
-            if (!tag.startsWith("album_card:")) continue
-            val albumId = tag.removePrefix("album_card:")
-            val album = dizzylabAlbums.firstOrNull { it.id == albumId }
-            if (album != null && (dizzylabQuery.isBlank() || album.title.contains(dizzylabQuery, ignoreCase = true))) {
-                child.visibility = View.VISIBLE
-                visibleCount++
-            } else {
-                child.visibility = View.GONE
-            }
-        }
-        val lastChild = if (box.childCount > 0) box.getChildAt(box.childCount - 1) else null
-        val isLoadMore = (lastChild?.tag as? String)?.startsWith("load_more") == true
-        if (visibleTotal > visibleCount) {
-            if (isLoadMore) box.removeViewAt(box.childCount - 1)
-            box.addView(actionButton("${Lang.get("load_more")}（${visibleCount}/${visibleTotal}）") {
-                loadMoreStreamingAlbums()
-            }.apply { tag = "load_more" }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
-                topMargin = dp(8)
-                bottomMargin = dp(8)
-            })
-        } else if (isLoadMore) {
-            box.removeViewAt(box.childCount - 1)
-        }
-    }
-
     private fun renderDizzylabAlbum(box: LinearLayout, details: StreamAlbumDetails) {
-        box.addView(actionButton("返回 DizzyLab 专辑列表") {
+        box.addView(actionButton(if (dizzyAlbumReturnToAccount) "返回关注动态" else "返回专辑列表") {
             openedDizzylabAlbum = null
-            render(Page.STREAMING)
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)))
+            if (dizzyAlbumReturnToAccount) { dizzyAlbumReturnToAccount = false; render(Page.DIZZYLAB_ACCOUNT) }
+            else render(Page.ONLINE)
+        })
         box.addView(streamAlbumDetailsCard(details) { showDizzylabAlbumMenu(details) })
-        if (details.tracks.isEmpty()) {
-            box.addView(TextView(this).apply {
-                text = "未在该专辑页识别到可播放的串流音频。"
-                bodyStyle(14f)
-                setPadding(0, dp(10), 0, dp(10))
+        val controls = LinearLayout(this)
+        controls.addView(actionButton("播放全部") { details.tracks.firstOrNull()?.let { playTrack(it, details.tracks) } }, LinearLayout.LayoutParams(0, dp(46), 1f))
+        controls.addView(actionButton(if (details.liked) "取消喜欢" else "喜欢专辑") {
+            performDizzylabAction({ it.setAlbumLike(details.album.id) }) { liked ->
+                openedDizzylabAlbum = details.copy(liked = liked)
+                if (dizzySection == DizzylabSection.LIKED) dizzyMusicLoaded = false
+                render(Page.ONLINE)
+            }
+        }, LinearLayout.LayoutParams(0, dp(46), 1f).apply { leftMargin = dp(8) })
+        box.addView(controls)
+        when {
+            details.purchased -> box.addView(actionButton("下载专辑 · MP3 $dizzyDownloadBitrate kbps") { downloadStreamAlbum(details) })
+            details.album.price == 0.0 && details.album.onSale && !details.album.preSelling -> box.addView(actionButton("免费领取专辑") {
+                dialogBuilder().setTitle("免费领取").setMessage("将《${details.album.title}》加入你的 Dizzylab 已购音乐？")
+                    .setPositiveButton("领取") { _, _ ->
+                        performDizzylabAction({ it.claimFree(details.album.id) }) {
+                            dizzyMusicLoaded = false
+                            loadDizzylabAlbum(details.album, dizzyAlbumReturnToAccount)
+                        }
+                    }.setNegativeButton("取消", null).show()
             })
-            return
+            else -> box.addView(actionButton("前往网页查看或购买") { showDizzylabWebPage(details.album.url, details.album.title) })
         }
+        if (details.tracks.isEmpty()) { box.addView(settingCard("暂无可播放曲目", "该商品可能是特典、下载商品或尚未发布。")); return }
         visibleTracks = details.tracks
         trackAdapter.tracks = details.tracks
         val height = (details.tracks.size.coerceAtLeast(1) * 86 + 12).coerceAtMost(24000)
@@ -1447,6 +2752,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             text = details.album.title
             titleStyle(17f)
             maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
         })
         textBox.addView(TextView(this).apply {
             text = listOf(
@@ -1586,8 +2892,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
         }
-        metaRow.addView(nowPlayingMetaText(track.displayArtist) { jumpToLibrary(query = track.displayArtist) })
-        metaRow.addView(nowPlayingMetaText(track.displayAlbum) { jumpToLibrary(query = track.displayAlbum) })
+        metaRow.addView(nowPlayingMetaText(track.displayArtist) { openTrackArtist(track) })
+        metaRow.addView(nowPlayingMetaText(track.displayAlbum) { openTrackAlbum(track) })
         box.addView(metaRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         val blankGestureArea = View(this).apply {
             background = ColorDrawable(Color.TRANSPARENT)
@@ -1822,47 +3128,41 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun showStreamingAccountsDialog() {
         val scroll = ScrollView(this)
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(8), dp(12), dp(8))
-        }
-        box.addView(streamSourceCard("DizzyLab", if (dizzylabCookie.isBlank()) "未登录" else "已登录", R.drawable.ic_dizzylab) {
-            if (dizzylabCookie.isBlank()) {
-                showDizzylabLogin()
-            } else {
-                confirmClearDizzylabCookie()
-            }
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(8)) }
+        var dialog: AlertDialog? = null
+        box.addView(streamSourceCard("Dizzylab", "账户、消息、关注动态与兑换", R.drawable.ic_dizzylab) {
+            dialog?.dismiss()
+            dizzyAccountSection = "home"
+            render(Page.DIZZYLAB_ACCOUNT)
         })
-        box.addView(streamSourceCard("Subsonic 服务器", "支持 Navidrome 等兼容 SubSonic API 的服务器", R.drawable.ic_navidrome) {
-            showSubsonicManagementDialog()
-        })
-        box.addView(streamSourceCard("WebDav 服务器", if (store.webDavServers.isEmpty()) "未添加服务器" else "已添加 ${store.webDavServers.size} 台服务器", R.drawable.ic_dav) {
-            showWebDavManagementDialog()
-        })
+        box.addView(streamSourceCard("Subsonic 服务器", "支持 Navidrome 等兼容 Subsonic API 的服务器", R.drawable.ic_navidrome) { showSubsonicManagementDialog() })
+        box.addView(streamSourceCard("WebDav 服务器", if (store.webDavServers.isEmpty()) "未添加服务器" else "已添加 ${store.webDavServers.size} 台服务器", R.drawable.ic_dav) { showWebDavManagementDialog() })
         scroll.addView(box)
-        dialogBuilder()
-            .setTitle("流媒体账号凭证")
-            .setView(scroll)
-            .setPositiveButton("关闭", null)
-            .show()
+        dialog = dialogBuilder().setTitle("流媒体账号凭证").setView(scroll).setPositiveButton("关闭", null).show()
     }
 
     private fun confirmClearDizzylabCookie() {
-        dialogBuilder()
-            .setTitle("清除 DizzyLab 登录状态")
-            .setMessage("确定要清除已保存的 DizzyLab Cookie 吗？清除后需要重新登录。")
-            .setPositiveButton("清除") { _, _ ->
-                dizzylabCookie = ""
-                dizzylabUserId = ""
-                dizzylabAlbums = emptyList()
-                openedDizzylabAlbum = null
-                CookieManager.getInstance().removeAllCookies(null)
-                CookieManager.getInstance().flush()
+        dialogBuilder().setTitle("退出 Dizzylab").setMessage("清除本机的 Dizzylab 登录状态？已下载的音乐会保留。")
+            .setPositiveButton("退出") { _, _ ->
+                dizzySessionRevision++
+                dizzyMusicRequest++; dizzyAccountRequest++; playbackRequestGeneration++
+                dizzylabCookie = ""; dizzylabToken = ""; dizzylabUserId = ""; dizzyUser = null
+                dizzylabAlbums = emptyList(); openedDizzylabAlbum = null
+                dizzyFeed = emptyList(); dizzyFollowing = emptyList(); dizzyCircles = emptyList()
+                dizzyMusicLoaded = false; dizzyMusicLoading = false; dizzyAccountLoading = false
+                dizzyMusicError = ""; dizzyAccountError = ""; dizzyAccountSection = "home"
+                // Clear only this site's cookies, not every WebView provider's account.
+                val manager = CookieManager.getInstance()
+                listOf("https://www.dizzylab.net/", "https://dizzylab.net/").forEach { url ->
+                    manager.getCookie(url).orEmpty().split(';').map { it.substringBefore('=').trim() }.filter { it.isNotEmpty() }.forEach { name ->
+                        manager.setCookie(url, "$name=; Max-Age=0; Path=/")
+                        manager.setCookie(url, "$name=; Max-Age=0; Path=/; Domain=.dizzylab.net")
+                    }
+                }
+                manager.flush()
                 saveSettings()
-                render(Page.SETTINGS)
-            }
-            .setNegativeButton("取消", null)
-            .show()
+                render(Page.DIZZYLAB_ACCOUNT)
+            }.setNegativeButton("取消", null).show()
     }
 
     private fun showStreamingSettingsDialog() {
@@ -1903,11 +3203,42 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             setPadding(0, dp(12), 0, 0)
         }
         box.addView(mobileCheck)
+        val weakNetworkCheck = CheckBox(this).apply {
+            text = "弱网模式（更宽松超时与重试，并强制使用 96 kbps 串流）"
+            isChecked = weakNetworkMode
+            setTextColor(Palette.TEXT)
+            setPadding(0, dp(12), 0, 0)
+        }
+        box.addView(weakNetworkCheck)
+        val weakNetworkHint = TextView(this).apply {
+            text = if (weakNetworkCheck.isChecked) "当前已开启：Subsonic/Navidrome 将优先保证可播放性。" else "关闭时将按下方转码选项正常工作。"
+            bodyStyle(12f, Palette.MUTED)
+            setPadding(0, dp(4), 0, 0)
+        }
+        weakNetworkCheck.setOnCheckedChangeListener { _, checked ->
+            weakNetworkHint.text = if (checked) "当前已开启：Subsonic/Navidrome 将优先保证可播放性。" else "关闭时将按下方转码选项正常工作。"
+        }
+        box.addView(weakNetworkHint)
+        box.addView(TextView(this).apply {
+            text = "Subsonic 串流转码"
+            titleStyle(15f)
+            setPadding(0, dp(12), 0, dp(6))
+        })
+        val transcodeSpinner = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_item, SubsonicTranscodeMode.entries.map { it.label }).also {
+                it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            }
+            setSelection(subsonicTranscodeMode.ordinal)
+            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+        }
+        box.addView(transcodeSpinner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)))
         dialogBuilder()
             .setTitle("串流预加载")
             .setView(box)
             .setPositiveButton("保存") { _, _ ->
                 allowMobileDataDownload = mobileCheck.isChecked
+                weakNetworkMode = weakNetworkCheck.isChecked
+                subsonicTranscodeMode = SubsonicTranscodeMode.entries.getOrElse(transcodeSpinner.selectedItemPosition) { SubsonicTranscodeMode.LOSSLESS }
                 saveSettings()
                 render(Page.SETTINGS)
             }
@@ -3017,7 +4348,44 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             ?.delete() == true
     }
 
-    private fun playTrack(track: Track, queue: List<Track>, countPlay: Boolean = true) {
+    private fun streamHeadersForTrack(track: Track): Map<String, String> {
+        val target = Uri.parse(track.uri)
+        if (target.scheme !in setOf("http", "https")) return emptyMap()
+        if (track.id.startsWith("stream:dizzylab:")) {
+            return if (target.scheme == "https" && target.host in setOf("streaming.dizzylab.net", "cdn.dizzylab.net", "albumsbase.dizzylab.net"))
+                DizzylabClient("").streamHeaders() else emptyMap()
+        }
+        if (track.id.startsWith("webdav:")) {
+            val server = store.webDavServers.filter { server ->
+                val base = Uri.parse(server.url)
+                target.scheme == base.scheme && target.host == base.host && target.port == base.port &&
+                    (target.path.orEmpty() == base.path.orEmpty().trimEnd('/') || target.path.orEmpty().startsWith(base.path.orEmpty().trimEnd('/') + "/"))
+            }.maxByOrNull { Uri.parse(it.url).path.orEmpty().length }
+            return server?.let { WebDavClient(it.url, it.username, it.password, it.port, it.ignoreCert).streamHeaders() }.orEmpty()
+        }
+        return emptyMap() // Subsonic has per-request URL authentication; local files need no headers.
+    }
+
+    private fun playTrack(track: Track, queue: List<Track>, countPlay: Boolean = true, resolveRemote: Boolean = true) {
+        if (resolveRemote) {
+            val requestId = ++playbackRequestGeneration
+            val ref = DizzylabTrackRef.from(track)
+            if (ref != null && track.uri.startsWith("https://")) {
+                val revision = dizzySessionRevision
+                setStatus("正在准备 ${track.displayTitle}…")
+                Thread {
+                    val result = runCatching { dizzylabApi(false).details(ref.discId).tracks.first { it.id == track.id } }
+                    runOnUiThread {
+                        if (isDestroyed || requestId != playbackRequestGeneration || revision != dizzySessionRevision) return@runOnUiThread
+                        result.onSuccess { fresh ->
+                            val updated = track.copy(uri = fresh.uri)
+                            playTrack(updated, queue.map { if (it.id == track.id) updated else it }, countPlay, resolveRemote = false)
+                        }.onFailure { Toast.makeText(this, it.message ?: "Dizzylab 播放准备失败", Toast.LENGTH_LONG).show() }
+                    }
+                }.start()
+                return
+            }
+        }
         if (!restorePreparingPaused && !requestPlaybackFocus()) return
         val baseQueue = queue.ifEmpty { listOf(track) }
         val nextQueue = if (playbackMode == PlaybackMode.PSEUDO_RANDOM) {
@@ -3031,6 +4399,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         if (playbackMode != PlaybackMode.PSEUDO_RANDOM && queueChanged) clearPseudoShuffleState()
         if (countPlay) store.addHistory(track.id)
         pausedByAudioFocus = false
+        player.headersForTrack = ::streamHeadersForTrack
         player.play(track, startWhenReady = !restorePreparingPaused)
         restorePreparingPaused = false
         if (page == Page.PLAYLISTS && openedPlaylist?.id == LibraryStore.HISTORY_ID) render(Page.PLAYLISTS)
@@ -3129,6 +4498,24 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun showTrackActions(track: Track) {
+        if (track.id.startsWith("stream:subsonic:")) {
+            val songId = subsonicInfo(track).getOrNull(2).orEmpty()
+            dialogBuilder()
+                .setTitle(displayTitle(track))
+                .setItems(arrayOf("播放", "下载", "编辑音乐信息", "歌曲详细信息")) { _, which ->
+                    when (which) {
+                        0 -> playTrack(track, queueForCurrentView())
+                        1 -> {
+                            val song = subsonicSongs.firstOrNull { it.id == songId } ?: subsonicRandomSongs.firstOrNull { it.id == songId }
+                            if (song != null) downloadSubsonicSong(song) else Toast.makeText(this, "当前 Subsonic 歌曲不在列表中，无法下载", Toast.LENGTH_SHORT).show()
+                        }
+                        2 -> showEditDialog(track)
+                        3 -> showTrackDetailsDialog(track)
+                    }
+                }
+                .show()
+            return
+        }
         if (track.id.startsWith("stream:dizzylab:")) {
             dialogBuilder()
                 .setTitle(displayTitle(track))
@@ -3582,10 +4969,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             setPadding(dp(18), dp(8), dp(18), dp(2))
         }
         box.addView(detailRow("歌手", track.displayArtist) {
-            jumpToLibrary(query = track.displayArtist)
+            openTrackArtist(track)
         })
         box.addView(detailRow("专辑", track.displayAlbum) {
-            jumpToLibrary(query = track.displayAlbum)
+            openTrackAlbum(track)
         })
         val tagsText = edit.tags.joinToString(", ").ifBlank { "无" }
         box.addView(detailRow("标签", tagsText) {
@@ -3666,6 +5053,36 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         render(Page.LIBRARY)
     }
 
+    private fun openTrackArtist(track: Track) {
+        val info = subsonicInfo(track)
+        val artistId = info.getOrNull(3).orEmpty()
+        if (artistId.isNotBlank()) {
+            onlineMusicSource = OnlineMusicSource.SUBSONIC
+            subsonicBackStack.clear()
+            subsonicScreen = SubsonicScreen.HOME
+            render(Page.ONLINE)
+            openSubsonicArtist(artistId, track.displayArtist)
+        } else {
+            jumpToLibrary(query = track.displayArtist)
+        }
+    }
+
+    private fun openTrackAlbum(track: Track) {
+        val info = subsonicInfo(track)
+        val albumId = info.getOrNull(4).orEmpty()
+        if (albumId.isNotBlank()) {
+            onlineMusicSource = OnlineMusicSource.SUBSONIC
+            subsonicBackStack.clear()
+            subsonicScreen = SubsonicScreen.HOME
+            render(Page.ONLINE)
+            val album = subsonicAlbums.firstOrNull { it.id == albumId }
+                ?: SubsonicAlbum(id = albumId, title = track.displayAlbum, artist = track.displayArtist)
+            openSubsonicAlbum(album)
+        } else {
+            jumpToLibrary(query = track.displayAlbum)
+        }
+    }
+
     private fun showEditDialog(track: Track) {
         val edit = store.edits[track.id] ?: TrackEdit()
         val box = LinearLayout(this).apply {
@@ -3714,11 +5131,48 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                         rating = selectedRating
                     )
                 )
+                submitSubsonicEdit(track, selectedRating, tags.text.toString().split(Regex("[,，]")).map { it.trim() }.filter { it.isNotBlank() })
                 trackAdapter.notifyDataSetChanged()
                 if (page == Page.LIBRARY) render(Page.LIBRARY) else renderIfPlaylistChanged()
             }
             .setNegativeButton("取消", null)
             .show()
+    }
+
+    private fun submitSubsonicEdit(track: Track, rating: Int, tags: List<String>) {
+        val info = subsonicInfo(track)
+        val serverId = info.getOrNull(1).orEmpty()
+        val songId = info.getOrNull(2).orEmpty()
+        if (songId.isBlank()) return
+        val server = store.subsonicServers.firstOrNull { it.id == serverId } ?: return
+        Thread {
+            val result = runCatching {
+                val client = subsonicClient(server)
+                client.setRating(songId, rating)
+                val wantsFavorite = tags.any { tag ->
+                    tag.equals("喜爱", ignoreCase = true) ||
+                        tag.equals("favorite", ignoreCase = true) ||
+                        tag.equals("starred", ignoreCase = true)
+                }
+                if (wantsFavorite) client.starSong(songId, true)
+            }
+            runOnUiThread {
+                result.onFailure {
+                    Toast.makeText(this, "Subsonic 信息提交失败：${it.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun submitSubsonicScrobble(track: Track) {
+        val info = subsonicInfo(track)
+        val serverId = info.getOrNull(1).orEmpty()
+        val songId = info.getOrNull(2).orEmpty()
+        if (songId.isBlank()) return
+        val server = store.subsonicServers.firstOrNull { it.id == serverId } ?: return
+        Thread {
+            runCatching { subsonicClient(server).scrobble(songId, submission = true) }
+        }.start()
     }
 
     private fun showAudioMetadataEditDialog(track: Track) {
@@ -3900,6 +5354,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun loadArtwork(track: Track, target: ImageView) {
         if (track.artworkPath.startsWith("http://") || track.artworkPath.startsWith("https://")) {
+            val cached = cachedRemoteArtworkPath(track.artworkPath)
+            if (cached.isNotBlank()) {
+                decodeArtworkPath(cached)?.let {
+                    target.setImageBitmap(it)
+                    return
+                }
+            }
             target.setImageResource(R.drawable.ic_cover_placeholder)
             loadRemoteImage(track.artworkPath, target)
             return
@@ -3915,6 +5376,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun resolvedArtworkPath(track: Track): String {
         val explicit = track.artworkPath.takeIf { it.isNotBlank() }
+        if (explicit != null && explicit.startsWith("http")) {
+            val cached = cachedRemoteArtworkPath(explicit)
+            if (cached.isNotBlank()) return cached
+        }
         if (explicit != null && (explicit.startsWith("content://") || File(explicit).exists())) return explicit
         return siblingArtworkFile(track)?.absolutePath.orEmpty()
     }
@@ -3978,11 +5443,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         target.tag = expected
         imageExecutor.execute {
             val bitmap = runCatching {
-                val bytes = if (expected.contains("dizzylab.net", ignoreCase = true) && dizzylabCookie.isNotBlank()) {
-                    DizzylabClient(dizzylabCookie).imageBytes(expected)
-                } else {
-                    URL(expected).openStream().use { it.readBytes() }
-                }
+                val path = cacheRemoteArtwork(expected, true)
+                val bytes = if (path.isNotBlank()) File(path).readBytes() else remoteImageBytes(expected)
                 BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
             }.onFailure {
                 Log.w(TAG, "Remote image failed: $expected", it)
@@ -3993,6 +5455,69 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 }
             }
         }
+    }
+
+    private fun cachedRemoteArtworkPath(url: String): String {
+        if (url.isBlank()) return ""
+        val file = remoteArtworkCacheFile(url)
+        return file.takeIf { it.isFile && it.length() > 0 }?.absolutePath.orEmpty()
+    }
+
+    private fun cacheRemoteArtwork(url: String, allowNetwork: Boolean): String {
+        if (url.isBlank()) return ""
+        val cached = cachedRemoteArtworkPath(url)
+        if (cached.isNotBlank()) return cached
+        if (!allowNetwork) return ""
+        return runCatching {
+            val bytes = remoteImageBytes(url)
+            val file = remoteArtworkCacheFile(url)
+            file.parentFile?.mkdirs()
+            file.writeBytes(bytes)
+            enforceStreamCacheLimit()
+            file.absolutePath
+        }.getOrDefault("")
+    }
+
+    private fun remoteArtworkCacheFile(url: String): File {
+        val ext = url.substringBefore('?').substringAfterLast('.', "img")
+            .lowercase(Locale.ROOT)
+            .takeIf { it.length in 2..5 } ?: "img"
+        return File(streamCacheDir(), "remote_artwork/${url.hashCode()}.$ext")
+    }
+
+    private fun remoteImageBytes(url: String): ByteArray {
+        return if (url.contains("dizzylab.net", ignoreCase = true) && dizzylabCookie.isNotBlank()) {
+            DizzylabClient(dizzylabCookie).imageBytes(url)
+        } else if (url.contains("/rest/getCoverArt.view", ignoreCase = true)) {
+            val server = selectedSubsonicServer()
+            if (server != null) {
+                runCatching { subsonicClient(server).fetchBytes(url) }.getOrElse {
+                    fetchRemoteBytesWithTimeout(url)
+                }
+            } else {
+                fetchRemoteBytesWithTimeout(url)
+            }
+        } else {
+            fetchRemoteBytesWithTimeout(url)
+        }
+    }
+
+    private fun fetchRemoteBytesWithTimeout(url: String): ByteArray {
+        var lastError: Throwable? = null
+        val attempts = if (weakNetworkMode) 2 else 1
+        repeat(attempts) { attempt ->
+            try {
+                val connection = URL(url).openConnection().apply {
+                    connectTimeout = if (weakNetworkMode) 30_000 else 10_000
+                    readTimeout = if (weakNetworkMode) 180_000 else 30_000
+                }
+                connection.getInputStream().use { return it.readBytes() }
+            } catch (error: Throwable) {
+                lastError = error
+                if (attempt + 1 < attempts) Thread.sleep(800)
+            }
+        }
+        throw (lastError ?: IllegalStateException("Failed to fetch remote bytes"))
     }
 
     private fun updateLyricView(track: Track?) {
@@ -4245,12 +5770,23 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         playbackMode = PlaybackMode.entries.getOrElse(prefs.getInt("playbackMode", 0)) { PlaybackMode.SEQUENTIAL }
         profileName = prefs.getString("profileName", "profile")?.ifBlank { "profile" } ?: "profile"
         profileAvatarUri = prefs.getString("profileAvatarUri", "") ?: ""
-        dizzylabCookie = prefs.getString("dizzylabCookie", "") ?: ""
-        dizzylabUserId = prefs.getString("dizzylabUserId", "") ?: ""
+        val savedDizzy = dizzylabSessionStore.read()
+        dizzylabCookie = savedDizzy?.cookie ?: prefs.getString("dizzylabCookie", "").orEmpty()
+        dizzylabToken = savedDizzy?.token.orEmpty()
+        dizzylabUserId = savedDizzy?.uid ?: prefs.getString("dizzylabUserId", "").orEmpty()
+        onlineMusicSource = OnlineMusicSource.fromKey(prefs.getString("onlineMusicSource", null))
+        dizzyDownloadBitrate = prefs.getInt("dizzyDownloadBitrate", 320).let { if (it == 128) 128 else 320 }
+        if (savedDizzy == null && dizzylabCookie.isNotBlank()) {
+            runCatching { dizzylabSessionStore.save(dizzylabCookie, "", dizzylabUserId) }.onSuccess {
+                prefs.edit().remove("dizzylabCookie").apply()
+            }
+        }
         streamPreloadCount = prefs.getInt("streamPreloadCount", 1).coerceIn(0, 5)
         streamDownloadFolderUri = prefs.getString("streamDownloadFolderUri", "") ?: ""
         streamCacheLimitGb = prefs.getFloat("streamCacheLimitGb", 2.0f).coerceAtLeast(0.1f)
         streamCacheFolderUri = prefs.getString("streamCacheFolderUri", "") ?: ""
+        weakNetworkMode = prefs.getBoolean("weakNetworkMode", false)
+        subsonicTranscodeMode = SubsonicTranscodeMode.entries.getOrElse(prefs.getInt("subsonicTranscodeMode", SubsonicTranscodeMode.LOSSLESS.ordinal)) { SubsonicTranscodeMode.LOSSLESS }
         outputDirectoryMode = OutputDirectoryMode.entries.getOrElse(prefs.getInt("outputDirectoryMode", OutputDirectoryMode.INTERNAL.ordinal)) { OutputDirectoryMode.INTERNAL }
         restorePlaybackOnLaunch = prefs.getBoolean("restorePlaybackOnLaunch", false)
         audioFocusBehavior = AudioFocusBehavior.entries.getOrElse(prefs.getInt("audioFocusBehavior", AudioFocusBehavior.PAUSE.ordinal)) { AudioFocusBehavior.PAUSE }
@@ -4271,6 +5807,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun saveSettings() {
+        val sessionSaved = runCatching {
+            synchronized(dizzySessionLock) { dizzylabSessionStore.save(dizzylabCookie, dizzylabToken, dizzylabUserId) }
+        }.isSuccess
+        if (!sessionSaved) runOnUiThread { Toast.makeText(this, "Dizzylab 登录状态未能保存，请重新登录", Toast.LENGTH_SHORT).show() }
         getSharedPreferences("settings", MODE_PRIVATE).edit()
             .putInt("themeColor", themeColor)
             .putInt("darkMode", darkMode.ordinal)
@@ -4296,12 +5836,16 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .putInt("playbackMode", playbackMode.ordinal)
             .putString("profileName", profileName.ifBlank { "profile" })
             .putString("profileAvatarUri", profileAvatarUri)
-            .putString("dizzylabCookie", dizzylabCookie)
+            .apply { if (sessionSaved) remove("dizzylabCookie") }
+            .putString("onlineMusicSource", onlineMusicSource.key)
+            .putInt("dizzyDownloadBitrate", dizzyDownloadBitrate)
             .putString("dizzylabUserId", dizzylabUserId)
             .putInt("streamPreloadCount", streamPreloadCount.coerceIn(0, 5))
             .putString("streamDownloadFolderUri", streamDownloadFolderUri)
             .putFloat("streamCacheLimitGb", streamCacheLimitGb)
             .putString("streamCacheFolderUri", streamCacheFolderUri)
+            .putBoolean("weakNetworkMode", weakNetworkMode)
+            .putInt("subsonicTranscodeMode", subsonicTranscodeMode.ordinal)
             .putInt("outputDirectoryMode", outputDirectoryMode.ordinal)
             .putBoolean("restorePlaybackOnLaunch", restorePlaybackOnLaunch)
             .putInt("audioFocusBehavior", audioFocusBehavior.ordinal)
@@ -4396,14 +5940,14 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .put("profileName", profileName)
             .put("profileAvatarUri", profileAvatarUri)
             .put("localAccount", JSONObject().put("name", profileName).put("avatarUri", profileAvatarUri))
-            .put("dizzylabCookie", dizzylabCookie)
+            .put("onlineMusicSource", onlineMusicSource.key)
+            .put("dizzyDownloadBitrate", dizzyDownloadBitrate)
             .put("dizzylabUserId", dizzylabUserId)
             .put(
                 "streamingAccounts",
                 JSONObject().put(
                     "dizzylab",
                     JSONObject()
-                        .put("cookie", dizzylabCookie)
                         .put("userId", dizzylabUserId)
                         .put("loggedIn", dizzylabCookie.isNotBlank())
                 )
@@ -4412,6 +5956,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .put("streamDownloadFolderUri", streamDownloadFolderUri)
             .put("streamCacheLimitGb", streamCacheLimitGb)
             .put("streamCacheFolderUri", streamCacheFolderUri)
+            .put("weakNetworkMode", weakNetworkMode)
+            .put("subsonicTranscodeMode", subsonicTranscodeMode.ordinal)
             .put("outputDirectoryMode", outputDirectoryMode.ordinal)
             .put("restorePlaybackOnLaunch", restorePlaybackOnLaunch)
             .put("audioFocusBehavior", audioFocusBehavior.ordinal)
@@ -4450,6 +5996,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             profileName = account.optString("name", profileName).ifBlank { "profile" }
             profileAvatarUri = account.optString("avatarUri", profileAvatarUri)
         }
+        val previousDizzyCookie = dizzylabCookie
+        onlineMusicSource = OnlineMusicSource.fromKey(settings.optString("onlineMusicSource", onlineMusicSource.key))
+        dizzyDownloadBitrate = settings.optInt("dizzyDownloadBitrate", dizzyDownloadBitrate).let { if (it == 128) 128 else 320 }
         dizzylabCookie = settings.optString("dizzylabCookie", dizzylabCookie)
         dizzylabUserId = settings.optString("dizzylabUserId", dizzylabUserId)
         settings.optJSONObject("streamingAccounts")
@@ -4458,10 +6007,18 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 dizzylabCookie = dizzylab.optString("cookie", dizzylabCookie)
                 dizzylabUserId = dizzylab.optString("userId", dizzylabUserId)
             }
+        if (previousDizzyCookie != dizzylabCookie) {
+            dizzySessionRevision++; dizzyMusicRequest++; dizzyAccountRequest++
+            dizzylabToken = ""; dizzyUser = null; openedDizzylabAlbum = null
+            dizzylabAlbums = emptyList(); dizzyFeed = emptyList(); dizzyFollowing = emptyList()
+            dizzyMusicLoaded = false; dizzyMusicLoading = false; dizzyAccountLoading = false
+        }
         streamPreloadCount = settings.optInt("streamPreloadCount", streamPreloadCount).coerceIn(0, 5)
         streamDownloadFolderUri = settings.optString("streamDownloadFolderUri", streamDownloadFolderUri)
         streamCacheLimitGb = settings.optDouble("streamCacheLimitGb", streamCacheLimitGb.toDouble()).toFloat().coerceAtLeast(0.1f)
         streamCacheFolderUri = settings.optString("streamCacheFolderUri", streamCacheFolderUri)
+        weakNetworkMode = settings.optBoolean("weakNetworkMode", weakNetworkMode)
+        subsonicTranscodeMode = SubsonicTranscodeMode.entries.getOrElse(settings.optInt("subsonicTranscodeMode", subsonicTranscodeMode.ordinal)) { subsonicTranscodeMode }
         outputDirectoryMode = OutputDirectoryMode.entries.getOrElse(settings.optInt("outputDirectoryMode", outputDirectoryMode.ordinal)) { outputDirectoryMode }
         restorePlaybackOnLaunch = settings.optBoolean("restorePlaybackOnLaunch", restorePlaybackOnLaunch)
         audioFocusBehavior = AudioFocusBehavior.entries.getOrElse(settings.optInt("audioFocusBehavior", audioFocusBehavior.ordinal)) { AudioFocusBehavior.PAUSE }
@@ -4668,7 +6225,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val id: String = UUID.randomUUID().toString(),
         val source: String,
         val title: String,
-        val totalBytes: Long = 0,
+        var totalBytes: Long = 0,
         var downloadedBytes: Long = 0,
         var progressPercent: Int = 0,
         var status: String = "排队中",
@@ -4684,16 +6241,22 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val executor = downloadExecutor ?: Executors.newSingleThreadExecutor().also { downloadExecutor = it }
         executor.execute {
             task.status = "下载中"
-            block(task)
-            task.status = "完成"
-            synchronized(downloadQueue) { downloadQueue.remove(task) }
+            try { block(task) } catch (_: Exception) { task.status = "失败" }
+            val succeeded = task.status == "下载中" || task.status == "完成"
+            if (succeeded) {
+                task.status = "完成"
+                synchronized(downloadQueue) { downloadQueue.remove(task) }
+            }
             runOnUiThread {
-                downloadNotifyDone++
+                if (succeeded) downloadNotifyDone++
                 updateDownloadNotificationFromQueue()
-                if (downloadQueue.isEmpty()) {
+                val active = synchronized(downloadQueue) { downloadQueue.any { it.status == "下载中" || it.status == "排队中" } }
+                if (!active) {
                     stopDownloadRefresh()
-                    finishDownloadNotification("下载完成", downloadNotifyDone, downloadNotifyTotal)
+                    val failed = synchronized(downloadQueue) { downloadQueue.any { it.status == "失败" } }
+                    finishDownloadNotification(if (failed) "下载结束，部分任务失败" else "下载完成", downloadNotifyDone, downloadNotifyTotal)
                 }
+                refreshDownloadListDialog()
             }
         }
     }
@@ -4816,10 +6379,6 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         subsonicDialog?.dismiss()
         val scroll = ScrollView(this)
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(8)) }
-        box.addView(TextView(this).apply {
-            text = Lang.get("subsonic_info")
-            bodyStyle(13f, Palette.MUTED); setPadding(dp(8), dp(4), dp(8), dp(12))
-        })
         store.subsonicServers.forEach { server ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
@@ -4828,6 +6387,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
                 setOnClickListener {
                     store.selectedSubsonicServerId = if (store.selectedSubsonicServerId == server.id) "" else server.id
+                    clearSubsonicPageState()
                     store.save()
                     showSubsonicManagementDialog()
                 }
@@ -4843,7 +6403,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             row.addView(actionButton(Lang.get("edit")) { showSubsonicEditDialog(server) }, LinearLayout.LayoutParams(dp(60), dp(38)).apply { rightMargin = dp(4) })
             row.setOnLongClickListener {
                 dialogBuilder().setTitle(Lang.get("delete_server")).setMessage(Lang.get("confirm_delete").replace("%s", server.displayName))
-                    .setPositiveButton(Lang.get("delete")) { _, _ -> store.subsonicServers.removeAll { it.id == server.id }; store.save(); showSubsonicManagementDialog() }
+                    .setPositiveButton(Lang.get("delete")) { _, _ ->
+                        store.subsonicServers.removeAll { it.id == server.id }
+                        if (store.selectedSubsonicServerId == server.id) store.selectedSubsonicServerId = ""
+                        clearSubsonicPageState()
+                        store.save()
+                        showSubsonicManagementDialog()
+                    }
                     .setNegativeButton(Lang.get("cancel"), null).show()
                 true
             }
@@ -4877,19 +6443,39 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .setTitle(if (existing == null) Lang.get("subsonic_add") else Lang.get("subsonic_edit"))
             .setView(box)
             .setPositiveButton(Lang.get("save")) { _, _ ->
+                val url = urlInput.text.toString().trim().trimEnd('/')
+                if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                    Toast.makeText(this, "Subsonic 地址必须以 http:// 或 https:// 开头", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
                 val server = SubsonicServer(
                     id = existing?.id ?: UUID.randomUUID().toString(),
                     name = nameInput.text.toString().trim(),
-                    url = urlInput.text.toString().trimEnd('/'),
+                    url = url,
                     username = userInput.text.toString().trim(),
                     password = passInput.text.toString().trim(),
                     port = portInput.text.toString().trim().toIntOrNull() ?: 0,
                     ignoreCert = certCheck.isChecked
                 )
-                if (existing != null) store.subsonicServers.removeAll { it.id == server.id }
-                store.subsonicServers.add(server)
-                store.save()
-                showSubsonicManagementDialog()
+                setStatus("正在验证 Subsonic 服务器...")
+                Thread {
+                    val result = subsonicClient(server).ping()
+                    runOnUiThread {
+                        result.onSuccess { msg ->
+                            if (existing != null) store.subsonicServers.removeAll { it.id == server.id }
+                            store.subsonicServers.add(server)
+                            if (store.selectedSubsonicServerId.isBlank()) store.selectedSubsonicServerId = server.id
+                            clearSubsonicPageState()
+                            store.save()
+                            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                            setStatus("Subsonic 服务器验证成功")
+                            showSubsonicManagementDialog()
+                        }.onFailure { error ->
+                            Toast.makeText(this, "Subsonic 验证失败：${error.message}", Toast.LENGTH_SHORT).show()
+                            setStatus("Subsonic 服务器验证失败")
+                        }
+                    }
+                }.start()
             }
             .setNegativeButton(Lang.get("cancel"), null).show()
     }
@@ -5063,7 +6649,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             streamSource = null; webDavCurrentServer = null; webDavCurrentPath = ""; webDavCurrentItems = emptyList(); webDavCache.clear(); webDavSearchQuery = ""; render(Page.STREAMING)
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)))
         if (webDavCurrentPath.isNotBlank()) {
-            val parentPath = webDavCurrentPath.substringBeforeLast('/').ifBlank { "" }
+            val parentPath = webDavParentPath(webDavCurrentPath)
             val navRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(4) }
@@ -5109,6 +6695,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         if (webDavSearchQuery.isNotBlank()) {
             setStatus("找到 $itemCount 项")
         }
+    }
+
+    private fun webDavParentPath(path: String): String {
+        val normalized = path.trim('/').trim()
+        if (normalized.isBlank()) return ""
+        return normalized.substringBeforeLast('/', "")
     }
 
     private fun isMusicFile(name: String): Boolean {
@@ -5184,11 +6776,6 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             val rest = allTracks.filter { it.id !in preload.map { t -> t.id } }
             preload + rest
         } else listOf(track)
-        player.headersForTrack = { t ->
-            if (t.id.startsWith("webdav:")) client.streamHeaders()
-            else if (t.id.startsWith("stream:dizzylab:") && dizzylabCookie.isNotBlank()) DizzylabClient(dizzylabCookie).streamHeaders()
-            else emptyMap()
-        }
         val cacheDir = File(streamCacheDir(), "webdav_stream").apply { mkdirs() }
         if (item != null) {
             val ext = item.name.substringAfterLast('.', "mp3")
@@ -5953,100 +7540,155 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         startActivityForResult(intent, REQUEST_CONVERT)
     }
 
-    private fun showDizzylabLogin() {
+    private fun showDizzylabLogin(onSuccess: (() -> Unit)? = null) {
+        showDizzylabWebPage(DIZZYLAB_LOGIN_URL, "登录 Dizzylab") {
+            dizzyAccountRequest++
+            dizzyAccountLoading = false
+            dizzylabToken = ""
+            dizzyUser = null
+            dizzyAccountError = ""
+            loadDizzylabAccount {
+                dizzyMusicLoaded = false
+                onSuccess?.invoke()
+            }
+        }
+    }
+
+    private fun showDizzylabWebPage(url: String, title: String, onClosed: (() -> Unit)? = null) {
+        val returnPage = page
+        val albumToRefresh = openedDizzylabAlbum?.takeIf { page == Page.ONLINE && onlineMusicSource == OnlineMusicSource.DIZZYLAB }
+        val returnToAccount = dizzyAlbumReturnToAccount
+        val address = Uri.parse(url)
+        if (address.scheme != "https" || address.host !in setOf("www.dizzylab.net", "dizzylab.net")) return
         val webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
-            settings.databaseEnabled = true
-            CookieManager.getInstance().setAcceptCookie(true)
-            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            val manager = CookieManager.getInstance()
+            manager.setAcceptCookie(true)
+            if (manager.getCookie(DizzylabApiClient.BASE).orEmpty().split(';').none { it.trim().startsWith("sessionid=") }) {
+                dizzylabCookie.split(';').map { it.trim() }.filter { it.startsWith("sessionid=") || it.startsWith("csrftoken=") }.forEach { pair ->
+                    manager.setCookie(DizzylabApiClient.BASE, pair + "; Path=/; Secure" + if (pair.startsWith("sessionid=")) "; HttpOnly" else "")
+                }
+            }
             webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    saveDizzylabCookieFromWeb(url.orEmpty())
+                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                    val uri = request?.url ?: return true
+                    if (!request.isForMainFrame) return false
+                    if (isDizzylabPackageUrl(uri)) { queueDizzylabWebPackage(uri.toString(), title); return true }
+                    if (uri.scheme == "https" && uri.host in setOf("www.dizzylab.net", "dizzylab.net")) return false
+                    // Payment pages finish in the browser/payment app; no native checkout or SDK credentials.
+                    if (uri.scheme == "https" || uri.scheme == "alipays") {
+                        runCatching { startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+                            .onFailure { Toast.makeText(this@MainActivity, "无法打开该网页或支付应用", Toast.LENGTH_SHORT).show() }
+                    }
+                    return true
+                }
+                override fun onPageFinished(view: WebView?, loadedUrl: String?) {
+                    saveDizzylabCookieFromWeb(loadedUrl.orEmpty())
                 }
             }
-            loadUrl(DIZZYLAB_LOGIN_URL)
+            setDownloadListener { downloadUrl, _, _, _, _ ->
+                if (isDizzylabPackageUrl(Uri.parse(downloadUrl))) queueDizzylabWebPackage(downloadUrl, title)
+                else Toast.makeText(this@MainActivity, "请在系统浏览器中下载该类型的文件", Toast.LENGTH_LONG).show()
+            }
+            loadUrl(url)
         }
-        dialogBuilder()
-            .setTitle("DizzyLab 登录")
-            .setView(webView)
-            .setPositiveButton("登录完成") { _, _ ->
-                saveDizzylabCookieFromWeb(webView.url.orEmpty())
-                if (dizzylabCookie.isBlank()) {
-                    Toast.makeText(this, "未检测到 DizzyLab Cookie", Toast.LENGTH_SHORT).show()
-                } else {
-                    loadDizzylabAlbums()
+        val dialog = Dialog(this)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        val wrapper = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            fitsSystemWindows = true
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            setBackgroundColor(Palette.BG)
+        }
+        wrapper.addView(TextView(this).apply {
+            text = title; titleStyle(18f); maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding(0, 0, 0, dp(8))
+        })
+        val toolbar = LinearLayout(this)
+        toolbar.addView(actionButton("网页返回") { if (webView.canGoBack()) webView.goBack() }, LinearLayout.LayoutParams(0, dp(46), 1f))
+        toolbar.addView(actionButton("关闭网页") { dialog.dismiss() }, LinearLayout.LayoutParams(0, dp(46), 1f).apply { leftMargin = dp(8) })
+        wrapper.addView(toolbar)
+        wrapper.addView(webView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        wrapper.addView(actionButton("完成并刷新") { dialog.dismiss() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)))
+        dialog.setContentView(wrapper)
+        dialog.setOnKeyListener { _, keyCode, event ->
+            if (keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP && webView.canGoBack()) { webView.goBack(); true } else false
+        }
+        dialog.setOnDismissListener {
+            saveDizzylabCookieFromWeb(webView.url.orEmpty())
+            webView.stopLoading(); webView.destroy()
+            if (onClosed != null) onClosed() else if (hasDizzylabSession()) {
+                dizzyMusicLoaded = false
+                loadDizzylabAccount {
+                    if (page == returnPage) albumToRefresh?.album?.let { loadDizzylabAlbum(it, returnToAccount) }
                 }
-            }
-            .setNegativeButton("关闭", null)
-            .show()
+            } else if (page == Page.DIZZYLAB_ACCOUNT) render(Page.DIZZYLAB_ACCOUNT)
+        }
+        dialog.show()
+        dialog.window?.apply {
+            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+            setBackgroundDrawable(ColorDrawable(Palette.BG))
+        }
     }
 
     private fun saveDizzylabCookieFromWeb(url: String) {
-        if (!url.contains("dizzylab.net")) return
+        val uri = Uri.parse(url)
+        if (uri.scheme != "https" || uri.host !in setOf("www.dizzylab.net", "dizzylab.net")) return
         val cookie = CookieManager.getInstance().getCookie("https://www.dizzylab.net/").orEmpty()
-        if (cookie.isBlank()) return
-        dizzylabCookie = cookie
-        Regex("""/u/([^/]+)/?""").find(url)?.groupValues?.getOrNull(1)?.let { id ->
-            if (id.isNotBlank() && id != "albums") dizzylabUserId = id
-        }
-        saveSettings()
-    }
-
-    private fun loadDizzylabAlbums(query: String = "") {
-        if (dizzylabCookie.isBlank()) {
-            showDizzylabLogin()
-            return
-        }
-        streamSource = StreamSource.DIZZYLAB
-        setStatus(if (query.isBlank()) "正在加载 DizzyLab 账户专辑..." else "正在搜索 DizzyLab：$query")
-        Thread {
-            runCatching {
-                val client = DizzylabClient(dizzylabCookie)
-                val (userId, musicUrl) = client.discoverMusicUrl(dizzylabUserId)
-                dizzylabUserId = userId
-                client.albums(musicUrl, query)
-            }.onSuccess { albums ->
-                runOnUiThread {
-                    dizzylabAlbums = albums
-                    dizzylabVisibleAlbumCount = 40
-                    saveSettings()
-                    render(Page.STREAMING)
-                    setStatus("DizzyLab：${albums.size} 张专辑")
-                }
-            }.onFailure { error ->
-                runOnUiThread {
-                    Toast.makeText(this, error.message ?: "DizzyLab 专辑加载失败", Toast.LENGTH_SHORT).show()
-                    setStatus("DizzyLab 专辑加载失败")
+        fun sessionId(value: String) = value.split(';').map { it.trim() }.firstOrNull { it.startsWith("sessionid=") }.orEmpty()
+        val changedAccount = sessionId(cookie) != sessionId(dizzylabCookie)
+        if (sessionId(cookie).isBlank() && !changedAccount) return
+        if (cookie != dizzylabCookie) {
+            synchronized(dizzySessionLock) {
+                dizzylabCookie = if (sessionId(cookie).isBlank()) "" else cookie
+                if (changedAccount) {
+                    dizzySessionRevision++; dizzyMusicRequest++; dizzyAccountRequest++
+                    dizzylabToken = ""; dizzylabUserId = ""; dizzyUser = null
+                    dizzylabAlbums = emptyList(); openedDizzylabAlbum = null
+                    dizzyFeed = emptyList(); dizzyFollowing = emptyList()
+                    dizzyMusicLoaded = false; dizzyMusicLoading = false; dizzyAccountLoading = false
+                    dizzyMusicError = ""; dizzyAccountError = ""
                 }
             }
-        }.start()
+            saveSettings()
+        }
+        CookieManager.getInstance().flush()
     }
 
-    private fun loadDizzylabAlbum(album: StreamAlbum) {
+    private fun loadDizzylabAlbum(album: StreamAlbum, fromAccount: Boolean = false) {
+        dizzyMusicLoading = false
+        val request = ++dizzyMusicRequest
+        val revision = dizzySessionRevision
+        val discId = if (album.id.startsWith("http")) Uri.parse(album.url).lastPathSegment.orEmpty() else album.id
         setStatus("正在加载专辑：${album.title}")
+        showLoading()
         Thread {
-            runCatching { DizzylabClient(dizzylabCookie).albumDetails(album) }
-                .onSuccess { details ->
-                    runOnUiThread {
-                        openedDizzylabAlbum = details
-                        render(Page.STREAMING)
-                        setStatus("${details.album.title}：${details.tracks.size} 首")
-                    }
-                }
-                .onFailure { error ->
-                    runOnUiThread { Toast.makeText(this, error.message ?: "专辑加载失败", Toast.LENGTH_SHORT).show() }
-                }
+            val result = runCatching { dizzylabApi(false).details(discId) }
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                hideLoading()
+                if (request != dizzyMusicRequest || revision != dizzySessionRevision) return@runOnUiThread
+                result.onSuccess { details ->
+                    onlineMusicSource = OnlineMusicSource.DIZZYLAB
+                    openedDizzylabAlbum = details.copy(description = plainDizzylabText(details.description))
+                    dizzyAlbumReturnToAccount = fromAccount
+                    render(Page.ONLINE)
+                }.onFailure { Toast.makeText(this, it.message ?: "专辑加载失败", Toast.LENGTH_LONG).show() }
+            }
         }.start()
     }
 
     private fun showDizzylabAlbumMenu(details: StreamAlbumDetails) {
-        dialogBuilder()
-            .setTitle(details.album.title)
-            .setItems(arrayOf("下载整张专辑")) { _, _ ->
-                downloadStreamAlbum(details)
-            }
-            .show()
+        val actions = if (details.purchased) arrayOf("下载整张专辑", "在网页查看") else arrayOf("在网页查看或购买")
+        dialogBuilder().setTitle(details.album.title).setItems(actions) { _, index ->
+            if (details.purchased && index == 0) downloadStreamAlbum(details)
+            else showDizzylabWebPage(details.album.url, details.album.title)
+        }.show()
     }
 
     private fun ensureStreamDownloadFolderReady(onReady: () -> Unit): Boolean {
@@ -6074,13 +7716,17 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         action?.invoke()
     }
 
-    private fun downloadStreamAlbum(details: StreamAlbumDetails) {
+    private fun downloadStreamAlbum(details: StreamAlbumDetails, checkMobile: Boolean = true) {
+        if (checkMobile) { checkMobileDataForDownload { downloadStreamAlbum(details, false) }; return }
+        if (!details.purchased) { Toast.makeText(this, "请先领取或在网页购买该专辑", Toast.LENGTH_LONG).show(); return }
         if (details.tracks.isEmpty()) {
             Toast.makeText(this, "没有可下载的音频", Toast.LENGTH_SHORT).show()
             return
         }
-        if (!ensureStreamDownloadFolderReady { downloadStreamAlbum(details) }) return
+        if (!ensureStreamDownloadFolderReady { downloadStreamAlbum(details, false) }) return
         val total = details.tracks.size
+        val bitrate = dizzyDownloadBitrate
+        val revision = dizzySessionRevision
         downloadNotifyTotal = total; downloadNotifyDone = 0
         setStatus("已加入下载队列 ($total 首)...")
         updateDownloadNotification("下载队列 0/$total", 0, total)
@@ -6089,10 +7735,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             details.tracks.forEach { track ->
                 enqueueDownload("dizzylab", track.displayTitle) { task ->
                     runCatching {
-                        val result = downloadStreamTrackSync(track, details, coverPath)
-                        if (result != null) {
-                            runOnUiThread { addDownloadedTracksToLibrary(listOf(result), details) }
-                        }
+                        val result = downloadStreamTrackSync(track, details, coverPath, bitrate, revision)
+                        checkNotNull(result) { "下载失败" }
+                        runOnUiThread { addDownloadedTracksToLibrary(listOf(result), details) }
                         task.progressPercent = 100
                     }.onFailure { task.status = "失败" }
                 }
@@ -6100,32 +7745,41 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }.start()
     }
 
-    private fun downloadStreamTrack(track: Track) {
-        if (!ensureStreamDownloadFolderReady { downloadStreamTrack(track) }) return
-        val details = openedDizzylabAlbum ?: StreamAlbumDetails(
-            album = StreamAlbum(track.displayAlbum, track.displayAlbum, "", track.artworkPath),
+    private fun downloadStreamTrack(track: Track, checkMobile: Boolean = true) {
+        if (checkMobile) { checkMobileDataForDownload { downloadStreamTrack(track, false) }; return }
+        if (!hasDizzylabSession()) { showDizzylabLogin(); return }
+        val ref = DizzylabTrackRef.from(track)
+        if (ref == null) { Toast.makeText(this, "请重新打开 Dizzylab 专辑后下载", Toast.LENGTH_LONG).show(); return }
+        if (!ensureStreamDownloadFolderReady { downloadStreamTrack(track, false) }) return
+        val details = openedDizzylabAlbum?.takeIf { it.album.id == ref.discId } ?: StreamAlbumDetails(
+            album = StreamAlbum(ref.discId, track.displayAlbum, "${DizzylabApiClient.BASE}/d/${DizzylabApiClient.encode(ref.discId)}/", track.artworkPath),
             tracks = listOf(track), circle = track.displayArtist
         )
+        val bitrate = dizzyDownloadBitrate
+        val revision = dizzySessionRevision
         downloadNotifyTotal = 1; downloadNotifyDone = 0
         updateDownloadNotification("下载队列 0/1", 0, 1)
         Thread {
             val coverPath = downloadStreamCover(details)
             enqueueDownload("dizzylab", track.displayTitle) { task ->
                 runCatching {
-                    val result = downloadStreamTrackSync(track, details, coverPath)
-                    if (result != null) {
-                        runOnUiThread { addDownloadedTracksToLibrary(listOf(result), details) }
-                    }
+                    val result = downloadStreamTrackSync(track, details, coverPath, bitrate, revision)
+                    checkNotNull(result) { "下载失败" }
+                    runOnUiThread { addDownloadedTracksToLibrary(listOf(result), details) }
                     task.progressPercent = 100
                 }.onFailure { task.status = "失败" }
             }
         }.start()
     }
 
-    private fun downloadStreamTrackSync(track: Track, details: StreamAlbumDetails, coverPath: String): Track? {
+    private fun downloadStreamTrackSync(track: Track, details: StreamAlbumDetails, coverPath: String, bitrate: Int, revision: Int): Track? {
         return runCatching {
-            val bytes = DizzylabClient(dizzylabCookie).download(track.uri, details.album.url)
-            val fileName = safeFileName("${track.displayTitle}.${track.uri.substringBefore("?").substringAfterLast('.', "mp3")}")
+            val ref = DizzylabTrackRef.from(track) ?: error("请重新打开 Dizzylab 专辑后下载")
+            check(revision == dizzySessionRevision) { "账号已切换，下载已取消" }
+            val downloadUrl = dizzylabApi(true).downloadUrl(ref, bitrate)
+            val bytes = DizzylabClient(dizzylabCookie).download(downloadUrl, DizzylabApiClient.BASE)
+            check(revision == dizzySessionRevision) { "账号已切换，下载已取消" }
+            val fileName = safeFileName("${track.displayTitle}.mp3")
             val taggedBytes = tagDownloadedStreamBytes(fileName, bytes, track, details, coverPath)
             val uri = writeStreamDownloadBytes("dizzylab", details.album.title, fileName, track.mimeType.ifBlank { "audio/mpeg" }, taggedBytes)
             track.copy(
@@ -6137,7 +7791,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 artworkPath = coverPath
             )
         }.onFailure {
-            Log.w(TAG, "DizzyLab track download failed: ${track.uri}", it)
+            Log.w(TAG, "Dizzylab track download failed")
         }.getOrNull()
     }
 
@@ -6193,47 +7847,87 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }.getOrDefault("")
     }
 
-    private fun writeStreamDownloadBytes(source: String, album: String, fileName: String, mimeType: String, bytes: ByteArray): String {
-        if (streamDownloadFolderUri.isBlank() || !hasPersistedWritePermission(streamDownloadFolderUri)) {
-            if (streamDownloadFolderUri.isNotBlank()) {
-                Log.w(TAG, "Stream download folder permission missing, falling back to app directory: $streamDownloadFolderUri")
-                streamDownloadFolderUri = ""
-                saveSettings()
-                runOnUiThread {
-                    Toast.makeText(this, "系统拒绝访问下载文件夹，已改用默认下载目录。", Toast.LENGTH_LONG).show()
+    private fun isDizzylabPackageUrl(uri: Uri): Boolean = uri.scheme == "https" &&
+        (uri.host == "albumsbase.dizzylab.net" || (uri.host in setOf("www.dizzylab.net", "dizzylab.net") && uri.path.orEmpty().startsWith("/albums/download/")))
+
+    private fun queueDizzylabWebPackage(url: String, title: String) {
+        checkMobileDataForDownload {
+            if (!ensureStreamDownloadFolderReady { queueDizzylabWebPackage(url, title) }) return@checkMobileDataForDownload
+            val revision = dizzySessionRevision
+            val cookie = dizzylabCookie
+            val type = Uri.parse(url).getQueryParameter("tp").orEmpty().takeIf { it in setOf("128", "MP3", "FLAC") }.orEmpty()
+            val fileName = safeFileName(listOf(title, type).filter { it.isNotBlank() }.joinToString(" - ") + ".zip")
+            enqueueDownload("dizzylab", fileName) { task ->
+                check(revision == dizzySessionRevision) { "账号已切换，下载已取消" }
+                DizzylabClient(cookie).withDownloadStream(url, DizzylabApiClient.BASE) { input, length, _ ->
+                    val stream = java.io.PushbackInputStream(input, 4)
+                    val signature = ByteArray(4)
+                    var count = 0
+                    while (count < signature.size) {
+                        val n = stream.read(signature, count, signature.size - count)
+                        if (n < 0) break
+                        count += n
+                    }
+                    check(count == 4 && signature[0] == 0x50.toByte() && signature[1] == 0x4b.toByte()) { "下载未返回有效的 ZIP 文件包" }
+                    stream.unread(signature)
+                    task.totalBytes = length.coerceAtLeast(0)
+                    writeStreamDownloadData("dizzylab", title, fileName, "application/zip") { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            check(revision == dizzySessionRevision) { "账号已切换，下载已取消" }
+                            val n = stream.read(buffer)
+                            if (n < 0) break
+                            output.write(buffer, 0, n)
+                            task.downloadedBytes += n
+                            if (length > 0) task.progressPercent = (task.downloadedBytes * 100 / length).toInt().coerceAtMost(99)
+                        }
+                        check(length <= 0 || task.downloadedBytes == length) { "文件包下载不完整" }
+                    }
+                    task.progressPercent = 100
                 }
             }
-            return writeDefaultStreamDownloadBytes(source, album, fileName, bytes)
-        }
-        return runCatching {
-            val root = Uri.parse(streamDownloadFolderUri)
-            val sourceDir = findOrCreateDocumentDir(root, source)
-            val albumDir = findOrCreateDocumentDir(root, safeFileName(album), sourceDir)
-            val fileUri = DocumentsContract.createDocument(contentResolver, albumDir, mimeType, fileName)
-                ?: error("无法创建下载文件")
-            contentResolver.openOutputStream(fileUri)?.use { it.write(bytes) } ?: error("无法写入下载文件")
-            fileUri.toString()
-        }.getOrElse { error ->
-            Log.w(TAG, "Stream download folder write failed, falling back to app directory: $streamDownloadFolderUri", error)
-            streamDownloadFolderUri = ""
-            saveSettings()
-            runOnUiThread {
-                Toast.makeText(this, "下载文件夹写入失败，已改用默认下载目录。", Toast.LENGTH_LONG).show()
-            }
-            writeDefaultStreamDownloadBytes(source, album, fileName, bytes)
+            Toast.makeText(this, "已加入原下载队列；文件包将保存为 ZIP", Toast.LENGTH_LONG).show()
         }
     }
 
-    private fun writeDefaultStreamDownloadBytes(source: String, album: String, fileName: String, bytes: ByteArray): String {
-        val baseDir = if (hasAllFilesAccess()) {
-            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "SMP")
-        } else {
-            getExternalFilesDir(null) ?: filesDir
+    private fun writeStreamDownloadBytes(source: String, album: String, fileName: String, mimeType: String, bytes: ByteArray): String =
+        writeStreamDownloadData(source, album, fileName, mimeType) { it.write(bytes) }
+
+    /** Common destination/commit path for all providers, including streamed ZIP packages. */
+    private fun writeStreamDownloadData(source: String, album: String, fileName: String, mimeType: String, write: (java.io.OutputStream) -> Unit): String {
+        var document: Uri? = null
+        if (streamDownloadFolderUri.isNotBlank() && hasPersistedWritePermission(streamDownloadFolderUri)) {
+            val destination = runCatching {
+                val root = Uri.parse(streamDownloadFolderUri)
+                val sourceDir = findOrCreateDocumentDir(root, source)
+                val albumDir = findOrCreateDocumentDir(root, safeFileName(album), sourceDir)
+                val uri = DocumentsContract.createDocument(contentResolver, albumDir, mimeType, fileName) ?: error("无法创建下载文件")
+                document = uri
+                contentResolver.openOutputStream(uri) ?: error("无法写入下载文件")
+            }.getOrNull()
+            if (destination != null) {
+                try { destination.use(write); return document.toString() }
+                catch (error: Exception) { runCatching { DocumentsContract.deleteDocument(contentResolver, document!!) }; throw error }
+            }
+            document?.let { runCatching { DocumentsContract.deleteDocument(contentResolver, it) } }
         }
+        if (streamDownloadFolderUri.isNotBlank()) {
+            streamDownloadFolderUri = ""
+            runOnUiThread {
+                saveSettings()
+                Toast.makeText(this, "下载目录无法访问，已使用默认目录", Toast.LENGTH_LONG).show()
+            }
+        }
+        val baseDir = if (hasAllFilesAccess()) File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "SMP")
+            else getExternalFilesDir(null) ?: filesDir
         val dir = File(baseDir, "StreamDownloads/$source/${safeFileName(album)}").apply { mkdirs() }
         val file = File(dir, fileName)
-        file.writeBytes(bytes)
-        return Uri.fromFile(file).toString()
+        val temporary = File(dir, ".${UUID.randomUUID()}.part")
+        try {
+            temporary.outputStream().use(write)
+            java.nio.file.Files.move(temporary.toPath(), file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            return Uri.fromFile(file).toString()
+        } finally { temporary.delete() }
     }
 
     private fun hasPersistedWritePermission(uri: String): Boolean {
@@ -6504,7 +8198,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun setStatus(text: String) {
-        statusText.text = text
+        statusText.text = if (page == Page.ONLINE) onlineSourceLabel() + "  ▾" else text
+        statusText.contentDescription = if (page == Page.ONLINE) "切换音乐来源，${onlineSourceLabel()}" else text
+        statusText.isClickable = page == Page.ONLINE
     }
 
     private fun rebuildShell(target: Page) {
@@ -6931,13 +8627,18 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         LIBRARY,
         PLAYLISTS,
         NOW_PLAYING,
-        SUBSONIC,
+        ONLINE,
+        DIZZYLAB_ACCOUNT,
         SETTINGS,
         STREAMING
     }
 
     private enum class StreamSource {
-        DIZZYLAB, WEBDAV
+        WEBDAV
+    }
+
+    private enum class SubsonicScreen {
+        HOME, SEARCH, ARTISTS, SONGS, ALBUMS, PLAYLISTS, ARTIST_DETAIL, ALBUM_DETAIL, PLAYLIST_DETAIL
     }
 
     private enum class PlaylistCategory(val label: String) {
@@ -6991,7 +8692,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val LYRICS_NOTIFICATION_ID = 31
         private const val FLOATING_LYRICS_NOTIFICATION_ID = 41
         private const val TAG = "SMP"
-        private const val APP_VERSION = "1.5.3"
+        private const val SUBSONIC_PAGE_SIZE = 40
+        private const val APP_VERSION = "2.1.0-beta.1"
         private const val REPO_URL = "https://github.com/SuperMite233/Simple-Music-Player"
         private const val ISSUES_URL = "$REPO_URL/issues"
         private const val AUTHOR_URL = "https://space.bilibili.com/287415007"

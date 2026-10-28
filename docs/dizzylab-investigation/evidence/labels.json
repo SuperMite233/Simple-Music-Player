@@ -1,0 +1,88 @@
+{
+  "auth": "web-cookie-only",
+  "content_type": "application/json",
+  "name": "labels",
+  "path": "/apis/getlabels/?l=0&r=2",
+  "semantics": {
+    "canshowmore": true,
+    "total_count": 681
+  },
+  "shape": {
+    "canshowmore": "boolean",
+    "labels": {
+      "array_count": 2,
+      "items": [
+        {
+          "covers": {
+            "array_count": 1,
+            "items": [
+              "string"
+            ]
+          },
+          "description": "string",
+          "discs": {
+            "array_count": 1,
+            "items": [
+              "string"
+            ]
+          },
+          "isgift": {
+            "array_count": 1,
+            "items": [
+              "boolean"
+            ]
+          },
+          "labelcover": "string",
+          "labelid": "number",
+          "tags": {
+            "array_count": 1,
+            "items": [
+              {
+                "array_count": 3,
+                "items": [
+                  "string",
+                  "string"
+                ]
+              }
+            ]
+          },
+          "title": "string",
+          "titles": {
+            "array_count": 1,
+            "items": [
+              "string"
+            ]
+          }
+        },
+        {
+          "covers": {
+            "array_count": 0,
+            "items": []
+          },
+          "description": "string",
+          "discs": {
+            "array_count": 0,
+            "items": []
+          },
+          "isgift": {
+            "array_count": 0,
+            "items": []
+          },
+          "labelcover": "string",
+          "labelid": "number",
+          "tags": {
+            "array_count": 0,
+            "items": []
+          },
+          "title": "string",
+          "titles": {
+            "array_count": 0,
+            "items": []
+          }
+        }
+      ]
+    },
+    "total_count": "number"
+  },
+  "status": 200
+}

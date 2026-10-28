@@ -1,0 +1,49 @@
+{
+  "evidence_type": "live-public-HTML-form-extraction",
+  "path": "/albums/login/",
+  "status": 200,
+  "forms": [
+    {
+      "action": "/search",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "s",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "action": "/search",
+      "method": "GET",
+      "fields": [
+        {
+          "name": "s",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "action": "/albums/login/",
+      "method": "POST",
+      "fields": [
+        {
+          "name": "csrfmiddlewaretoken",
+          "type": "hidden"
+        },
+        {
+          "name": "next",
+          "type": "hidden"
+        },
+        {
+          "name": "username",
+          "type": "text"
+        },
+        {
+          "name": "password",
+          "type": "password"
+        }
+      ]
+    }
+  ]
+}

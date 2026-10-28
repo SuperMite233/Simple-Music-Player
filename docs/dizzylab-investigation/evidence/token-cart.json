@@ -1,0 +1,20 @@
+{
+  "auth": "app-token",
+  "content_type": "application/json",
+  "name": "token-cart",
+  "path": "/apis/getcart/?l=0&r=2",
+  "semantics": {
+    "allcount": 0,
+    "canshowmore": false
+  },
+  "shape": {
+    "allcount": "number",
+    "allfee": "number",
+    "canshowmore": "boolean",
+    "discs": {
+      "array_count": 0,
+      "items": []
+    }
+  },
+  "status": 200
+}

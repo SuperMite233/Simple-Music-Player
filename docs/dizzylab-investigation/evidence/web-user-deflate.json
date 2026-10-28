@@ -1,0 +1,142 @@
+{
+  "forms": [
+    {
+      "action": "/search",
+      "fields": [
+        {
+          "name": "s",
+          "type": "text"
+        }
+      ],
+      "method": "get"
+    },
+    {
+      "action": "/search",
+      "fields": [
+        {
+          "name": "s",
+          "type": "search"
+        }
+      ],
+      "method": "get"
+    }
+  ],
+  "links": [
+    {
+      "route_template": "/",
+      "ui_label": ""
+    },
+    {
+      "route_template": "/label/",
+      "ui_label": "社团"
+    },
+    {
+      "route_template": "/redeem/",
+      "ui_label": "兑换"
+    },
+    {
+      "route_template": "/deflate/",
+      "ui_label": "DEFLATE"
+    },
+    {
+      "route_template": "/shuffle/",
+      "ui_label": ""
+    },
+    {
+      "route_template": "/u/<uid>",
+      "ui_label": "<dynamic-item>"
+    },
+    {
+      "route_template": "/feed/",
+      "ui_label": "我的关注"
+    },
+    {
+      "route_template": "/albums/purchases/",
+      "ui_label": "全部订单"
+    },
+    {
+      "route_template": "/albums/msgbox/",
+      "ui_label": "收件箱"
+    },
+    {
+      "route_template": "/albums/logout",
+      "ui_label": "退出登录"
+    },
+    {
+      "route_template": "/u/<uid>/music",
+      "ui_label": "<dynamic-item>"
+    },
+    {
+      "route_template": "/u/<uid>/review",
+      "ui_label": "<dynamic-item>"
+    },
+    {
+      "route_template": "/u/<uid>/following",
+      "ui_label": "<dynamic-item>"
+    },
+    {
+      "route_template": "/u/<uid>/likes",
+      "ui_label": "<dynamic-item>"
+    },
+    {
+      "route_template": "/u/<uid>/deflate",
+      "ui_label": "<dynamic-item>"
+    },
+    {
+      "route_template": "/u/<uid>/options",
+      "ui_label": "<dynamic-item>"
+    },
+    {
+      "route_template": "https://www.dizzylab.net/terms",
+      "ui_label": "用户协议和隐私"
+    },
+    {
+      "route_template": "/dizzymart/",
+      "ui_label": "DizzyMart"
+    },
+    {
+      "route_template": "/ranking/",
+      "ui_label": "排行榜"
+    },
+    {
+      "route_template": "/app",
+      "ui_label": "APP"
+    },
+    {
+      "route_template": "/help",
+      "ui_label": "遇到问题?"
+    },
+    {
+      "route_template": "/setup",
+      "ui_label": "社团入驻"
+    }
+  ],
+  "path": "/u/<uid>/deflate/",
+  "scripts": [
+    {
+      "index": 0,
+      "sha256": "54f30c8fabcba5b792d02799628fa9241d944ff2c793cc2fed5c65f256918794",
+      "request_sites": []
+    },
+    {
+      "index": 1,
+      "sha256": "42bfce6e2897650bf4a4c9720617d6602bc963907353143ba1935ca58cec2f3a",
+      "request_sites": []
+    },
+    {
+      "index": 2,
+      "sha256": "1634fd5a6614fd6dba5cf9bee8167239dd6afe1245da2bb8745bffb3b0626d8c",
+      "request_sites": []
+    },
+    {
+      "index": 3,
+      "sha256": "f862b0138454a4599cfe26dfd9fa8cebf2cad205bd7150cc98f304cec4153d31",
+      "request_sites": []
+    }
+  ],
+  "title": "<personal-page> - dizzylab",
+  "evidence_type": "current-page-static-extraction",
+  "limitations": [
+    "Links and script request sites do not establish execution. Dynamic route/query values removed. Script hashes refer to original inline source; request sites are summarized."
+  ]
+}

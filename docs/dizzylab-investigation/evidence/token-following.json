@@ -1,0 +1,30 @@
+{
+  "auth": "app-token",
+  "content_type": "application/json",
+  "name": "token-following",
+  "path": "/apis/getmyfollowing/?l=0&r=2&sort=ad",
+  "semantics": {
+    "canshowmore": true
+  },
+  "shape": {
+    "canshowmore": "boolean",
+    "discs": {
+      "array_count": 2,
+      "items": [
+        {
+          "cover": "string",
+          "id": "number",
+          "title": "string",
+          "wantsomemail": "boolean"
+        },
+        {
+          "cover": "string",
+          "id": "number",
+          "title": "string",
+          "wantsomemail": "boolean"
+        }
+      ]
+    }
+  },
+  "status": 200
+}

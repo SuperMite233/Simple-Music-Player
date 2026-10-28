@@ -1,0 +1,560 @@
+{
+  "investigated_at": "2026-10-28",
+  "apk_sha256": "b3a5344ef0e276baafa061406a7c772c27b2c7eeacbde5fc69650ebd6e5ae5ab",
+  "bundle_member": "assets/index.android.bundle",
+  "bundle_sha256": "0b132873644dd54fb89d288dfdb6e4e947c549037d3907233d6662854f833b47",
+  "base_url": "https://www.dizzylab.net/apis/",
+  "source": "user supplied APK, static only; not runtime requests",
+  "rea_evidence_id": "ev_4510bc28a07bdf83f7bac109f036107b8122238ec8ebdbcc869c723a5aeee9a7",
+  "endpoints": [
+    {
+      "path": "/apis/getappinfo/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": false,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1395,
+          "column_utf16_0based": 1454,
+          "byte_offset_utf8_0based": 2366458,
+          "metro_module_id": 1389,
+          "literal_prefix": "getappinfo/?fromver="
+        }
+      ]
+    },
+    {
+      "path": "/apis/getdiscs/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": false,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1396,
+          "column_utf16_0based": 1219,
+          "byte_offset_utf8_0based": 2370133,
+          "metro_module_id": 1390,
+          "literal_prefix": "getdiscs/?l="
+        }
+      ]
+    },
+    {
+      "path": "/apis/getlabels/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": false,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1403,
+          "column_utf16_0based": 1428,
+          "byte_offset_utf8_0based": 2382453,
+          "metro_module_id": 1397,
+          "literal_prefix": "getlabels/?l="
+        }
+      ]
+    },
+    {
+      "path": "/apis/getmyinfo/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": false,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1405,
+          "column_utf16_0based": 1025,
+          "byte_offset_utf8_0based": 2386270,
+          "metro_module_id": 1399,
+          "literal_prefix": "getmyinfo/?token="
+        },
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1461,
+          "column_utf16_0based": 4396,
+          "byte_offset_utf8_0based": 2577445,
+          "metro_module_id": 1455,
+          "literal_prefix": "getmyinfo/?token="
+        }
+      ]
+    },
+    {
+      "path": "/apis/getmydisc/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": false,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1407,
+          "column_utf16_0based": 1056,
+          "byte_offset_utf8_0based": 2393186,
+          "metro_module_id": 1401,
+          "literal_prefix": "getmydisc/?l="
+        }
+      ]
+    },
+    {
+      "path": "/apis/getmylike/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": false,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1408,
+          "column_utf16_0based": 921,
+          "byte_offset_utf8_0based": 2396670,
+          "metro_module_id": 1402,
+          "literal_prefix": "getmylike/?l="
+        }
+      ]
+    },
+    {
+      "path": "/apis/getmyfollowing/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": false,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1409,
+          "column_utf16_0based": 915,
+          "byte_offset_utf8_0based": 2399816,
+          "metro_module_id": 1403,
+          "literal_prefix": "getmyfollowing/?l="
+        },
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1461,
+          "column_utf16_0based": 3907,
+          "byte_offset_utf8_0based": 2576956,
+          "metro_module_id": 1455,
+          "literal_prefix": "getmyfollowing/?l="
+        }
+      ]
+    },
+    {
+      "path": "/apis/getotheruserinfo/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": false,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1411,
+          "column_utf16_0based": 1000,
+          "byte_offset_utf8_0based": 2404842,
+          "metro_module_id": 1405,
+          "literal_prefix": "getotheruserinfo/?l="
+        }
+      ]
+    },
+    {
+      "path": "/apis/gettrackdownloadurl/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": false,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1413,
+          "column_utf16_0based": 2327,
+          "byte_offset_utf8_0based": 2413822,
+          "metro_module_id": 1407,
+          "literal_prefix": "gettrackdownloadurl/?discid="
+        }
+      ]
+    },
+    {
+      "path": "/apis/auth/login/",
+      "method": "POST",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": true,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1419,
+          "column_utf16_0based": 1587,
+          "byte_offset_utf8_0based": 2442367,
+          "metro_module_id": 1413,
+          "literal_prefix": "auth/login/"
+        }
+      ]
+    },
+    {
+      "path": "/apis/getsomecover/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": false,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1419,
+          "column_utf16_0based": 2626,
+          "byte_offset_utf8_0based": 2443406,
+          "metro_module_id": 1413,
+          "literal_prefix": "getsomecover/?l="
+        }
+      ]
+    },
+    {
+      "path": "/apis/auth/register/",
+      "method": "POST",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": true,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1422,
+          "column_utf16_0based": 2314,
+          "byte_offset_utf8_0based": 2449699,
+          "metro_module_id": 1416,
+          "literal_prefix": "auth/register/"
+        }
+      ]
+    },
+    {
+      "path": "/apis/getthisdicsinfo/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": false,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1429,
+          "column_utf16_0based": 1973,
+          "byte_offset_utf8_0based": 2467870,
+          "metro_module_id": 1423,
+          "literal_prefix": "getthisdicsinfo/?discid="
+        }
+      ]
+    },
+    {
+      "path": "/apis/ilikethisornot/",
+      "method": "POST",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": true,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1429,
+          "column_utf16_0based": 3504,
+          "byte_offset_utf8_0based": 2469401,
+          "metro_module_id": 1423,
+          "literal_prefix": "ilikethisornot/"
+        }
+      ]
+    },
+    {
+      "path": "/apis/getdiscbuyers/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": false,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1429,
+          "column_utf16_0based": 6163,
+          "byte_offset_utf8_0based": 2472060,
+          "metro_module_id": 1423,
+          "literal_prefix": "getdiscbuyers/?l="
+        }
+      ]
+    },
+    {
+      "path": "/apis/getdisccommit/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": false,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1429,
+          "column_utf16_0based": 7218,
+          "byte_offset_utf8_0based": 2473115,
+          "metro_module_id": 1423,
+          "literal_prefix": "getdisccommit/?l="
+        }
+      ]
+    },
+    {
+      "path": "/apis/postcomment/",
+      "method": "POST",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": true,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1429,
+          "column_utf16_0based": 8701,
+          "byte_offset_utf8_0based": 2474598,
+          "metro_module_id": 1423,
+          "literal_prefix": "postcomment/"
+        }
+      ]
+    },
+    {
+      "path": "/apis/getlabeldiscs/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": false,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1429,
+          "column_utf16_0based": 9306,
+          "byte_offset_utf8_0based": 2475203,
+          "metro_module_id": 1423,
+          "literal_prefix": "getlabeldiscs/?l="
+        }
+      ]
+    },
+    {
+      "path": "/apis/unlockafreedisc/",
+      "method": "POST",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": true,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1443,
+          "column_utf16_0based": 1162,
+          "byte_offset_utf8_0based": 2512384,
+          "metro_module_id": 1437,
+          "literal_prefix": "unlockafreedisc/"
+        }
+      ]
+    },
+    {
+      "path": "/apis/checkout_alipay/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": true,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1443,
+          "column_utf16_0based": 2422,
+          "byte_offset_utf8_0based": 2513644,
+          "metro_module_id": 1437,
+          "literal_prefix": "checkout_alipay/?token="
+        },
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1459,
+          "column_utf16_0based": 5853,
+          "byte_offset_utf8_0based": 2567054,
+          "metro_module_id": 1453,
+          "literal_prefix": "checkout_alipay/?token="
+        }
+      ]
+    },
+    {
+      "path": "/apis/gethislabelinfo/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": false,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1446,
+          "column_utf16_0based": 999,
+          "byte_offset_utf8_0based": 2520549,
+          "metro_module_id": 1440,
+          "literal_prefix": "gethislabelinfo/?labelid="
+        }
+      ]
+    },
+    {
+      "path": "/apis/ifollowthisornot/",
+      "method": "POST",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": true,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1446,
+          "column_utf16_0based": 2100,
+          "byte_offset_utf8_0based": 2521650,
+          "metro_module_id": 1440,
+          "literal_prefix": "ifollowthisornot/"
+        }
+      ]
+    },
+    {
+      "path": "/apis/getcart/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": false,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1459,
+          "column_utf16_0based": 1294,
+          "byte_offset_utf8_0based": 2562495,
+          "metro_module_id": 1453,
+          "literal_prefix": "getcart/?l="
+        }
+      ]
+    },
+    {
+      "path": "/apis/editcart/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": true,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1459,
+          "column_utf16_0based": 3613,
+          "byte_offset_utf8_0based": 2564814,
+          "metro_module_id": 1453,
+          "literal_prefix": "editcart/?token="
+        },
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1459,
+          "column_utf16_0based": 4712,
+          "byte_offset_utf8_0based": 2565913,
+          "metro_module_id": 1453,
+          "literal_prefix": "editcart/?token="
+        }
+      ]
+    },
+    {
+      "path": "/apis/iwanttweeksomething/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": true,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1461,
+          "column_utf16_0based": 5274,
+          "byte_offset_utf8_0based": 2578323,
+          "metro_module_id": 1455,
+          "literal_prefix": "iwanttweeksomething/?labelid="
+        }
+      ]
+    },
+    {
+      "path": "/apis/uploadandchangeuseravatar/",
+      "method": "POST",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": true,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1461,
+          "column_utf16_0based": 5818,
+          "byte_offset_utf8_0based": 2578867,
+          "metro_module_id": 1455,
+          "literal_prefix": "uploadandchangeuseravatar/"
+        }
+      ]
+    },
+    {
+      "path": "/apis/redeem/",
+      "method": "POST",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": true,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1466,
+          "column_utf16_0based": 1131,
+          "byte_offset_utf8_0based": 2606428,
+          "metro_module_id": 1460,
+          "literal_prefix": "redeem/"
+        }
+      ]
+    },
+    {
+      "path": "/apis/comfirm_redeem/",
+      "method": "POST",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": true,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1466,
+          "column_utf16_0based": 2074,
+          "byte_offset_utf8_0based": 2607371,
+          "metro_module_id": 1460,
+          "literal_prefix": "comfirm_redeem/"
+        }
+      ]
+    },
+    {
+      "path": "/apis/search/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": false,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1467,
+          "column_utf16_0based": 1050,
+          "byte_offset_utf8_0based": 2612689,
+          "metro_module_id": 1461,
+          "literal_prefix": "search/?l="
+        }
+      ]
+    },
+    {
+      "path": "/apis/tags/",
+      "method": "GET",
+      "evidence_type": "shipped-artifact-static",
+      "live_verified": false,
+      "may_change_server_state": false,
+      "locations": [
+        {
+          "member": "assets/index.android.bundle",
+          "line_1based": 1468,
+          "column_utf16_0based": 858,
+          "byte_offset_utf8_0based": 2617340,
+          "metro_module_id": 1462,
+          "literal_prefix": "tags/?l="
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "No APK execution or live API requests",
+    "Cookie authentication and app token compatibility not verified",
+    "Static call sites do not establish current server availability",
+    "GET may mutate state; auth/login is itself an authentication side effect",
+    "Source positions refer to original ZIP member bytes, not a pretty-printed copy"
+  ]
+}

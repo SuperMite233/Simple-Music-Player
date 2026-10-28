@@ -1,0 +1,256 @@
+{
+  "forms": [
+    {
+      "action": "/search",
+      "fields": [
+        {
+          "name": "s",
+          "type": "text"
+        }
+      ],
+      "method": "get"
+    },
+    {
+      "action": "/search",
+      "fields": [
+        {
+          "name": "s",
+          "type": "search"
+        }
+      ],
+      "method": "get"
+    },
+    {
+      "action": "/d/Meteor-EP/",
+      "fields": [
+        {
+          "name": "csrfmiddlewaretoken",
+          "type": "hidden"
+        },
+        {
+          "name": "comment_txt_box",
+          "type": "textarea"
+        },
+        {
+          "name": "",
+          "type": "button"
+        }
+      ],
+      "method": "post"
+    }
+  ],
+  "links": [
+    {
+      "route_template": "/",
+      "ui_label": ""
+    },
+    {
+      "route_template": "/label/",
+      "ui_label": "社团"
+    },
+    {
+      "route_template": "/redeem/",
+      "ui_label": "兑换"
+    },
+    {
+      "route_template": "/deflate/",
+      "ui_label": "DEFLATE"
+    },
+    {
+      "route_template": "/shuffle/",
+      "ui_label": ""
+    },
+    {
+      "route_template": "/u/<uid>",
+      "ui_label": "<dynamic-item>"
+    },
+    {
+      "route_template": "/feed/",
+      "ui_label": "我的关注"
+    },
+    {
+      "route_template": "/albums/purchases/",
+      "ui_label": "全部订单"
+    },
+    {
+      "route_template": "/albums/msgbox/",
+      "ui_label": "收件箱"
+    },
+    {
+      "route_template": "/albums/logout",
+      "ui_label": "退出登录"
+    },
+    {
+      "route_template": "/l/<label-name>",
+      "ui_label": "<dynamic-item>"
+    },
+    {
+      "route_template": "/albums/tags/?tag=<value>",
+      "ui_label": "#Melodic Progressive House"
+    },
+    {
+      "route_template": "/albums/download/?d=<value>&tp=<value>&k=<redacted>&v=<value>",
+      "ui_label": "MP3标准音质 (128kbps) - 31MB"
+    },
+    {
+      "route_template": "/d/<discid>",
+      "ui_label": "<dynamic-item>"
+    },
+    {
+      "route_template": "/review/create/?discid=<value>",
+      "ui_label": "写一篇repo"
+    },
+    {
+      "route_template": "/redeem",
+      "ui_label": "使用兑换码"
+    },
+    {
+      "route_template": "https://www.dizzylab.net/help",
+      "ui_label": "遇到问题？"
+    },
+    {
+      "route_template": "https://dizzylab.net/d/<discid>/",
+      "ui_label": "<dynamic-item>"
+    },
+    {
+      "route_template": "https://www.dizzylab.net/terms",
+      "ui_label": "用户协议和隐私"
+    },
+    {
+      "route_template": "/dizzymart/",
+      "ui_label": "DizzyMart"
+    },
+    {
+      "route_template": "/ranking/",
+      "ui_label": "排行榜"
+    },
+    {
+      "route_template": "/app",
+      "ui_label": "APP"
+    },
+    {
+      "route_template": "/help",
+      "ui_label": "遇到问题?"
+    },
+    {
+      "route_template": "/setup",
+      "ui_label": "社团入驻"
+    }
+  ],
+  "path": "/d/<discid>/",
+  "scripts": [
+    {
+      "index": 0,
+      "sha256": "54f30c8fabcba5b792d02799628fa9241d944ff2c793cc2fed5c65f256918794",
+      "request_sites": []
+    },
+    {
+      "index": 1,
+      "sha256": "42bfce6e2897650bf4a4c9720617d6602bc963907353143ba1935ca58cec2f3a",
+      "request_sites": []
+    },
+    {
+      "index": 2,
+      "sha256": "4a7f7e02a8ccb10e841cd8eedc4f8371c120856407ea6858bb9476f20b72808c",
+      "request_sites": [
+        {
+          "route_expression_prefix": "https://www.dizzylab.net/albums/postdisccomment/",
+          "method": "POST",
+          "observed_body_keys": [
+            "comment",
+            "csrfmiddlewaretoken",
+            "discid"
+          ],
+          "source_context_anchor_line": 4
+        },
+        {
+          "route_expression_prefix": "https://www.dizzylab.net/albums/deletemycomment/",
+          "method": "POST",
+          "observed_body_keys": [
+            "csrfmiddlewaretoken",
+            "discid"
+          ],
+          "source_context_anchor_line": 28
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "sha256": "d945e613b4121cd11b4279c4edd1582a31e4278ea304d392c60e4055dd6b0afa",
+      "request_sites": []
+    },
+    {
+      "index": 4,
+      "sha256": "dd4946c610339651e68ee23b66ceea3fe900ef9f8d05fcb9a6b446fb5a9d43ee",
+      "request_sites": []
+    },
+    {
+      "index": 5,
+      "sha256": "dbaad9790f96baa3e0805c0d97ad3495433d5e28bc0506993093625af6b56b52",
+      "request_sites": [
+        {
+          "route_expression_prefix": "/albums/getthisdisclikes/?discid=<value>",
+          "method": "GET",
+          "observed_body_keys": [],
+          "source_context_anchor_line": 70
+        },
+        {
+          "route_expression_prefix": "/albums/ilikethisornot/",
+          "method": "POST",
+          "observed_body_keys": [
+            "csrfmiddlewaretoken",
+            "discid"
+          ],
+          "source_context_anchor_line": 93
+        },
+        {
+          "route_expression_prefix": "/getreviews/?discid=<value>",
+          "method": "GET",
+          "observed_body_keys": [],
+          "source_context_anchor_line": 118
+        },
+        {
+          "route_expression_prefix": "/getreviewlikesanddislikes/?id=<value>",
+          "method": "GET",
+          "observed_body_keys": [],
+          "source_context_anchor_line": 195
+        },
+        {
+          "route_expression_prefix": "/ilikethisreviewornot/",
+          "method": "POST",
+          "observed_body_keys": [
+            "csrfmiddlewaretoken",
+            "id",
+            "iwant"
+          ],
+          "source_context_anchor_line": 224
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "sha256": "aebf1b03d188c208e3e9146c810e82a65c26ce3443057fc632124f4f87a3ee7d",
+      "request_sites": []
+    },
+    {
+      "index": 7,
+      "sha256": "eaff5dcb00aff4d9f060d23488ccc166ba6795ec46278861de8a338bf78e770c",
+      "request_sites": []
+    },
+    {
+      "index": 8,
+      "sha256": "1634fd5a6614fd6dba5cf9bee8167239dd6afe1245da2bb8745bffb3b0626d8c",
+      "request_sites": []
+    },
+    {
+      "index": 9,
+      "sha256": "f862b0138454a4599cfe26dfd9fa8cebf2cad205bd7150cc98f304cec4153d31",
+      "request_sites": []
+    }
+  ],
+  "title": "Meteor EP - dizzylab",
+  "evidence_type": "current-page-static-extraction",
+  "limitations": [
+    "Links and script request sites do not establish execution. Dynamic route/query values removed. Script hashes refer to original inline source; request sites are summarized."
+  ]
+}

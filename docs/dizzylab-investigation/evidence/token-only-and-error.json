@@ -1,0 +1,61 @@
+[
+  {
+    "cookies": false,
+    "name": "token-only-myinfo",
+    "path": "/apis/getmyinfo/",
+    "shape": {
+      "user": {
+        "cover": "string",
+        "mail": "string",
+        "uid": "number",
+        "user_group": "string",
+        "username": "string"
+      }
+    },
+    "status": 200,
+    "token": true
+  },
+  {
+    "cookies": false,
+    "name": "token-only-library",
+    "path": "/apis/getmydisc/?l=0&r=2&sort=ad",
+    "shape": {
+      "canshowmore": "boolean",
+      "discs": {
+        "array_count": 2,
+        "items": [
+          {
+            "boost": "null",
+            "cover": "string",
+            "id": "string",
+            "ispreselling": "boolean",
+            "label": "string",
+            "onsell": "boolean",
+            "price": "number",
+            "title": "string"
+          },
+          {
+            "boost": "null",
+            "cover": "string",
+            "id": "string",
+            "ispreselling": "boolean",
+            "label": "string",
+            "onsell": "boolean",
+            "price": "number",
+            "title": "string"
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "token": true
+  },
+  {
+    "content_type": "text/html; charset=utf-8",
+    "cookies": false,
+    "name": "invalid-token",
+    "path": "/apis/getmyinfo/?token=<invalid>",
+    "status": 200,
+    "title": "出错了！ - dizzylab"
+  }
+]

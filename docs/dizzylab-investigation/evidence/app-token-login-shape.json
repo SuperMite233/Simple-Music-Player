@@ -1,0 +1,9 @@
+{
+  "content_type": "application/json",
+  "is_json": true,
+  "keys": [
+    "token"
+  ],
+  "status": 200,
+  "token_in_memory": true
+}

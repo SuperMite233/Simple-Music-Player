@@ -1,0 +1,31 @@
+{
+  "auth": "app-token",
+  "content_type": "application/json",
+  "name": "token-search",
+  "path": "/apis/search/?l=0&r=2&keyword=Meteor",
+  "safe_flags": {
+    "canshowmore": true
+  },
+  "shape": {
+    "allcount": "number",
+    "canshowmore": "boolean",
+    "discs": {
+      "array_count": 2,
+      "items": [
+        {
+          "cover": "string",
+          "id": "string",
+          "label": "string",
+          "title": "string"
+        },
+        {
+          "cover": "string",
+          "id": "string",
+          "label": "string",
+          "title": "string"
+        }
+      ]
+    }
+  },
+  "status": 200
+}

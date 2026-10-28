@@ -173,20 +173,29 @@ class DizzylabClient(private val cookie: String) {
 
     fun streamHeaders(): Map<String, String> {
         return mapOf(
-            "Cookie" to cookie,
             "User-Agent" to USER_AGENT,
             "Referer" to BASE
         )
     }
 
     fun download(url: String, referer: String = BASE): ByteArray {
+        return withDownloadStream(url, referer) { input, _, _ -> input.readBytes() }
+    }
+
+    fun <T> withDownloadStream(url: String, referer: String = BASE, block: (java.io.InputStream, Long, String) -> T): T {
         val connection = open(url, accept = "*/*", referer = referer)
-        return connection.inputStream.use { it.readBytes() }
+        return try {
+            val type = connection.contentType.orEmpty().lowercase(Locale.ROOT)
+            check(connection.responseCode in 200..299 && !type.contains("text/html") && !type.contains("application/json")) {
+                "下载未返回有效文件，请检查登录状态和下载权限"
+            }
+            connection.inputStream.use { block(it, connection.contentLengthLong, type) }
+        } finally { connection.disconnect() }
     }
 
     fun imageBytes(url: String, referer: String = BASE): ByteArray {
         val connection = open(url, accept = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8", referer = referer)
-        return connection.inputStream.use { it.readBytes() }
+        return try { connection.inputStream.use { it.readBytes() } } finally { connection.disconnect() }
     }
 
     private fun findProfileUserId(html: String): String? {
@@ -308,19 +317,30 @@ class DizzylabClient(private val cookie: String) {
 
     private fun get(url: String): String {
         val connection = open(url)
-        return connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        return try { connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() } } finally { connection.disconnect() }
     }
 
     private fun open(url: String, accept: String = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", referer: String = BASE): HttpURLConnection {
-        return (URL(url).openConnection() as HttpURLConnection).apply {
-            instanceFollowRedirects = true
+        var target = URL(url)
+        repeat(6) {
+            require(target.protocol == "https" && target.userInfo == null && target.port in setOf(-1, 443) &&
+                target.host in setOf("www.dizzylab.net", "dizzylab.net", "cdn.dizzylab.net", "streaming.dizzylab.net", "albumsbase.dizzylab.net")) { "不受支持的 Dizzylab 地址" }
+            val connection = (target.openConnection() as HttpURLConnection).apply {
+            instanceFollowRedirects = false
             connectTimeout = 15_000
             readTimeout = 20_000
-            setRequestProperty("Cookie", cookie)
+            if (target.host == "www.dizzylab.net" || target.host == "dizzylab.net") setRequestProperty("Cookie", cookie)
             setRequestProperty("User-Agent", USER_AGENT)
             setRequestProperty("Accept", accept)
             setRequestProperty("Referer", referer)
+            }
+            if (connection.responseCode in setOf(301, 302, 303, 307, 308)) {
+                val location = connection.getHeaderField("Location") ?: error("Dizzylab 跳转无效")
+                connection.disconnect()
+                target = URL(target, location)
+            } else return connection
         }
+        error("Dizzylab 跳转过多")
     }
 
     private fun absoluteUrl(value: String): String {
@@ -508,7 +528,7 @@ class DizzylabClient(private val cookie: String) {
 
     companion object {
         private const val BASE = "https://www.dizzylab.net"
-        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android) SMP/beta1.1.4"
+        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android) SMP/2.1.0-beta.1"
     }
 }
 
@@ -516,7 +536,12 @@ data class StreamAlbum(
     val id: String,
     val title: String,
     val url: String,
-    val coverUrl: String = ""
+    val coverUrl: String = "",
+    val price: Double? = null,
+    val purchased: Boolean = false,
+    val circle: String = "",
+    val onSale: Boolean = false,
+    val preSelling: Boolean = false
 )
 
 data class StreamAlbumDetails(
@@ -525,5 +550,7 @@ data class StreamAlbumDetails(
     val circle: String = "",
     val releaseDate: String = "",
     val description: String = "",
-    val tags: List<String> = emptyList()
+    val tags: List<String> = emptyList(),
+    val purchased: Boolean = false,
+    val liked: Boolean = false
 )

@@ -1,0 +1,316 @@
+{
+  "date": "2026-10-28",
+  "format": "redacted request/response shape and static source-context summaries; not replayable HAR; source_context_anchor_line identifies the selected source excerpt, not an exact URL column",
+  "files": [
+    {
+      "file": "app-token-login-shape.json",
+      "bytes": 140,
+      "sha256": "67bd8148cd67db6d04d5d345ca6a7901546eee0245459f14e76c81c64e2e60b9"
+    },
+    {
+      "file": "authorized-draft-cleanup-action.json",
+      "bytes": 77,
+      "sha256": "ddd6958aba512e6b1f1f8582e45626396cf2bc59f707a4a75933ee6a245415de"
+    },
+    {
+      "file": "authorized-draft-cleanup-verified.json",
+      "bytes": 129,
+      "sha256": "25a232f801b3344a56a07aa6e6e18c2a8a0515a7caff83d32828e1e291108835"
+    },
+    {
+      "file": "buyers.json",
+      "bytes": 525,
+      "sha256": "8886bfe0546c55e213d27aa43dd1a8cf8ba87bb0c12a3e41e5bb0f18f89146af"
+    },
+    {
+      "file": "catalog.json",
+      "bytes": 1591,
+      "sha256": "931de39a452b2c9d437aef719bf84a6d907b37e20738277861fd03395bbbbfab"
+    },
+    {
+      "file": "comments.json",
+      "bytes": 546,
+      "sha256": "9fa606223a3141768b2e9ad09ea56368b8e627d18022133a3b9161ced7c0fa91"
+    },
+    {
+      "file": "feed.json",
+      "bytes": 1916,
+      "sha256": "aa41dcd742dc0fc8166273b81b8e9855b02a5472e7679950e715815065edcfd9"
+    },
+    {
+      "file": "guest-auth-and-pagination.json",
+      "bytes": 5622,
+      "sha256": "0583c7a3fe0f0f2a151786a73e5541efad6fd70291198476e1b79fca24008ac4"
+    },
+    {
+      "file": "guest-detail.json",
+      "bytes": 1488,
+      "sha256": "f4deef906ef16877ef94aa5d15a0e976eb4f1a180e2ac956ca65547d1eca69d4"
+    },
+    {
+      "file": "label-discs.json",
+      "bytes": 818,
+      "sha256": "8992856d1e6c46c2aab29b09aef98c9cbea93b3022c3091506053586cd1323fd"
+    },
+    {
+      "file": "label-info.json",
+      "bytes": 1372,
+      "sha256": "1d7b2d344e64cc792a6f85cbdfb2132002ffb02b05ba70e2aba69ae3877e8cff"
+    },
+    {
+      "file": "labels.json",
+      "bytes": 1954,
+      "sha256": "4ba36f42509746cd780db9450f29ac97b2598469da14b2053d996e3ddb7a231a"
+    },
+    {
+      "file": "live-observations.json",
+      "bytes": 19020,
+      "sha256": "4852f7bfda985096010e88dbceb576ad372eab22461f40c89ad21c63e2b48136"
+    },
+    {
+      "file": "media-and-pack-range.json",
+      "bytes": 4621,
+      "sha256": "7a726a0cb43a5d62dfad6c205321b6a01ee4e7cc568a633cb225b2adc2d02fe4"
+    },
+    {
+      "file": "owned-detail.json",
+      "bytes": 1481,
+      "sha256": "5c8dce4dc1af63a1e3a2844bce7b89c4b3302aa9e285648be1a780d473767638"
+    },
+    {
+      "file": "search.json",
+      "bytes": 238,
+      "sha256": "822b94f49df0891cf51a818cb7efd0d136684dc208c2af0ec0ca06a7cbda0bda"
+    },
+    {
+      "file": "tags.json",
+      "bytes": 230,
+      "sha256": "b860a8929782a8f69408be1f4e563e5dc84a618f2be78386560dedb2b61ee31b"
+    },
+    {
+      "file": "token-cart.json",
+      "bytes": 386,
+      "sha256": "199832385342cae7203785a12ffcffc635ebdf15c1b7bc8466fa0e84b23c2cfb"
+    },
+    {
+      "file": "token-following.json",
+      "bytes": 634,
+      "sha256": "3c286d0e244a0924bb17fe084eab42e206f21e143735afde55d6209032cfc44e"
+    },
+    {
+      "file": "token-library.json",
+      "bytes": 867,
+      "sha256": "082097230a319e5235921c5b1dea38831126abb0f047a28205851b1b94659588"
+    },
+    {
+      "file": "token-likes.json",
+      "bytes": 325,
+      "sha256": "db1587b2a6a61caed33bc56afa977295dd6b0ccd857eaff2671fd84dd07922ad"
+    },
+    {
+      "file": "token-myinfo.json",
+      "bytes": 338,
+      "sha256": "11e3dc4743ad9a923247f0cf621c100517eb0dc73440440f69f595f393059cdc"
+    },
+    {
+      "file": "token-only-and-error.json",
+      "bytes": 1431,
+      "sha256": "0f0314fcd099fa2be963b4d885f620148ca69bde0657de62d536ae597e6a6659"
+    },
+    {
+      "file": "token-search.json",
+      "bytes": 642,
+      "sha256": "119a779fa88baeef54cbe5a39023a981761ee595c6fc880265a7f6baf6a788ed"
+    },
+    {
+      "file": "token-tags.json",
+      "bytes": 753,
+      "sha256": "963689ea3ae90e84f1a3274888eaa700d77418b913feb02bdcf3b5c0c3a7c577"
+    },
+    {
+      "file": "track-download-128.json",
+      "bytes": 337,
+      "sha256": "0bdf32e6b1544eaf3d91a3ad471d46b9448e4900d273bd3768ceadeed05c080a"
+    },
+    {
+      "file": "track-download-320.json",
+      "bytes": 337,
+      "sha256": "3157f433040940e3288138940749b7c485b7815d7050eaf002a1cbab1f20fcc8"
+    },
+    {
+      "file": "unowned-detail.json",
+      "bytes": 1484,
+      "sha256": "45369f599296f95fd42f688582b405eee820db13c9a2efa1fd26a9a963f2fa6d"
+    },
+    {
+      "file": "unowned-download.json",
+      "bytes": 272,
+      "sha256": "78ed6ef8dcaa4c2ee22ea79e0fdde07c3d0164c956092220d56a30ef16383c46"
+    },
+    {
+      "file": "web-buyers.json",
+      "bytes": 776,
+      "sha256": "c81a6df0108a5ff96f0019617c4c76b598e78a9e1217eae998ed9578c7978ce6"
+    },
+    {
+      "file": "web-comments.json",
+      "bytes": 634,
+      "sha256": "4a18a09e12a033863fef909c2647f518d5c276ff3c7526f92def4902283caee0"
+    },
+    {
+      "file": "web-cookie-library.json",
+      "bytes": 222,
+      "sha256": "b3249f88461ba5ba03e74702c0e154f6765102adf92b4c2551002e6c2d682489"
+    },
+    {
+      "file": "web-cookie-myinfo.json",
+      "bytes": 206,
+      "sha256": "b412493e31369d00e275d67c154d59d34e2a21304c3378f066608d5b823c5870"
+    },
+    {
+      "file": "web-deflate.json",
+      "bytes": 3758,
+      "sha256": "9b625c387a068e635001a2351c15be4e5d4e927672c2d34f3fa41d50c3e76740"
+    },
+    {
+      "file": "web-disc-likes.json",
+      "bytes": 218,
+      "sha256": "4adec100a940644312d6b7dd9eb358946ce9ca7c9ceb6c443424500f557050ce"
+    },
+    {
+      "file": "web-dizzz-105.json",
+      "bytes": 1288,
+      "sha256": "dba336c0752524b47eb906e5637faa15c8e1bc490d6a700fe0c2ea68ecee701a"
+    },
+    {
+      "file": "web-feed.json",
+      "bytes": 3663,
+      "sha256": "ba601ba8b125e728deb754b53d5de981ee9955dc390d415124b7245509bb15e4"
+    },
+    {
+      "file": "web-following.json",
+      "bytes": 3432,
+      "sha256": "174fe057206cbf479c2e59639d5ab7a007b84085be339ad07918e382f3de8b5c"
+    },
+    {
+      "file": "web-home.json",
+      "bytes": 3640,
+      "sha256": "14fd0aec54d0d59ca7216b3d91e7b651e988bb674118d9750a4d26d5a5b5c04f"
+    },
+    {
+      "file": "web-inbox.json",
+      "bytes": 3584,
+      "sha256": "e6d45ef7ad4be673a47553b263671d617b555d7c1c7bc246468826b588271575"
+    },
+    {
+      "file": "web-label-list.json",
+      "bytes": 3245,
+      "sha256": "276147f00d911b461ebcc3a7ebaccfde60e78a89382341cd874bc3546fc4dc98"
+    },
+    {
+      "file": "web-label.json",
+      "bytes": 3395,
+      "sha256": "22e476808325b86ee169465f0db6080ce2ea7cbd0da92e636cd334d290241b72"
+    },
+    {
+      "file": "web-library-page.json",
+      "bytes": 4152,
+      "sha256": "14004bb803ea7b97d37e6ff1898e637e13f5d43ae1cb00e7562b1d84925585c4"
+    },
+    {
+      "file": "web-likes.json",
+      "bytes": 3247,
+      "sha256": "cb2c7c65fba7b127648ed6c6800f3dafff62c146dfa4e9c21c6a9699c5c45bf6"
+    },
+    {
+      "file": "web-login-form.json",
+      "bytes": 900,
+      "sha256": "f16ff3f257f9b2aec73273645f5c97b8103b81a58d5048326cbca837fbd3c2d4"
+    },
+    {
+      "file": "web-options.json",
+      "bytes": 5084,
+      "sha256": "ad3c8f462da9d54bbed854695f2b3a5b2431cbbe234102d1d5ebcad122102c90"
+    },
+    {
+      "file": "web-orders.json",
+      "bytes": 2967,
+      "sha256": "5e64165eba876285a0a6d638739a70a83e64e8a07baf16fc58182dfaca7d309b"
+    },
+    {
+      "file": "web-owned-album.json",
+      "bytes": 6587,
+      "sha256": "616c16f8b71e18976a8d012cdbc9ec84d6c3bc7f47df398d8453c15c003c54f5"
+    },
+    {
+      "file": "web-pack.json",
+      "bytes": 3362,
+      "sha256": "c3cb7337d5b9b8809e2435c73a59c4339bb2213d11db671d79188cc697bf2e7d"
+    },
+    {
+      "file": "web-payment-functions.json",
+      "bytes": 983,
+      "sha256": "e3cf5140b3e9923a96487303bf4835dddbd032413d2da01a513a71fd9028134a"
+    },
+    {
+      "file": "web-random-post.json",
+      "bytes": 830,
+      "sha256": "fcbbab7d5249d70ad9b83753b06c7ee32481d899c13695c896468076355bbd96"
+    },
+    {
+      "file": "web-random-track.json",
+      "bytes": 171,
+      "sha256": "71dcbc99389267de9ec40016ed27a518406976f652c9f57742982d0f839b8834"
+    },
+    {
+      "file": "web-ranking.json",
+      "bytes": 2860,
+      "sha256": "49edadf4b54856fa43a3c4d9b49136e63f425008608753a5b3e399662c25a35a"
+    },
+    {
+      "file": "web-redeem.json",
+      "bytes": 3118,
+      "sha256": "13bca6acb1fcc2a8537b5acd13e99648c25a44a2e3f1051e099c38d717179c04"
+    },
+    {
+      "file": "web-review-compose.json",
+      "bytes": 5162,
+      "sha256": "23405ac49cd3ec3c25888cd9930c2c1bbc77791cfae01789399cbca0f0d35765"
+    },
+    {
+      "file": "web-reviews.json",
+      "bytes": 1210,
+      "sha256": "14ad83127358b0b528f5edf75e232312edff813e818133914a48dc664d95de1f"
+    },
+    {
+      "file": "web-search.json",
+      "bytes": 3282,
+      "sha256": "bcde1f3779f22aa6d0dc24dcc19083c6d2c8e2bffb7d7c94edc65eb2847d6032"
+    },
+    {
+      "file": "web-shuffle.json",
+      "bytes": 3531,
+      "sha256": "c2aa11fab6e41cf6d02e2a0553d073d0d722f1bd278a8511faec1d85612b6a4d"
+    },
+    {
+      "file": "web-tags.json",
+      "bytes": 2942,
+      "sha256": "12123ad863f36e147e22ee314e5d966be09ada0e8373733adf6edd76611cf422"
+    },
+    {
+      "file": "web-unowned-album.json",
+      "bytes": 5225,
+      "sha256": "53ba5bc768cb385bf0b3353659e0aeb4abe7631ac85e04c6bf0fc99f91ae3673"
+    },
+    {
+      "file": "web-user-deflate.json",
+      "bytes": 3249,
+      "sha256": "d071d78682ff9645673d414eaac9cec275664b9eee078a57105832bb12eb0b31"
+    },
+    {
+      "file": "web-user-reviews.json",
+      "bytes": 3248,
+      "sha256": "6d7a9d8800ce23ea55d58842aba503ce23c6172ee329bb36fd145ff3e3defcf0"
+    }
+  ]
+}

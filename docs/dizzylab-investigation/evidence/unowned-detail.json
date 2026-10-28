@@ -1,0 +1,63 @@
+{
+  "auth": "app-token",
+  "content_type": "application/json",
+  "name": "unowned-detail",
+  "path": "/apis/getthisdicsinfo/?discid=TND-Y004",
+  "semantics": {
+    "ihavethis": false,
+    "ilikeit": false
+  },
+  "shape": {
+    "cover": "string",
+    "disc_description": "string",
+    "disc_description_2": "string",
+    "hasgift": "boolean",
+    "id": "string",
+    "ihavethis": "boolean",
+    "ilikeit": "boolean",
+    "ishires": "boolean",
+    "ispreselling": "boolean",
+    "label": "string",
+    "label_description": "string",
+    "label_description_2": "string",
+    "labelcover": "string",
+    "labelid": "number",
+    "likes": "number",
+    "onlyhavegift": "boolean",
+    "onsell": "boolean",
+    "price": "number",
+    "release_date": "string",
+    "tags": {
+      "array_count": 3,
+      "items": [
+        "string",
+        "string"
+      ]
+    },
+    "title": "string",
+    "tracks": {
+      "array_count": 14,
+      "items": [
+        {
+          "album": "string",
+          "authers": "string",
+          "coverurl": "string",
+          "discid": "string",
+          "id": "string",
+          "title": "string",
+          "url": "string"
+        },
+        {
+          "album": "string",
+          "authers": "string",
+          "coverurl": "string",
+          "discid": "string",
+          "id": "string",
+          "title": "string",
+          "url": "string"
+        }
+      ]
+    }
+  },
+  "status": 200
+}

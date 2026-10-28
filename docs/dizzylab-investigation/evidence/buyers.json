@@ -1,0 +1,27 @@
+{
+  "auth": "web-cookie-only",
+  "content_type": "application/json",
+  "name": "buyers",
+  "path": "/apis/getdiscbuyers/?l=0&r=2&discid=TND-Y004",
+  "semantics": {
+    "canshowmore": false
+  },
+  "shape": {
+    "boosters": {
+      "array_count": 0,
+      "items": []
+    },
+    "buyers": {
+      "array_count": 1,
+      "items": [
+        {
+          "cover": "string",
+          "id": "number",
+          "name": "string"
+        }
+      ]
+    },
+    "canshowmore": "boolean"
+  },
+  "status": 200
+}

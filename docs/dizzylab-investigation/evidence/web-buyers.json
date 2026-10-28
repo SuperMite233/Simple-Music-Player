@@ -1,0 +1,44 @@
+{
+  "content_type": "application/json",
+  "name": "web-buyers",
+  "path": "/albums/getbuyers/?discid=Meteor-EP&l=0&r=2",
+  "shape": {
+    "avatar_url": {
+      "array_count": 2,
+      "items": [
+        "string",
+        "string"
+      ]
+    },
+    "canshowmore": "boolean",
+    "names": {
+      "array_count": 2,
+      "items": [
+        "string",
+        "string"
+      ]
+    },
+    "prebuyer": {
+      "array_count": 2,
+      "items": [
+        "boolean",
+        "boolean"
+      ]
+    },
+    "redeemit": {
+      "array_count": 2,
+      "items": [
+        "boolean",
+        "boolean"
+      ]
+    },
+    "user_url": {
+      "array_count": 2,
+      "items": [
+        "string",
+        "string"
+      ]
+    }
+  },
+  "status": 200
+}

@@ -1,0 +1,10 @@
+{
+  "content_type": "application/json",
+  "name": "web-disc-likes",
+  "path": "/albums/getthisdisclikes/?discid=Meteor-EP",
+  "shape": {
+    "ilikethis": "boolean",
+    "likes": "number"
+  },
+  "status": 200
+}

@@ -1,0 +1,220 @@
+{
+  "forms": [
+    {
+      "action": "/search",
+      "fields": [
+        {
+          "name": "s",
+          "type": "text"
+        }
+      ],
+      "method": "get"
+    },
+    {
+      "action": "/search",
+      "fields": [
+        {
+          "name": "s",
+          "type": "search"
+        }
+      ],
+      "method": "get"
+    },
+    {
+      "action": "/review/960/",
+      "fields": [
+        {
+          "name": "csrfmiddlewaretoken",
+          "type": "hidden"
+        },
+        {
+          "name": "frmtitle",
+          "type": "text"
+        },
+        {
+          "name": "frmdesc1",
+          "type": "textarea"
+        },
+        {
+          "name": "frmfavsong",
+          "type": "select-one"
+        },
+        {
+          "name": "detail_pic_1",
+          "type": "file"
+        },
+        {
+          "name": "detail_pic_2",
+          "type": "file"
+        },
+        {
+          "name": "detail_pic_3",
+          "type": "file"
+        },
+        {
+          "name": "detail_pic_4",
+          "type": "file"
+        },
+        {
+          "name": "",
+          "type": "submit"
+        },
+        {
+          "name": "",
+          "type": "button"
+        }
+      ],
+      "method": "post"
+    }
+  ],
+  "links": [
+    {
+      "route_template": "/",
+      "ui_label": ""
+    },
+    {
+      "route_template": "/label/",
+      "ui_label": "社团"
+    },
+    {
+      "route_template": "/redeem/",
+      "ui_label": "兑换"
+    },
+    {
+      "route_template": "/deflate/",
+      "ui_label": "DEFLATE"
+    },
+    {
+      "route_template": "/shuffle/",
+      "ui_label": ""
+    },
+    {
+      "route_template": "/u/<uid>",
+      "ui_label": "<dynamic-item>"
+    },
+    {
+      "route_template": "/feed/",
+      "ui_label": "我的关注"
+    },
+    {
+      "route_template": "/albums/purchases/",
+      "ui_label": "全部订单"
+    },
+    {
+      "route_template": "/albums/msgbox/",
+      "ui_label": "收件箱"
+    },
+    {
+      "route_template": "/albums/logout",
+      "ui_label": "退出登录"
+    },
+    {
+      "route_template": "/d/<discid>",
+      "ui_label": "<dynamic-item>"
+    },
+    {
+      "route_template": "/l/<label-name>",
+      "ui_label": "<dynamic-item>"
+    },
+    {
+      "route_template": "?iwant=<value>",
+      "ui_label": "删除这篇repo"
+    },
+    {
+      "route_template": "https://www.dizzylab.net/terms",
+      "ui_label": "用户协议和隐私"
+    },
+    {
+      "route_template": "/dizzymart/",
+      "ui_label": "DizzyMart"
+    },
+    {
+      "route_template": "/ranking/",
+      "ui_label": "排行榜"
+    },
+    {
+      "route_template": "/app",
+      "ui_label": "APP"
+    },
+    {
+      "route_template": "/help",
+      "ui_label": "遇到问题?"
+    },
+    {
+      "route_template": "/setup",
+      "ui_label": "社团入驻"
+    }
+  ],
+  "path": "/review/<review-id>/",
+  "scripts": [
+    {
+      "index": 0,
+      "sha256": "54f30c8fabcba5b792d02799628fa9241d944ff2c793cc2fed5c65f256918794",
+      "request_sites": []
+    },
+    {
+      "index": 1,
+      "sha256": "42bfce6e2897650bf4a4c9720617d6602bc963907353143ba1935ca58cec2f3a",
+      "request_sites": []
+    },
+    {
+      "index": 2,
+      "sha256": "168b58f11451dcf3038a34884c66b804e0a57e4e579d6debcef8f2c80f5e25f9",
+      "request_sites": [
+        {
+          "route_expression_prefix": "/postreviewcomment/",
+          "method": "POST",
+          "observed_body_keys": [
+            "comment",
+            "csrfmiddlewaretoken",
+            "id",
+            "iwant"
+          ],
+          "source_context_anchor_line": 8
+        },
+        {
+          "route_expression_prefix": "/getreviewcomments/?id=<value>",
+          "method": "GET",
+          "observed_body_keys": [
+            "comment",
+            "csrfmiddlewaretoken",
+            "id",
+            "iwant"
+          ],
+          "source_context_anchor_line": 17
+        },
+        {
+          "route_expression_prefix": "/getreviewlikesanddislikes/?id=<value>",
+          "method": "GET",
+          "observed_body_keys": [],
+          "source_context_anchor_line": 67
+        },
+        {
+          "route_expression_prefix": "/ilikethisreviewornot/",
+          "method": "POST",
+          "observed_body_keys": [
+            "csrfmiddlewaretoken",
+            "id",
+            "iwant"
+          ],
+          "source_context_anchor_line": 92
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "sha256": "1634fd5a6614fd6dba5cf9bee8167239dd6afe1245da2bb8745bffb3b0626d8c",
+      "request_sites": []
+    },
+    {
+      "index": 4,
+      "sha256": "f862b0138454a4599cfe26dfd9fa8cebf2cad205bd7150cc98f304cec4153d31",
+      "request_sites": []
+    }
+  ],
+  "title": "Meteor EP的repo - dizzylab",
+  "evidence_type": "current-page-static-extraction",
+  "limitations": [
+    "Links and script request sites do not establish execution. Dynamic route/query values removed. Script hashes refer to original inline source; request sites are summarized."
+  ]
+}
