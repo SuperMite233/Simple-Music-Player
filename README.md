@@ -26,8 +26,24 @@ Simple Music Player，简称 SMP，是一款使用 Kotlin 开发的 Android 音�
 - 支持 WebDav 服务器连接与浏览，支持 Basic/Digest 认证，目录索引缓存，串流缓存。
 - 支持 WebDav 在线播放（自动缓存、文件夹播放列表、同目录封面匹配）和下载（整张专辑下载、元数据自动重扫描）。
 - 支持 NCM 转换，相关核心代码参考并移植自 [NCMConverter4a](https://github.com/cdb96/NCMConverter4a)。
-- 支持调试模式，报错自动生成日志文件。
+- 默认启用运行日志，支持等级、保存天数、脱敏预览和多选 ZIP 导出；日志与各类缓存受独立及总空间上限约束。
+- 封面持久化并按内容去重；跨来源同曲共享播放历史、次数、评分和收藏，普通缓存清理不删除用户记录。
+- NCM 支持从系统文件管理器打开确认转换，最终音乐提交系统媒体库。
 - 界面切换淡入淡出动画，卡片按压反馈效果。
+
+## Material Design 3 外观
+
+应用使用 Material 3 颜色角色、组件、字体层级和导航。现有 RGB 配色作为种子生成浅/深色方案，保留主题色预设、自定义颜色、浅色/深色/跟随系统、背景图片及透明度、头像和悬浮歌词设置。背景图片叠加可读性遮罩；配色编辑点击取消不会保存预览颜色。
+
+[设计规则](docs/md3/design-system.md)与[初轮 MD3 验收](docs/md3/visual-acceptance.md)保留原始改造证据；本次分组设置、播放器、缓存和日志界面的验收见 [本轮报告](docs/ui-refresh/visual-acceptance.md)。复现模拟器验收：
+
+```powershell
+.\tools\android.ps1 -Task Audit -UseSystemProxy
+.\tools\android.ps1 -Task Emulator
+.\tools\visual-audit.ps1 -Theme light -Scope full -RunName light-phone
+```
+
+验收使用隔离调试包的合成数据，勿在存有个人数据的调试安装上运行测试。正式应用数据不参与验收。
 
 ## 流媒体支持
 
@@ -92,7 +108,9 @@ Debug 包使用 `com.supermite.smp.debug`，可与正式版并行安装，便于
 
 ## 发布版本
 
-当前预发行版本：`2.1.0-beta.1`；现有正式版本：`2.0.0`。
+本次预发行版本：`beta-2.0.0-20261030`；正式版基准：`2.0.0`。版本来源为 `version.properties`，规则见 [版本与签名规范](docs/release-policy.md)。两个发布频道统一包名与长期签名；旧版签名不同，首次迁移需先导出配置、备份音乐，再安装新签名版本。
+
+缓存分类、歌曲记录、日志保留与 NCM 输出的存储边界见 [缓存与诊断规范](docs/cache-and-diagnostics.md)。发布构建使用 `tools/android.ps1 -Task Release -UseSystemProxy`，私钥配置从项目外读取。
 
 ## 待办事项
 

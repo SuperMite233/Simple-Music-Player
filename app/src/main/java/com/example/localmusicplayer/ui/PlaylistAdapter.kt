@@ -12,6 +12,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.supermite.smp.R
 import com.supermite.smp.data.Playlist
+import com.supermite.smp.cache.CacheManager
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -21,6 +22,8 @@ class PlaylistAdapter(
     private val context: Context,
     private val artworkProvider: (String) -> String?
 ) : BaseAdapter() {
+    private val cache by lazy {CacheManager(context)}
+    var artworkLoader: ((String,ImageView)->Unit)? = null
     var playlists: List<Playlist> = emptyList()
         set(value) {
             field = value
@@ -41,11 +44,14 @@ class PlaylistAdapter(
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(context.dp(12), context.dp(10), context.dp(12), context.dp(10))
-                background = panelDrawable(Palette.PANEL, 8, context)
+                background = panelDrawable(Palette.PANEL, 12, context)
+                foreground = rippleDrawable(context, android.graphics.Color.TRANSPARENT)
             }
             val thumb = ImageView(context).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
-                background = panelDrawable(Palette.PANEL_ALT, 8, context)
+                clipToOutline = true
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                background = panelDrawable(Palette.PANEL_ALT, 12, context)
             }
             view.addView(thumb, LinearLayout.LayoutParams(context.dp(56), context.dp(56)))
             val textBox = LinearLayout(context).apply {
@@ -54,8 +60,8 @@ class PlaylistAdapter(
             }
             holder = Holder(
                 thumb = thumb,
-                title = TextView(context).apply { titleStyle(16f) },
-                meta = TextView(context).apply { bodyStyle(12.5f) }
+                title = TextView(context).apply { bodyStyle(16f, Palette.TEXT) },
+                meta = TextView(context).apply { bodyStyle(14f) }
             )
             textBox.addView(holder.title)
             textBox.addView(holder.meta)
@@ -83,23 +89,26 @@ class PlaylistAdapter(
 
     private fun loadArtwork(playlist: Playlist, imageView: ImageView) {
         val firstTrackId = playlist.trackIds.firstOrNull()
+        imageView.tag=firstTrackId
+        if(firstTrackId!=null)artworkLoader?.let {it(firstTrackId,imageView);return}
         val path = firstTrackId?.let(artworkProvider).orEmpty()
         val bitmap = decodeArtworkPath(path)
         if (bitmap != null) {
             imageView.setImageBitmap(bitmap)
         } else {
             imageView.setImageResource(R.drawable.ic_cover_placeholder)
-            imageView.setBackgroundColor(Palette.PANEL_ALT)
+            imageView.background = panelDrawable(Palette.PANEL_ALT, 12, context)
         }
     }
 
     private fun decodeArtworkPath(path: String): android.graphics.Bitmap? {
         if (path.isBlank()) return null
+        if(path.startsWith("https://") || path.startsWith("http://"))return decodeArtworkPath(cache.artwork.cachedPath(path))
         return runCatching {
             if (path.startsWith("content://")) {
                 context.contentResolver.openInputStream(Uri.parse(path))?.use { BitmapFactory.decodeStream(it) }
             } else {
-                File(path).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.absolutePath) }
+                cache.resolveLegacyPath(path.removePrefix("file://")).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.absolutePath) }
             }
         }.getOrNull()
     }

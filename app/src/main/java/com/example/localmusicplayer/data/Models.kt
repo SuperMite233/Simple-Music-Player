@@ -18,7 +18,11 @@ data class Track(
     val cueSheet: String? = null,
     val cueIndex: Int? = null,
     val cueStartMs: Long = 0L,
-    val cueEndMs: Long = 0L
+    val cueEndMs: Long = 0L,
+    /** Stable source reference, retained when uri/sourcePath temporarily point at evictable audio. */
+    val sourceReference: String = "",
+    /** Provider cover ID/public reference, without temporary URL authentication. */
+    val artworkReference: String = ""
 ) {
     val displayTitle: String
         get() = title.ifBlank { sourcePath.substringAfterLast('/').ifBlank { "未知曲目" } }

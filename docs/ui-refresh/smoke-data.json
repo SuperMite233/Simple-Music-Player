@@ -1,0 +1,56 @@
+{
+  "version": "beta-2.0.0-20261030",
+  "suite": "ui-refresh",
+  "scope": "smoke",
+  "run": "smoke-release-final",
+  "theme": "light",
+  "fontScale": 1,
+  "widthDp": 375,
+  "heightDp": 750,
+  "errors": 0,
+  "assertions": [
+    {
+      "name": "ncm_system_media_and_records",
+      "ok": true
+    },
+    {
+      "name": "runtime_diagnostics",
+      "ok": true
+    }
+  ],
+  "smoke": {
+    "ncm_system_media_and_records": {
+      "systemMime": "audio/flac",
+      "publishedBytes": 8400,
+      "ncmInputBytes": 8673,
+      "durationMs": 1000,
+      "mediaIndexed": true,
+      "records": {
+        "logicalHistoryRows": 1,
+        "combinedPlays": 2,
+        "survivesMetadataClear": true
+      },
+      "testMediaDeleted": true
+    },
+    "runtime_diagnostics": {
+      "selectedExportFiles": 2,
+      "exportBytes": 1655,
+      "quotaBytes": 1048576,
+      "retainedBytes": 577933,
+      "checks": [
+        "enabled_by_default_and_seven_day_retention",
+        "expired_log_is_pruned",
+        "level_filtering_and_redacted_preview",
+        "multi_file_export_contains_only_selected_logs_and_redacts",
+        "logs_category_disable_suspends_recording",
+        "one_megabyte_log_quota_is_enforced"
+      ],
+      "passed": true,
+      "preferencesAndOriginalLogsRestored": true
+    }
+  },
+  "screens": [],
+  "apkSha256": "23a3ed262a72cf57afc9809e2a3c739082d552a8b86950eb68759f94b8aa7bbb",
+  "androidApi": "37",
+  "instrumentationSha256": "362f0a4afd63f5c241b2f0a9b92ab0b20a6cbc5b2ea661c2496878c6bec39d34"
+}

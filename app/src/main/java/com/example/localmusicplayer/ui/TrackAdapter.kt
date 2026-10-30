@@ -3,8 +3,6 @@
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
-import android.os.Handler
-import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -17,14 +15,14 @@ import com.supermite.smp.R
 import com.supermite.smp.data.Track
 import com.supermite.smp.data.TrackEdit
 import java.io.File
-import java.net.URL
-import java.util.concurrent.Executors
+import com.supermite.smp.cache.CacheManager
 
 class TrackAdapter(
     private val context: Context,
     private val edits: Map<String, TrackEdit>
 ) : BaseAdapter() {
-    private val imageExecutor = Executors.newFixedThreadPool(3)
+    private val cache by lazy {CacheManager(context)}
+    var artworkLoader: ((Track,ImageView)->Unit)? = null
     var tracks: List<Track> = emptyList()
         set(value) {
             field = value
@@ -63,11 +61,14 @@ class TrackAdapter(
                 isClickable = true
                 isLongClickable = true
                 setPadding(context.dp(12), context.dp(10), context.dp(12), context.dp(10))
-                background = panelDrawable(Palette.PANEL, 8, context)
+                background = panelDrawable(Palette.PANEL, 12, context)
+                foreground = rippleDrawable(context, android.graphics.Color.TRANSPARENT)
             }
             val thumb = ImageView(context).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
-                background = panelDrawable(Palette.PANEL_ALT, 8, context)
+                clipToOutline = true
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                background = panelDrawable(Palette.PANEL_ALT, 12, context)
             }
             view.addView(thumb, LinearLayout.LayoutParams(context.dp(56), context.dp(56)))
 
@@ -78,16 +79,19 @@ class TrackAdapter(
             holder = Holder(
                 thumb = thumb,
                 title = TextView(context).apply {
-                    titleStyle(16f)
+                    bodyStyle(16f, Palette.TEXT)
                     maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
                 },
                 meta = TextView(context).apply {
-                    bodyStyle(12.5f)
+                    bodyStyle(14f)
                     maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
                 },
                 tags = TextView(context).apply {
                     bodyStyle(12f, Palette.ACCENT_ALT)
                     maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
                 }
             )
             textBox.addView(holder.title)
@@ -96,14 +100,16 @@ class TrackAdapter(
             view.addView(textBox, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             val more = ImageButton(context).apply {
                 setImageResource(R.drawable.ic_menu)
+                imageTintList = android.content.res.ColorStateList.valueOf(Palette.MUTED)
+                contentDescription = "歌曲更多操作"
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 adjustViewBounds = true
                 isFocusable = false
                 isFocusableInTouchMode = false
                 setPadding(context.dp(9), context.dp(9), context.dp(9), context.dp(9))
-                background = panelDrawable(Palette.PANEL_ALT, 8, context)
+                background = panelDrawable(Palette.PANEL_ALT, 12, context)
             }
-            view.addView(more, LinearLayout.LayoutParams(context.dp(42), context.dp(42)))
+            view.addView(more, LinearLayout.LayoutParams(context.dp(48), context.dp(48)))
             view.tag = holder
         } else {
             view = convertView as LinearLayout
@@ -113,12 +119,15 @@ class TrackAdapter(
         val track = tracks[position]
         val edit = edits[track.id]
         view.setOnClickListener { onTrackClick?.invoke(track) }
-        view.background = panelDrawable(if (track.id in selectedIds) Palette.ACCENT else Palette.PANEL, 8, context)
+        view.background = panelDrawable(if (track.id in selectedIds) Palette.SELECTED else Palette.PANEL, 12, context)
         val more = view.getChildAt(view.childCount - 1) as ImageButton
         more.visibility = if (selectionMode) View.GONE else View.VISIBLE
         more.setOnClickListener { onMoreClick?.invoke(track) }
+        more.contentDescription = "${track.displayTitle}：更多操作"
+        view.isSelected = track.id in selectedIds
         val isCurrent = track.id == currentTrackId
-        holder.title.setTextColor(if (isCurrent) Palette.ACCENT else Palette.TEXT)
+        holder.title.setTextColor(if (track.id in selectedIds) Palette.ON_SELECTED else if (isCurrent) Palette.ACCENT else Palette.TEXT)
+        holder.meta.setTextColor(if (track.id in selectedIds) Palette.ON_SELECTED else Palette.MUTED)
         holder.title.text = edit?.alias?.takeIf { it.isNotBlank() } ?: track.displayTitle
         view.setOnLongClickListener {
             onTrackLongClick?.invoke(track, position)
@@ -145,20 +154,12 @@ class TrackAdapter(
     }
 
     private fun loadArtwork(track: Track, imageView: ImageView) {
+        imageView.tag=track.id
+        artworkLoader?.let {it(track,imageView);return}
         if (track.artworkPath.startsWith("http://") || track.artworkPath.startsWith("https://")) {
-            imageView.setImageResource(R.drawable.ic_cover_placeholder)
-            val expected = track.artworkPath
-            imageView.tag = expected
-            imageExecutor.execute {
-                val bitmap = runCatching {
-                    URL(expected).openStream().use { BitmapFactory.decodeStream(it) }
-                }.getOrNull()
-                if (bitmap != null) {
-                    Handler(Looper.getMainLooper()).post {
-                        if (imageView.tag == expected) imageView.setImageBitmap(bitmap)
-                    }
-                }
-            }
+            val path=cache.artwork.cachedPath(track.artworkPath)
+            val bitmap=decodeArtworkPath(path)
+            if(bitmap!=null)imageView.setImageBitmap(bitmap) else imageView.setImageResource(R.drawable.ic_cover_placeholder)
             return
         }
         val bitmap = decodeArtworkPath(track.artworkPath) ?: siblingArtworkFile(track)?.let { BitmapFactory.decodeFile(it.absolutePath) }
@@ -166,7 +167,7 @@ class TrackAdapter(
             imageView.setImageBitmap(bitmap)
         } else {
             imageView.setImageResource(R.drawable.ic_cover_placeholder)
-            imageView.setBackgroundColor(Palette.PANEL_ALT)
+            imageView.background = panelDrawable(Palette.PANEL_ALT, 12, context)
         }
     }
 
@@ -176,7 +177,7 @@ class TrackAdapter(
             if (path.startsWith("content://")) {
                 context.contentResolver.openInputStream(Uri.parse(path))?.use { BitmapFactory.decodeStream(it) }
             } else {
-                File(path).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.absolutePath) }
+                cache.resolveLegacyPath(path.removePrefix("file://")).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.absolutePath) }
             }
         }.getOrNull()
     }

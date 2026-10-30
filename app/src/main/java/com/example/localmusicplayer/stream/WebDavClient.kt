@@ -15,6 +15,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import com.supermite.smp.logging.AppLogger
+import com.supermite.smp.logging.LogRedactor
 
 data class WebDavItem(
     val name: String,
@@ -29,7 +31,8 @@ class WebDavClient(
     private val username: String = "",
     private val password: String = "",
     private val port: Int = 0,
-    private val ignoreCert: Boolean = false
+    private val ignoreCert: Boolean = false,
+    val cacheIdentity: String = com.supermite.smp.cache.CacheStorage.sha256("$serverUrl|$username|$port".toByteArray())
 ) {
     private val baseUrl: String = buildBaseUrl(serverUrl, port)
     private val httpClient: OkHttpClient = buildHttpClient(ignoreCert)
@@ -40,6 +43,8 @@ class WebDavClient(
     private var digestOpaque: String? = null
     private var digestAlgorithm: String? = null
     private var digestNc: Int = 0
+
+    fun resourceUrl(path: String): String = "${baseUrl.trimEnd('/')}/${encodePath(path.trimStart('/'))}"
 
     fun listDirectory(path: String = ""): List<WebDavItem> {
         val cleanPath = path.trim('/')
@@ -249,6 +254,7 @@ class WebDavClient(
                 headersMap[name] = if (headersMap.containsKey(name)) headersMap[name] + ", " + value else value
             }
             val code = response.code
+            logDebug("响应: ${request.method} ${request.url.encodedPath} HTTP $code")
             val responseBody = response.body
 
             if (method.equals("GET", ignoreCase = true) && code in 200..299) {
@@ -400,7 +406,8 @@ class WebDavClient(
         var debugLogger: ((String) -> Unit)? = null
 
         private fun logDebug(msg: String) {
-            debugLogger?.invoke(msg)
+            val sanitized = LogRedactor.redact(msg)
+            debugLogger?.invoke(sanitized) ?: AppLogger.debug("WEBDAV", sanitized)
         }
 
         private fun encodePath(path: String): String {

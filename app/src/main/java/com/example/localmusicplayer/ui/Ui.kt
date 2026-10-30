@@ -9,38 +9,31 @@ import android.view.ViewGroup
 import android.widget.TextView
 
 object Palette {
-    var BG = 0xFF101418.toInt()
-    var PANEL = 0xFF1A2027.toInt()
-    var PANEL_ALT = 0xFF24303A.toInt()
-    var ACCENT = 0xFF35C2A1.toInt()
-    var ACCENT_ALT = 0xFFF2B84B.toInt()
-    var TEXT = 0xFFF4F7F8.toInt()
-    var MUTED = 0xFFAAB5BD.toInt()
-    var DANGER = 0xFFE66A6A.toInt()
-
-    fun apply(dark: Boolean, accent: Int) {
-        ACCENT = accent
-        ACCENT_ALT = if (dark) 0xFFF2B84B.toInt() else 0xFFB46A00.toInt()
-        DANGER = if (dark) 0xFFE66A6A.toInt() else 0xFFC43D3D.toInt()
-        if (dark) {
-            BG = 0xFF101418.toInt()
-            PANEL = 0xFF1A2027.toInt()
-            PANEL_ALT = 0xFF24303A.toInt()
-            TEXT = 0xFFF4F7F8.toInt()
-            MUTED = 0xFFAAB5BD.toInt()
-        } else {
-            BG = 0xFFF6F8FA.toInt()
-            PANEL = 0xFFFFFFFF.toInt()
-            PANEL_ALT = 0xFFE8EEF2.toInt()
-            TEXT = 0xFF111820.toInt()
-            MUTED = 0xFF5D6975.toInt()
-        }
-    }
+    const val DEFAULT_SEED = 0xFF35C2A1.toInt()
+    private var colors = Md3Colors(false, DEFAULT_SEED)
+    val BG get() = colors.surface
+    val PANEL get() = colors.surfaceContainerLow
+    val PANEL_ALT get() = colors.surfaceContainerHighest
+    val CONTAINER get() = colors.surfaceContainer
+    val DIALOG get() = colors.surfaceContainerHigh
+    val ACCENT get() = colors.primary
+    val ON_ACCENT get() = colors.onPrimary
+    val ACCENT_CONTAINER get() = colors.primaryContainer
+    val ON_ACCENT_CONTAINER get() = colors.onPrimaryContainer
+    val SELECTED get() = colors.secondaryContainer
+    val ON_SELECTED get() = colors.onSecondaryContainer
+    val ACCENT_ALT get() = colors.tertiary
+    val TEXT get() = colors.onSurface
+    val MUTED get() = colors.onSurfaceVariant
+    val OUTLINE get() = colors.outline
+    val OUTLINE_VARIANT get() = colors.outlineVariant
+    val DANGER get() = colors.error
+    fun apply(dark: Boolean, accent: Int) { colors = Md3Colors(dark, accent) }
 }
 
 fun Context.dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
-fun panelDrawable(color: Int = Palette.PANEL, radiusDp: Int = 8, context: Context): GradientDrawable {
+fun panelDrawable(color: Int = Palette.PANEL, radiusDp: Int = 12, context: Context): GradientDrawable {
     return GradientDrawable().apply {
         setColor(color)
         cornerRadius = context.dp(radiusDp).toFloat()
@@ -55,14 +48,14 @@ fun View.setMargins(left: Int = 0, top: Int = 0, right: Int = 0, bottom: Int = 0
 
 fun TextView.titleStyle(sizeSp: Float = 17f) {
     setTextColor(Palette.TEXT)
-    textSize = sizeSp
-    typeface = Typeface.DEFAULT_BOLD
+    textSize = when { sizeSp >= 24f -> 24f; sizeSp >= 20f -> 22f; sizeSp >= 15f -> 16f; else -> 14f }
+    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
     includeFontPadding = false
 }
 
-fun TextView.bodyStyle(sizeSp: Float = 13f, color: Int = Palette.MUTED) {
+fun TextView.bodyStyle(sizeSp: Float = 14f, color: Int = Palette.MUTED) {
     setTextColor(color)
-    textSize = sizeSp
+    textSize = when { sizeSp >= 15f -> 16f; sizeSp > 12f -> 14f; else -> 12f }
     includeFontPadding = true
 }
 
@@ -80,10 +73,16 @@ fun formatDuration(ms: Long): String {
 }
 
 fun contrastTextColor(background: Int): Int {
-    val r = Color.red(background)
-    val g = Color.green(background)
-    val b = Color.blue(background)
-    val luminance = (0.299 * r + 0.587 * g + 0.114 * b)
-    return if (luminance > 150) Color.BLACK else Color.WHITE
+    return if (androidx.core.graphics.ColorUtils.calculateContrast(Color.WHITE, background) >=
+        androidx.core.graphics.ColorUtils.calculateContrast(Color.BLACK, background)) Color.WHITE else Color.BLACK
 }
 
+fun stateColors(foreground: Int, disabled: Int = Palette.MUTED) = android.content.res.ColorStateList(
+    arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()), intArrayOf(disabled, foreground)
+)
+
+fun rippleDrawable(context: Context, fill: Int, radiusDp: Int = 12): android.graphics.drawable.RippleDrawable {
+    val ripple = androidx.core.graphics.ColorUtils.setAlphaComponent(Palette.TEXT, 31)
+    return android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(ripple),
+        panelDrawable(fill, radiusDp, context), panelDrawable(Color.WHITE, radiusDp, context))
+}

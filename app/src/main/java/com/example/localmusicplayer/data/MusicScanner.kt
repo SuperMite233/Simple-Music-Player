@@ -8,6 +8,9 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import com.supermite.smp.cache.CacheCategory
+import com.supermite.smp.cache.CacheManager
+import com.supermite.smp.cache.CacheStorage
 import org.json.JSONObject
 import java.io.File
 import java.net.URLConnection
@@ -437,7 +440,7 @@ class MusicScanner(private val context: Context) {
         val retriever = MediaMetadataRetriever()
         return runCatching {
             retriever.setDataSource(context, uri)
-            val artworkPath = retriever.embeddedPicture?.let { saveArtwork(trackId, it) }.orEmpty()
+            val artworkPath = retriever.embeddedPicture?.let { saveArtwork(it) }.orEmpty()
             Metadata(
                 title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE).orEmpty(),
                 artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST).orEmpty(),
@@ -454,13 +457,11 @@ class MusicScanner(private val context: Context) {
         }
     }
 
-    private fun saveArtwork(trackId: String, bytes: ByteArray): String {
-        val dir = File(context.filesDir, "artwork").apply { mkdirs() }
-        val file = File(dir, "${Integer.toHexString(trackId.hashCode())}.jpg")
-        if (!file.exists() || file.length() != bytes.size.toLong()) {
-            file.writeBytes(bytes)
-        }
-        return file.absolutePath
+    private fun saveArtwork(bytes: ByteArray): String {
+        val cache = CacheManager(context)
+        val relative = "local/${CacheStorage.sha256(bytes)}.jpg"
+        return (cache.storage.find(CacheCategory.ARTWORK, relative)
+            ?: cache.storage.write(CacheCategory.ARTWORK, relative, bytes))?.absolutePath.orEmpty()
     }
 
     private fun queryDisplayName(uri: Uri): String {

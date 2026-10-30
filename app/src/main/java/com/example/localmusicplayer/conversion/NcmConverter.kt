@@ -1,40 +1,72 @@
 package com.supermite.smp.conversion
 
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.net.Uri
+import com.supermite.smp.cache.CacheManager
+import com.supermite.smp.cache.CacheWorkFile
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.InputStream
 import java.util.Base64
+import java.util.Locale
 import javax.crypto.Cipher
 import javax.crypto.spec.SecretKeySpec
 
 class NcmConverter(private val context: Context) {
-    data class Result(val outputFile: File, val title: String, val format: String)
+    data class Result(val outputFile: File, val title: String, val format: String, val mediaScanRequested: Boolean = false,
+        private val temporaryWork: CacheWorkFile? = null) : AutoCloseable {
+        val fileName: String get() = NcmFileNames.sanitize(title) + "." + format
+        val isTemporary: Boolean get() = temporaryWork != null
+        override fun close() { temporaryWork?.close() }
+    }
 
-    fun convert(uri: Uri, outputDir: File? = null): Result {
+    fun convert(uri: Uri, outputDir: File? = null): Result = convertInternal(uri, outputDir, temporary = false)
+    fun convertTemporary(uri: Uri): Result = convertInternal(uri, null, temporary = true)
+
+    private fun convertInternal(uri: Uri, outputDir: File?, temporary: Boolean): Result {
+        var work: CacheWorkFile? = null
+        try {
         val input = context.contentResolver.openInputStream(uri) ?: error("无法打开文件")
         BufferedInputStream(input).use { stream ->
-            skipFully(stream, 10)
+            val header = readExact(stream, 10)
+            require(header.copyOfRange(0, 8).contentEquals("CTENFDAM".toByteArray(Charsets.US_ASCII))) { "不是有效的 NCM 文件" }
             val rc4Key = readRc4Key(stream)
             val metadata = readMetadata(stream)
-            val format = metadata.optString("format").ifBlank { "mp3" }.lowercase()
+            val format = metadata.optString("format").ifBlank { "mp3" }.lowercase(Locale.ROOT)
+            require(format in setOf("mp3", "flac")) { "不支持的 NCM 音频格式" }
             val title = metadata.optString("musicName").ifBlank { "converted_music" }
             val coverBytes = readCover(stream)
 
-            val targetDir = (outputDir ?: File(context.getExternalFilesDir(null) ?: context.filesDir, "ConvertedMusic")).apply {
-                mkdirs()
+            val output = if (temporary) {
+                work = CacheManager(context).createWorkFile(format) ?: error("转换临时缓存已关闭或无法创建，请检查缓存设置")
+                work!!.file
+            } else {
+                val targetDir = (outputDir ?: File(context.getExternalFilesDir(null) ?: context.filesDir, "ConvertedMusic")).apply {
+                    check(isDirectory || mkdirs()) { "无法创建转换输出目录" }
+                }
+                uniqueFile(targetDir, sanitizeFileName(title), format)
             }
-            val output = uniqueFile(targetDir, sanitizeFileName(title), if (format == "flac") "flac" else "mp3")
-            output.outputStream().use { out ->
+            (work?.outputStream() ?: output.outputStream()).use { out ->
                 val keyStream = buildKeyStream(rc4Key)
                 val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                while (true) {
-                    val read = stream.read(buffer)
-                    if (read <= 0) break
-                    decryptChunk(buffer, read, keyStream)
-                    out.write(buffer, 0, read)
+                var keyOffset = 0
+                var total = 0L
+                try {
+                    while (true) {
+                        val read = stream.read(buffer)
+                        if (read < 0) break
+                        if (read == 0) continue
+                        NcmCipher.apply(buffer, read, keyStream, keyOffset)
+                        keyOffset = (keyOffset + read) and 0xff
+                        out.write(buffer, 0, read)
+                        total += read
+                    }
+                    require(total > 0) { "NCM 文件没有音频数据" }
+                } catch (error: Throwable) {
+                    output.delete()
+                    throw error
                 }
             }
             val artists = metadata.optJSONArray("artist")?.let { array ->
@@ -51,8 +83,14 @@ class NcmConverter(private val context: Context) {
                     coverBytes = coverBytes
                 )
             )
-            return Result(output, title, format)
+            work?.validate()
+            val scanRequested = !temporary && runCatching {
+                MediaScannerConnection.scanFile(context, arrayOf(output.absolutePath),
+                    arrayOf(if (format == "flac") "audio/flac" else "audio/mpeg"), null)
+            }.isSuccess
+            return Result(output, title, format, scanRequested, work)
         }
+        } catch (error: Throwable) { work?.close(); throw error }
     }
 
     private fun readRc4Key(stream: InputStream): ByteArray {
@@ -61,11 +99,15 @@ class NcmConverter(private val context: Context) {
         val encrypted = readExact(stream, keyLength)
         for (index in encrypted.indices) encrypted[index] = (encrypted[index].toInt() xor 0x64).toByte()
         val decrypted = aesDecrypt(CORE_KEY, encrypted)
+        require(decrypted.size > 17) { "NCM 密钥内容异常" }
         return decrypted.copyOfRange(17, decrypted.size)
     }
 
     private fun readMetadata(stream: InputStream): JSONObject {
         val metaLength = readLittleEndianInt(stream)
+        require(metaLength in 0..4 * 1024 * 1024) { "NCM 元数据长度异常" }
+        if (metaLength == 0) return JSONObject()
+        require(metaLength >= 22) { "NCM 元数据不完整" }
         val raw = readExact(stream, metaLength)
         for (index in raw.indices) raw[index] = (raw[index].toInt() xor 0x63).toByte()
         val payload = raw.copyOfRange(22, raw.size)
@@ -78,6 +120,7 @@ class NcmConverter(private val context: Context) {
         skipFully(stream, 5)
         val coverFrameLength = readLittleEndianInt(stream)
         val imageLength = readLittleEndianInt(stream)
+        require(coverFrameLength in 0..20 * 1024 * 1024 && imageLength in 0..coverFrameLength) { "NCM 封面长度异常" }
         val imageBytes = if (imageLength > 0) readExact(stream, imageLength) else ByteArray(0)
         val remaining = coverFrameLength - imageLength
         if (remaining > 0) skipFully(stream, remaining)
@@ -111,12 +154,6 @@ class NcmConverter(private val context: Context) {
         return keyStream
     }
 
-    private fun decryptChunk(buffer: ByteArray, length: Int, keyStream: ByteArray) {
-        for (index in 0 until length) {
-            buffer[index] = (buffer[index].toInt() xor keyStream[index and 0xff].toInt()).toByte()
-        }
-    }
-
     private fun readLittleEndianInt(stream: InputStream): Int {
         val bytes = readExact(stream, 4)
         return (bytes[0].toInt() and 0xff) or
@@ -126,12 +163,17 @@ class NcmConverter(private val context: Context) {
     }
 
     private fun readExact(stream: InputStream, length: Int): ByteArray {
+        require(length in 0..20 * 1024 * 1024) { "NCM 数据长度异常" }
         val bytes = ByteArray(length)
         var offset = 0
         while (offset < length) {
             val read = stream.read(bytes, offset, length - offset)
             if (read < 0) error("文件内容不完整")
-            offset += read
+            if (read == 0) {
+                val next = stream.read()
+                if (next < 0) error("文件内容不完整")
+                bytes[offset++] = next.toByte()
+            } else offset += read
         }
         return bytes
     }
@@ -150,7 +192,7 @@ class NcmConverter(private val context: Context) {
     }
 
     private fun sanitizeFileName(value: String): String {
-        return value.replace(Regex("""[\\/:*?"<>|]"""), "_").ifBlank { "converted_music" }
+        return NcmFileNames.sanitize(value)
     }
 
     private fun uniqueFile(dir: File, name: String, extension: String): File {

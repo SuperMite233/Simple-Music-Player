@@ -1,37 +1,32 @@
 <resources>
-    <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+    <style name="AppTheme" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:navigationBarColor">@color/bg</item>
-        <item name="android:statusBarColor">@color/bg</item>
         <item name="android:windowActionModeOverlay">true</item>
-    </style>
-    <style name="AppTheme.Light" parent="android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:fontFamily">sans</item>
         <item name="android:windowLightStatusBar">true</item>
-        <item name="android:navigationBarColor">#F6F8FA</item>
-        <item name="android:statusBarColor">#F6F8FA</item>
+        <item name="colorPrimary">#006B58</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#9DF2D5</item>
+        <item name="colorOnPrimaryContainer">#002117</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
+    </style>
+    <style name="AppTheme.Light" parent="Theme.Material3.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="colorPrimary">#006B58</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#9DF2D5</item>
+        <item name="colorOnPrimaryContainer">#002117</item>
+        <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowActionModeOverlay">true</item>
     </style>
-    <style name="AppTheme.Dark" parent="android:style/Theme.Material.NoActionBar">
+    <style name="AppTheme.Dark" parent="Theme.Material3.Dark.NoActionBar">
         <item name="android:fontFamily">sans</item>
+        <item name="colorPrimary">#81D5B9</item>
+        <item name="colorOnPrimary">#00382B</item>
+        <item name="colorPrimaryContainer">#00513F</item>
+        <item name="colorOnPrimaryContainer">#9DF2D5</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:navigationBarColor">#101418</item>
-        <item name="android:statusBarColor">#101418</item>
         <item name="android:windowActionModeOverlay">true</item>
     </style>
-    <style name="AppTheme.Dialog.Light" parent="android:style/Theme.Material.Light.Dialog.Alert">
-        <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#35C2A1</item>
-        <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:textColorPrimary">#111820</item>
-        <item name="android:textColorSecondary">#5D6975</item>
-    </style>
-    <style name="AppTheme.Dialog.Dark" parent="android:style/Theme.Material.Dialog.Alert">
-        <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#35C2A1</item>
-        <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:textColorPrimary">#F4F7F8</item>
-        <item name="android:textColorSecondary">#AAB5BD</item>
-    </style>
+    <style name="AppTheme.Dialog.Light" parent="ThemeOverlay.Material3.MaterialAlertDialog" />
+    <style name="AppTheme.Dialog.Dark" parent="ThemeOverlay.Material3.MaterialAlertDialog" />
 </resources>

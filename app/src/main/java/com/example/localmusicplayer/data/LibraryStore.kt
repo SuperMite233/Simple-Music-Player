@@ -2,19 +2,25 @@
 
 import android.content.Context
 import android.net.Uri
+import com.supermite.smp.cache.CacheCategory
+import com.supermite.smp.cache.CacheManager
+import com.supermite.smp.cache.CacheStorage
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 
-class LibraryStore(context: Context) {
-    private val file = File(context.filesDir, "library_state.json")
+class LibraryStore internal constructor(private val file: File, private val metadataCache: CacheManager? = null) {
+    constructor(context: Context) : this(File(context.filesDir, "library_state.json"), CacheManager(context))
 
     val edits: MutableMap<String, TrackEdit> = mutableMapOf()
     val tracks: MutableList<Track> = mutableListOf()
     val playlists: MutableList<Playlist> = mutableListOf()
     val history: MutableList<HistoryItem> = mutableListOf()
     val playCounts: MutableMap<String, Int> = mutableMapOf()
+    /** Long-lived listening records, separate from reconstructible network/disk caches. */
+    private val rememberedTracks: MutableList<Track> = mutableListOf()
+    private val trackAliases: MutableMap<String, String> = mutableMapOf()
     var albumPlaylistsCreated: Boolean = false
         private set
 
@@ -27,16 +33,69 @@ class LibraryStore(context: Context) {
         ensureSystemPlaylists()
     }
 
-    fun saveEdit(trackId: String, edit: TrackEdit) {
-        edits[trackId] = edit.copy(tags = edit.normalizedTags())
+    @Synchronized fun saveEdit(trackId: String, edit: TrackEdit) {
+        val normalized = edit.copy(tags = edit.normalizedTags(), rating = edit.rating.coerceIn(0, 5))
+        val canonical = canonicalTrackId(trackId)
+        sourceIdsFor(trackId).plus(canonical).forEach { edits[it] = normalized }
         save()
     }
 
     fun savedTracks(): List<Track> = tracks.toList()
 
-    fun saveTracks(newTracks: List<Track>) {
+    /** Every retained source variant; use [trackForRecord] to resolve a logical history/favorite ID. */
+    fun knownTracks(): List<Track> = (tracks + rememberedTracks).distinctBy { it.id }
+
+    fun canonicalTrackId(trackId: String): String {
+        var current = trackId
+        val seen = mutableSetOf<String>()
+        while (seen.add(current)) {
+            val next = trackAliases[current] ?: return current
+            if (next == current) return current
+            current = next
+        }
+        return trackId // Never follow corrupt cycles from an imported/old library.
+    }
+
+    fun sourceIdsFor(trackId: String): Set<String> {
+        val canonical = canonicalTrackId(trackId)
+        return trackAliases.keys.filter { canonicalTrackId(it) == canonical }.toSet() + canonical
+    }
+
+    fun trackForRecord(trackId: String): Track? {
+        val known = knownTracks()
+        return known.firstOrNull { it.id == trackId }
+            ?: known.firstOrNull { canonicalTrackId(it.id) == canonicalTrackId(trackId) }
+            ?: cachedTrack(trackId)
+    }
+
+    /** Call before recording a play and when online results are received. Remote auth URLs are never saved. */
+    @Synchronized fun rememberTracks(newTracks: Collection<Track>, persist: Boolean = true) {
+        newTracks.filter { TrackIdentity.isStreaming(it) }.forEach { incoming ->
+            val position = rememberedTracks.indexOfFirst { it.id == incoming.id }
+            val snapshot = incoming.recordSnapshot(rememberedTracks.getOrNull(position))
+            if (position >= 0) rememberedTracks[position] = snapshot else rememberedTracks.add(snapshot)
+            metadataCache?.let { cache -> runCatching {
+                cache.storage.write(CacheCategory.METADATA, "records/${CacheStorage.sha256(incoming.id.toByteArray())}.json",
+                    snapshot.toJson().toString().toByteArray(Charsets.UTF_8))
+            } }
+        }
+        registerIdentities(newTracks)
+        if (persist) save()
+    }
+
+    /** Drop only reconstructible in-memory metadata after the corresponding cache category is cleared. */
+    @Synchronized fun pruneUnreferencedMetadata() {
+        val userRecords = userRecordIds()
+        rememberedTracks.removeAll { canonicalTrackId(it.id) !in userRecords }
+        val localIds = tracks.map { it.id }.toSet()
+        trackAliases.keys.filter { it !in localIds && canonicalTrackId(it) !in userRecords }.toList().forEach { trackAliases.remove(it) }
+        save()
+    }
+
+    @Synchronized fun saveTracks(newTracks: List<Track>) {
         tracks.clear()
-        tracks.addAll(newTracks.distinctBy { it.id })
+        tracks.addAll(newTracks.filterNot { TrackIdentity.isStreaming(it) }.distinctBy { it.id })
+        rememberTracks(newTracks, persist = false)
         playlists.forEach { playlist ->
             val uniqueIds = playlist.trackIds.distinct()
             playlist.trackIds.clear()
@@ -45,15 +104,16 @@ class LibraryStore(context: Context) {
         save()
     }
 
-    fun addHistory(trackId: String, positionMs: Long = 0L) {
-        playCounts[trackId] = (playCounts[trackId] ?: 0) + 1
-        history.removeAll { it.trackId == trackId }
-        history.add(0, HistoryItem(trackId, System.currentTimeMillis(), positionMs))
+    @Synchronized fun addHistory(trackId: String, positionMs: Long = 0L) {
+        val canonical = canonicalTrackId(trackId)
+        playCounts[canonical] = (playCounts[canonical] ?: 0).toLong().plus(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        history.removeAll { canonicalTrackId(it.trackId) == canonical }
+        history.add(0, HistoryItem(canonical, System.currentTimeMillis(), positionMs))
         while (history.size > HISTORY_LIMIT) history.removeAt(history.lastIndex)
         save()
     }
 
-    fun playCount(trackId: String): Int = playCounts[trackId] ?: 0
+    fun playCount(trackId: String): Int = playCounts[canonicalTrackId(trackId)] ?: 0
 
     fun createPlaylist(name: String): Playlist {
         val playlist = Playlist(UUID.randomUUID().toString(), name.ifBlank { "新播放列表" })
@@ -100,15 +160,21 @@ class LibraryStore(context: Context) {
 
     fun removeTracksEverywhere(trackIds: Collection<String>) {
         val ids = trackIds.toSet()
+        val remaining = knownTracks().filterNot { it.id in ids }
+        val erasedRecords = ids.map { canonicalTrackId(it) }.filter { canonical ->
+            remaining.none { canonicalTrackId(it.id) == canonical }
+        }.toSet()
         playlists.forEach { playlist ->
             playlist.trackIds.removeAll(ids)
             playlist.updatedAt = System.currentTimeMillis()
         }
-        history.removeAll { it.trackId in ids }
-        ids.forEach {
+        rememberedTracks.removeAll { it.id in ids }
+        history.removeAll { canonicalTrackId(it.trackId) in erasedRecords }
+        trackAliases.keys.filter { canonicalTrackId(it) in erasedRecords }.plus(erasedRecords).forEach {
             edits.remove(it)
             playCounts.remove(it)
         }
+        trackAliases.keys.filter { canonicalTrackId(it) in erasedRecords }.toList().forEach { trackAliases.remove(it) }
         save()
     }
 
@@ -131,15 +197,14 @@ class LibraryStore(context: Context) {
 
     fun favoritePlaylist(): Playlist = playlists.first { it.id == FAVORITES_ID }
 
-    fun isFavorite(trackId: String): Boolean = favoritePlaylist().trackIds.contains(trackId)
+    fun isFavorite(trackId: String): Boolean = favoritePlaylist().trackIds.any { canonicalTrackId(it) == canonicalTrackId(trackId) }
 
     fun setFavorite(trackId: String, favorite: Boolean) {
         val playlist = favoritePlaylist()
+        val canonical = canonicalTrackId(trackId)
+        playlist.trackIds.removeAll { canonicalTrackId(it) == canonical }
         if (favorite) {
-            playlist.trackIds.remove(trackId)
-            playlist.trackIds.add(0, trackId)
-        } else {
-            playlist.trackIds.remove(trackId)
+            playlist.trackIds.add(0, canonical)
         }
         playlist.updatedAt = System.currentTimeMillis()
         save()
@@ -318,7 +383,7 @@ class LibraryStore(context: Context) {
             trackIds = playCounts.entries
                 .sortedByDescending { it.value }
                 .map { it.key }
-                .filter { id -> tracks.any { it.id == id } }
+                .filter { id -> trackForRecord(id) != null }
                 .take(HISTORY_LIMIT)
                 .toMutableList(),
             systemType = "ranking",
@@ -348,7 +413,7 @@ class LibraryStore(context: Context) {
     }
 
     private fun repairPlaylistData() {
-        val existingTrackIds = tracks.map { it.id }.toSet()
+        val existingTrackIds = knownTracks().map { it.id }.toSet() + trackAliases.values
         playlists.forEach { playlist ->
             val uniqueIds = playlist.trackIds.distinct().filter { it in existingTrackIds || playlist.systemType == "favorites" }
             playlist.trackIds.clear()
@@ -378,8 +443,7 @@ class LibraryStore(context: Context) {
     }
 
     private fun load() {
-        if (!file.exists()) return
-        val root = runCatching { JSONObject(file.readText()) }.getOrNull() ?: return
+        val root = if (file.exists()) runCatching { JSONObject(file.readText()) }.getOrNull() ?: JSONObject() else JSONObject()
         albumPlaylistsCreated = root.optBoolean("albumPlaylistsCreated", false)
 
         val editObj = root.optJSONObject("edits") ?: JSONObject()
@@ -452,9 +516,15 @@ class LibraryStore(context: Context) {
             )
         }
         selectedSubsonicServerId = root.optString("selectedSubsonicServerId", "")
+        root.optJSONArray("rememberedTracks").forEachObject { rememberedTracks.add(it.toTrack().recordSnapshot()) }
+        val aliases = root.optJSONObject("trackAliases") ?: JSONObject()
+        aliases.keys().forEach { key ->
+            aliases.optString(key).takeIf { it.isNotBlank() }?.let { trackAliases[key] = it }
+        }
+        registerIdentities(knownTracks())
     }
 
-    fun save() {
+    @Synchronized fun save() {
         val root = JSONObject()
         root.put("albumPlaylistsCreated", albumPlaylistsCreated)
 
@@ -472,6 +542,11 @@ class LibraryStore(context: Context) {
         root.put("edits", editObj)
 
         root.put("tracks", JSONArray(tracks.map { it.toJson() }))
+        root.put("recordSchema", 1)
+        val userRecords = userRecordIds()
+        root.put("rememberedTracks", JSONArray(rememberedTracks.filter { canonicalTrackId(it.id) in userRecords }.map { it.recordSnapshot().toJson() }))
+        val localIds = tracks.map { it.id }.toSet()
+        root.put("trackAliases", JSONObject(trackAliases.filter { it.key in localIds || canonicalTrackId(it.key) in userRecords }))
 
         playlists.forEach { playlist ->
             val uniqueIds = playlist.trackIds.distinct()
@@ -515,8 +590,83 @@ class LibraryStore(context: Context) {
         }))
         root.put("selectedSubsonicServerId", selectedSubsonicServerId)
 
-        file.writeText(root.toString(2))
+        val temporary = File(file.parentFile, file.name + ".tmp")
+        temporary.writeText(root.toString(2))
+        if (!temporary.renameTo(file)) {
+            file.writeText(temporary.readText())
+            temporary.delete()
+        }
     }
+
+    private fun registerIdentities(incoming: Collection<Track>) {
+        val known = (knownTracks() + incoming).associateBy { it.id }.values
+        val byTitle = known.groupBy { TrackIdentity.normalize(it.title) }
+        val artistsByGroup = known.groupBy { canonicalTrackId(it.id) }.mapValues { (_, group) ->
+            group.map { TrackIdentity.artist(it.artist) }.filter { it.isNotBlank() }.toSet()
+        }.toMutableMap()
+        incoming.forEach { track ->
+            if (track.id.isBlank()) return@forEach
+            run {
+                val oldCanonical = canonicalTrackId(track.id)
+                val oldGroupArtists = artistsByGroup[oldCanonical].orEmpty()
+                val candidates = byTitle[TrackIdentity.normalize(track.title)].orEmpty().filter { candidate ->
+                    candidate.id != track.id && trackAliases.containsKey(candidate.id) &&
+                        canonicalTrackId(candidate.id) != oldCanonical && TrackIdentity.matches(track, candidate)
+                }.groupBy { canonicalTrackId(it.id) }.filter { (canonical, _) ->
+                    val incomingArtist = TrackIdentity.artist(track.artist)
+                    val groupArtists = artistsByGroup[canonical].orEmpty()
+                    val combinedArtists = groupArtists + oldGroupArtists + listOf(incomingArtist).filter { it.isNotBlank() }
+                    combinedArtists.size <= 1
+                }
+                val match = candidates.keys.singleOrNull()
+                val incomingArtist = TrackIdentity.artist(track.artist)
+                if (match != null && (incomingArtist.isBlank() || oldGroupArtists.all { it == incomingArtist })) {
+                    trackAliases.keys.filter { canonicalTrackId(it) == oldCanonical }.forEach { trackAliases[it] = match }
+                    trackAliases[track.id] = match
+                    artistsByGroup[match] = artistsByGroup[match].orEmpty() + oldGroupArtists
+                    artistsByGroup.remove(oldCanonical)
+                } else if (!trackAliases.containsKey(track.id)) trackAliases[track.id] = track.id
+            }
+        }
+        // Collapse legacy per-source entries once; subsequent plays are added only to the logical key.
+        trackAliases.keys.toList().forEach { trackAliases[it] = canonicalTrackId(it) }
+        trackAliases.keys.groupBy { canonicalTrackId(it) }.forEach { (canonical, sourceIds) ->
+            val count = sourceIds.sumOf { (playCounts[it] ?: 0).toLong() }.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+            sourceIds.forEach { playCounts.remove(it) }
+            if (count > 0) playCounts[canonical] = count
+            val existingEdits = (listOfNotNull(edits[canonical]) + sourceIds.mapNotNull { edits[it] }).distinct()
+            if (existingEdits.isNotEmpty()) {
+                val merged = TrackEdit(
+                    alias = existingEdits.firstOrNull { it.alias.isNotBlank() }?.alias.orEmpty(),
+                    comment = existingEdits.map { it.comment }.filter { it.isNotBlank() }.distinct().joinToString("\n\n"),
+                    tags = existingEdits.flatMap { it.normalizedTags() }.distinct(),
+                    rating = existingEdits.maxOf { it.rating }.coerceIn(0, 5)
+                )
+                sourceIds.forEach { edits[it] = merged }
+            }
+        }
+        val logicalHistory = history.sortedByDescending { it.playedAt }.distinctBy { canonicalTrackId(it.trackId) }
+            .take(HISTORY_LIMIT).map { it.copy(trackId = canonicalTrackId(it.trackId)) }
+        history.clear(); history.addAll(logicalHistory)
+        playlists.firstOrNull { it.id == FAVORITES_ID }?.let { favorite ->
+            val ids = favorite.trackIds.map { canonicalTrackId(it) }.distinct()
+            favorite.trackIds.clear(); favorite.trackIds.addAll(ids)
+        }
+    }
+
+    private fun userRecordIds(): Set<String> = (history.map { it.trackId } + playCounts.keys + edits.keys +
+        playlists.filter { it.systemType.isBlank() || it.systemType == "favorites" }.flatMap { it.trackIds })
+        .map { canonicalTrackId(it) }.toSet()
+
+    private fun cachedTrack(trackId: String): Track? = runCatching {
+        val cache = metadataCache ?: return@runCatching null
+        val entry = cache.storage.find(CacheCategory.METADATA, "records/${CacheStorage.sha256(trackId.toByteArray())}.json")
+            ?.takeIf { it.length() <= 512 * 1024 } ?: return@runCatching null
+        val track = JSONObject(entry.readText()).toTrack().recordSnapshot().takeIf { it.id == trackId } ?: return@runCatching null
+        if (rememberedTracks.none { it.id == track.id }) rememberedTracks.add(track)
+        registerIdentities(listOf(track))
+        track
+    }.getOrNull()
 
     companion object {
         const val FAVORITES_ID = "system:favorites"
@@ -584,6 +734,8 @@ private fun Track.toJson(): JSONObject {
         .put("cueIndex", cueIndex)
         .put("cueStartMs", cueStartMs)
         .put("cueEndMs", cueEndMs)
+        .put("sourceReference", sourceReference)
+        .put("artworkReference", artworkReference)
 }
 
 private fun JSONObject.toTrack(): Track {
@@ -605,7 +757,9 @@ private fun JSONObject.toTrack(): Track {
         cueSheet = optNullableString("cueSheet"),
         cueIndex = optNullableInt("cueIndex"),
         cueStartMs = optLong("cueStartMs"),
-        cueEndMs = optLong("cueEndMs")
+        cueEndMs = optLong("cueEndMs"),
+        sourceReference = optString("sourceReference"),
+        artworkReference = optString("artworkReference")
     )
 }
 
@@ -615,5 +769,47 @@ private fun JSONObject.optNullableString(name: String): String? {
 
 private fun JSONObject.optNullableInt(name: String): Int? {
     return if (has(name) && !isNull(name)) optInt(name) else null
+}
+
+/** Keep source references and metadata, never temporary signed/authenticated playback URLs. */
+private fun Track.recordSnapshot(previous: Track? = null): Track {
+    fun publicAddress(value: String): String {
+        if (!value.startsWith("https://") && !value.startsWith("http://")) return value
+        return runCatching {
+            val uri = java.net.URI(value)
+            java.net.URI(uri.scheme, null, uri.host, uri.port, uri.path, null, null).toASCIIString()
+        }.getOrElse { value.substringBefore('?').substringBefore('#').replace(Regex("^(https?://)[^/@]+@"), "$1") }
+    }
+    fun isRemote(value: String) = value.startsWith("https://") || value.startsWith("http://")
+    val original = listOf(sourceReference, sourcePath, previous?.sourceReference.orEmpty(), previous?.sourcePath.orEmpty(), uri)
+        .firstOrNull { isRemote(it) }?.let(::publicAddress).orEmpty()
+    val dizzyPage = if (id.startsWith("stream:dizzylab:")) {
+        val disc = id.removePrefix("stream:dizzylab:").substringBefore(':')
+        "https://www.dizzylab.net/d/" + disc + "/"
+    } else ""
+    val savedUri = when {
+        id.startsWith("stream:subsonic:") -> "subsonic://record/" + id.removePrefix("stream:subsonic:")
+        id.startsWith("stream:dizzylab:") -> "https://www.dizzylab.net/stream-record/" + java.net.URLEncoder.encode(id,"UTF-8")
+        id.startsWith("webdav:") -> original.ifBlank { "webdav://record/" + id.removePrefix("webdav:") }
+        else -> publicAddress(uri)
+    }
+    val savedReference = when {
+        id.startsWith("stream:subsonic:") -> listOf(sourceReference,sourcePath,previous?.sourceReference.orEmpty()).firstOrNull { it.startsWith("subsonic|") }
+            ?: "subsonic|" + id.removePrefix("stream:subsonic:").replace(':','|')
+        id.startsWith("stream:dizzylab:") -> dizzyPage
+        TrackIdentity.isStreaming(this) -> original
+        else -> sourceReference
+    }
+    val savedPath = when {
+        id.startsWith("stream:subsonic:") -> savedReference
+        id.startsWith("stream:dizzylab:") -> dizzyPage
+        id.startsWith("webdav:") -> original.ifBlank { savedUri }
+        else -> publicAddress(sourcePath)
+    }
+    val savedArtworkReference = if (id.startsWith("stream:subsonic:"))
+        listOf(artworkReference, previous?.artworkReference.orEmpty()).firstOrNull { it.startsWith("subsonic|") }.orEmpty()
+        else publicAddress(artworkReference.ifBlank { previous?.artworkReference.orEmpty() })
+    return copy(uri = savedUri, sourcePath = savedPath, sourceReference = savedReference,
+        artworkPath = publicAddress(artworkPath), artworkReference = savedArtworkReference)
 }
 

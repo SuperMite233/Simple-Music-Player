@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Build', 'Check', 'Test', 'Lint', 'Install', 'Emulator')]
+    [ValidateSet('Build', 'Check', 'Test', 'Lint', 'Install', 'Emulator', 'Audit', 'Release')]
     [string]$Task = 'Check',
     [string]$AndroidRoot = 'D:\Android',
     [string]$Avd = 'Medium_Phone',
@@ -43,6 +43,8 @@ $smpTasks = switch ($Task) {
     'Build' { @(':app:assembleDebug') }
     'Install' { @(':app:assembleDebug') }
     'Test' { @(':app:testDebugUnitTest') }
+    'Release' { @(':app:assembleRelease', ':app:lintRelease') }
+    'Audit' { @(':app:assembleDebug', ':app:assembleDebugAndroidTest', ':app:testDebugUnitTest', ':app:lintDebug') }
     'Lint' { @(':app:lintDebug') }
     default { @(':app:assembleDebug', ':app:testDebugUnitTest', ':app:lintDebug') }
 }

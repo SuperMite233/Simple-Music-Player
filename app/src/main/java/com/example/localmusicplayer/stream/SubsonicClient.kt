@@ -1,6 +1,7 @@
 package com.supermite.smp.stream
 
 import com.supermite.smp.data.SubsonicServer
+import com.supermite.smp.logging.AppLogger
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
@@ -74,6 +75,7 @@ class SubsonicClient(
     private val server: SubsonicServer,
     private val weakNetworkMode: Boolean = false
 ) {
+    val cacheIdentity: String get() = server.id
     private val baseUrl = buildBaseUrl(server.url, server.port)
     private val httpClient = buildHttpClient(server.ignoreCert)
     private val random = SecureRandom()
@@ -185,6 +187,7 @@ class SubsonicClient(
     fun fetchBytes(url: String): ByteArray {
         val request = Request.Builder().url(url).get().build()
         httpClient.newCall(request).execute().use { response ->
+            AppLogger.debug("SUBSONIC", "Resource ${request.url.encodedPath}: HTTP ${response.code}")
             if (!response.isSuccessful) error("HTTP ${response.code}")
             return response.body?.bytes() ?: ByteArray(0)
         }
@@ -218,8 +221,10 @@ class SubsonicClient(
     }
 
     private fun call(method: String, params: List<Pair<String, String>>): JSONObject {
+        val started = System.nanoTime()
         val request = Request.Builder().url(endpointUrl(method, params)).get().build()
         httpClient.newCall(request).execute().use { response ->
+            AppLogger.debug("SUBSONIC", "$method: HTTP ${response.code}; ${(System.nanoTime()-started)/1_000_000}ms")
             val text = response.body?.string().orEmpty()
             if (!response.isSuccessful) error("HTTP ${response.code}: ${text.take(240)}")
             val root = JSONObject(text).optJSONObject("subsonic-response") ?: JSONObject(text)

@@ -8,5 +8,8 @@ local.properties
 .idea/
 *.jks
 *.keystore
+*.p12
+signing.properties
+signing-*.properties
 *.apk
 release-artifacts/

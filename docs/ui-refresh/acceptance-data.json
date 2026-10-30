@@ -1,0 +1,5172 @@
+{
+  "version": "beta-2.0.0-20261030",
+  "suite": "ui-refresh",
+  "apkSha256": "23a3ed262a72cf57afc9809e2a3c739082d552a8b86950eb68759f94b8aa7bbb",
+  "screenshots": 518,
+  "assertions": 101,
+  "runs": [
+    {
+      "run": "refresh-light",
+      "scope": "full",
+      "theme": "light",
+      "fontScale": 1,
+      "widthDp": 375,
+      "heightDp": 750,
+      "androidApi": "37",
+      "instrumentationSha256": "362f0a4afd63f5c241b2f0a9b92ab0b20a6cbc5b2ea661c2496878c6bec39d34",
+      "captureRecords": 106,
+      "assertions": [
+        {
+          "name": "mini_unframed",
+          "ok": true
+        },
+        {
+          "name": "mini_seek_does_not_skip",
+          "ok": true
+        },
+        {
+          "name": "mini_swipe_changes_track",
+          "ok": true
+        },
+        {
+          "name": "long_title_single_line",
+          "ok": true
+        },
+        {
+          "name": "long_title_original_tap_gesture",
+          "ok": true
+        },
+        {
+          "name": "long_title_original_up_gesture",
+          "ok": true
+        },
+        {
+          "name": "source_dropdown_affordance",
+          "ok": true
+        },
+        {
+          "name": "player_theme_dark",
+          "ok": true
+        },
+        {
+          "name": "player_theme_light",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_long_list",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_append_keeps_position",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_load_more_affordance",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_detail_back_keeps_position",
+          "ok": true
+        },
+        {
+          "name": "cache_logs_switch_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_logs_actions_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_temporary_switch_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_temporary_actions_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_settings_bottom",
+          "ok": true
+        }
+      ],
+      "screenshots": [
+        {
+          "name": "playlists",
+          "file": "build/visual-audit/refresh-light/playlists.png",
+          "sha256": "998ab2282a0dae08a05cd4ac9c0464cf7a5833a88e10f71a2ae2e15475870cfe",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library",
+          "file": "build/visual-audit/refresh-light/library.png",
+          "sha256": "b1d0a5c1dab0a978d2e8836080a953d6108c35acd7d8d1ec577aca24a03511cc",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "scan",
+          "file": "build/visual-audit/refresh-light/scan.png",
+          "sha256": "35ea312dce8d14c058e92bf14d630e1685249014b72d5707cf00c011fa0bdce7",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "now_playing",
+          "file": "build/visual-audit/refresh-light/now_playing.png",
+          "sha256": "a4daf52e8f7ba28b177ff87404f0c80ffc2b69ef8c49eb6dbb0edd5e244cce73",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "settings",
+          "file": "build/visual-audit/refresh-light/settings.png",
+          "sha256": "f73760c10a8c5f27fa4d85a25ee019c9ebefd9822ef2e9f4b339020bec0b355a",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "streaming",
+          "file": "build/visual-audit/refresh-light/streaming.png",
+          "sha256": "759c5c829f8a6fc1a4662a38608fdcb838c02451088f0b02ef18b8f0c6dfaf84",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_account",
+          "file": "build/visual-audit/refresh-light/dizzylab_account.png",
+          "sha256": "8c14aa3126045603e6494529df46bd010494178090e22b0b75ba431396827aca",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library_filters",
+          "file": "build/visual-audit/refresh-light/library_filters.png",
+          "sha256": "f9937d7ae18bab2a978be88e43504bbf13883ab69f9d317b2b5c6c55d5f82e5c",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "",
+              "widthDp": 319.2381,
+              "heightDp": 44.190475
+            }
+          ]
+        },
+        {
+          "name": "playlist_detail",
+          "file": "build/visual-audit/refresh-light/playlist_detail.png",
+          "sha256": "ac21f7627ac2986952041dd272bc61e35913b8a714604111d978e5c2ea4cf1cf",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_music",
+          "file": "build/visual-audit/refresh-light/dizzylab_music.png",
+          "sha256": "5a8f7a366fe4f1ce3ee7098f569f77316e8be3cbf998b090df38354872bf2814",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_album",
+          "file": "build/visual-audit/refresh-light/dizzylab_album.png",
+          "sha256": "6f584278f032a2d9d670673ccb50aa433fa4a807e0600e58bfc70f6fe8009c1f",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "晨光序曲 · Morning Light：更多操作",
+              "widthDp": 48,
+              "heightDp": 8.380953
+            }
+          ]
+        },
+        {
+          "name": "dizzylab_feed",
+          "file": "build/visual-audit/refresh-light/dizzylab_feed.png",
+          "sha256": "c1c4ea3be46176ec6223e893d93783ca75c15d116da4bad7650b2f02bf8f92cd",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_following",
+          "file": "build/visual-audit/refresh-light/dizzylab_following.png",
+          "sha256": "d8f68af02d0864284f5f4d775e0cdd744b8b978b25482d0bd986eccac6f76b67",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "webdav_browser",
+          "file": "build/visual-audit/refresh-light/webdav_browser.png",
+          "sha256": "4cda55f13202d20134efd6f89e0a0d3b8c4d884d4155b85ef87b7b5e0b1a07eb",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_home",
+          "file": "build/visual-audit/refresh-light/subsonic_home.png",
+          "sha256": "1e433db2695bce8fde7fb5ba3b6f9b13eaf2507b8c7765b40f516f42cc162aa8",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_search",
+          "file": "build/visual-audit/refresh-light/subsonic_search.png",
+          "sha256": "71afbd6242f251b02b4fe2017e4390c10a4be564a4a73d351b8fbd2040d06e7f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_artists",
+          "file": "build/visual-audit/refresh-light/subsonic_artists.png",
+          "sha256": "d2c1c8d87735b09dec49158afc20f7e7e1176fb3af61eb46757cbaff11bbb65f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_songs",
+          "file": "build/visual-audit/refresh-light/subsonic_songs.png",
+          "sha256": "2a9501a491b71b33a72564e0d26fb1513fea205dd7933dccb966cef0748c0a2f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_albums",
+          "file": "build/visual-audit/refresh-light/subsonic_albums.png",
+          "sha256": "332a8125639c623148df1ca7578a9740cd0725fa016e5d6d235aa5092e1918c9",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_playlists",
+          "file": "build/visual-audit/refresh-light/subsonic_playlists.png",
+          "sha256": "48199713ce96293e9c12c126f1616f194478a597c6609b46b46b088820c90014",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_artist_detail",
+          "file": "build/visual-audit/refresh-light/subsonic_artist_detail.png",
+          "sha256": "5bf05f7452a6f3630ace1d48ec1daa9ed346c9643298e383a6bfb8df81c1491d",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_album_detail",
+          "file": "build/visual-audit/refresh-light/subsonic_album_detail.png",
+          "sha256": "98da0ab44e0be45176f8fa72ce6e30b3a277e550f3ac7d8afc61483de220ade2",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_playlist_detail",
+          "file": "build/visual-audit/refresh-light/subsonic_playlist_detail.png",
+          "sha256": "0f6220c91a5536c1b20502cd7480a5a15cd496c66f2a441ce73b4f42d5d28615",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library_selection",
+          "file": "build/visual-audit/refresh-light/library_selection.png",
+          "sha256": "09be945cd3a65d3c8144897f316a5ef6adf48f68540efcce8c1fe61c39a70dd4",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showAccountDialog",
+          "file": "build/visual-audit/refresh-light/showAccountDialog.png",
+          "sha256": "8d6c5ccf34634551d98a4bf0fd0a3a25c2f5020a87be54871d2b6a57594b13a8",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showLocalProfileDialog",
+          "file": "build/visual-audit/refresh-light/showLocalProfileDialog.png",
+          "sha256": "69bb6ea5212969613ed3a435f1de4564334df80860e5efd79125841bb5a32809",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showStreamingAccountsDialog",
+          "file": "build/visual-audit/refresh-light/showStreamingAccountsDialog.png",
+          "sha256": "319348664dcc3327490e190a4329d7b15da611a9cee1bde0201a2408cb5b066c",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showAppearanceSettingsDialog",
+          "file": "build/visual-audit/refresh-light/showAppearanceSettingsDialog.png",
+          "sha256": "617623adc3f6d2d24d671c4d0457fed15da11d20c60da936efa70904666dc0c6",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showDarkModeDialog",
+          "file": "build/visual-audit/refresh-light/showDarkModeDialog.png",
+          "sha256": "2a3861b6d812d106fd4abbfa6db13185a17ec51517eae6fadd74a6b70437162f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showThemeSettingsDialog",
+          "file": "build/visual-audit/refresh-light/showThemeSettingsDialog.png",
+          "sha256": "14e383836062ddcc8785aa093429b811800484c7577cf4259bb58488a7e64675",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showBackgroundSettingsDialog",
+          "file": "build/visual-audit/refresh-light/showBackgroundSettingsDialog.png",
+          "sha256": "d36208c566accc1130c7b91512a1c1f700cc04883bca74a16203f0847529cc27",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showPermissionSettingsDialog",
+          "file": "build/visual-audit/refresh-light/showPermissionSettingsDialog.png",
+          "sha256": "ebb63f43042bb3446bcb50addee114e5390e8c68280bc5f4d6fe68de88e92897",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showAllFilesAccessDialog",
+          "file": "build/visual-audit/refresh-light/showAllFilesAccessDialog.png",
+          "sha256": "c661d12c8d801bd6ece8b727abc6fd368dd0860aad7abfa83a0901a2cdeceaa4",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showNotificationSettingsDialog",
+          "file": "build/visual-audit/refresh-light/showNotificationSettingsDialog.png",
+          "sha256": "c882296c1eaffce7a25e1f41b43f756b1c3741b17aaf82ab5113e3faec64fa1f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showPlaybackSettingsDialog",
+          "file": "build/visual-audit/refresh-light/showPlaybackSettingsDialog.png",
+          "sha256": "56cb9bf4791d342896aeb2f5012c8915ba6506b18e93b021d51183c5d45d8fa0",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showStreamingSettingsDialog",
+          "file": "build/visual-audit/refresh-light/showStreamingSettingsDialog.png",
+          "sha256": "92e388268671a6c585c1c219f2ad212efe89d72a25e7651b430ccb07d171330d",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showEqualizerDialog",
+          "file": "build/visual-audit/refresh-light/showEqualizerDialog.png",
+          "sha256": "db43ab4d7a46bc02966e1b71416d2cf150828152661051832787474a55603964",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showFloatingLyricsSettingsDialog",
+          "file": "build/visual-audit/refresh-light/showFloatingLyricsSettingsDialog.png",
+          "sha256": "513c80b700c06f8b61d73e7766f842685cefd8f4b81b3600df0871843cf70336",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showStorageSettingsDialog",
+          "file": "build/visual-audit/refresh-light/showStorageSettingsDialog.png",
+          "sha256": "72c261d0e8d3d53c32f3f9b2b1b787827d2ad7c0c92a181ff88681cf5fd52bfe",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showCacheSettingsDialog",
+          "file": "build/visual-audit/refresh-light/showCacheSettingsDialog.png",
+          "sha256": "a6ee6e810afc5dbb4bcb8578a12b9c6c9289287755bb4d930e3b284afb9cd2ba",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showDiagnosticsDialog",
+          "file": "build/visual-audit/refresh-light/showDiagnosticsDialog.png",
+          "sha256": "669a9d6995aaee648b6cebfda20b957ce0f98e104e7ca760bcf4d215808ceec0",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showLogPreviewDialog",
+          "file": "build/visual-audit/refresh-light/showLogPreviewDialog.png",
+          "sha256": "ee84c08dfb4f94396c52e5c48a6f36ffdeb524010b586ff006172215c90af897",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showScanSettingsDialog",
+          "file": "build/visual-audit/refresh-light/showScanSettingsDialog.png",
+          "sha256": "e2a1fbbee17b96803c432506fb33e277aac96433c0ed2be5b4291780f318e7bb",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showStreamCacheLimitDialog",
+          "file": "build/visual-audit/refresh-light/showStreamCacheLimitDialog.png",
+          "sha256": "e2a8fa0b9fe6be569df379834dda6c262075fc039cb3e3c3913cbd105f4efa1f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showOutputDirectoryDialog",
+          "file": "build/visual-audit/refresh-light/showOutputDirectoryDialog.png",
+          "sha256": "43f1c8b048ebd18cfabeedbb26951d5a1b41b81c67e5180fbc542f28823df8ce",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showConfigDialog",
+          "file": "build/visual-audit/refresh-light/showConfigDialog.png",
+          "sha256": "bcdebf7a4224f46f46c105cbee9b5f8d0e19d39469640f484d0f1907ecb3d73e",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showDownloadListDialog",
+          "file": "build/visual-audit/refresh-light/showDownloadListDialog.png",
+          "sha256": "da666188a12023923e6b8e9359b99189f3bbbc5a0910bf17a2d2761f2ee344c6",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showSoftwareDetailsDialog",
+          "file": "build/visual-audit/refresh-light/showSoftwareDetailsDialog.png",
+          "sha256": "8f51b30f8ffbbbb31ac746b58a6a70dfe03b0ca6470dcf9c3273771b1bd935f7",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showUpdateSettingsDialog",
+          "file": "build/visual-audit/refresh-light/showUpdateSettingsDialog.png",
+          "sha256": "5f05e45d452ee641c68577b853986d99f3e36955324388b15d1d32acbf7c5431",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showReadmeDialog",
+          "file": "build/visual-audit/refresh-light/showReadmeDialog.png",
+          "sha256": "2b6f1e628772e8c07cfd0f6d7b8ee9a65a179c246eeff0039084db6006954059",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showPlaybackModeDialog",
+          "file": "build/visual-audit/refresh-light/showPlaybackModeDialog.png",
+          "sha256": "d03b29246cc6428d4f612bdf25a00769bb0cdd6bb417b1f27cabe3bb7009a6ba",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showSpeedDialog",
+          "file": "build/visual-audit/refresh-light/showSpeedDialog.png",
+          "sha256": "a5229175ac4181defa90484ec65f66dd9935e6b55f173f408a6eee32e84aa8c1",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showCurrentQueueDialog",
+          "file": "build/visual-audit/refresh-light/showCurrentQueueDialog.png",
+          "sha256": "39d35de728d72d4eb5d886970f60353de2c8cc788737954e580590078268c73a",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showVolumeDialog",
+          "file": "build/visual-audit/refresh-light/showVolumeDialog.png",
+          "sha256": "51f0e4363dfc0a10f748d8abd49726e3ad9cf698f5f77bb24cdbbc77de148cc4",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showSubsonicManagementDialog",
+          "file": "build/visual-audit/refresh-light/showSubsonicManagementDialog.png",
+          "sha256": "b99753e5daacb58b6bf93826ff1caa5d53a5a792a892d4f5bddc281ef35a10a2",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showWebDavManagementDialog",
+          "file": "build/visual-audit/refresh-light/showWebDavManagementDialog.png",
+          "sha256": "4d8ad0b297e18ab073ac5c5cc48c1326bf2a90272174de61915bc019de0fd1f7",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showDizzylabRedemption",
+          "file": "build/visual-audit/refresh-light/showDizzylabRedemption.png",
+          "sha256": "37224a7e2785b807e3f6e1048b77673bb5d7d5a23ee7dcc66daac98079a54e43",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cdk_inline_error",
+          "file": "build/visual-audit/refresh-light/cdk_inline_error.png",
+          "sha256": "40ffabad230b6c239dba6887b43f887a068142174ab942a7f39f70b37a614464",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "webview_chrome",
+          "file": "build/visual-audit/refresh-light/webview_chrome.png",
+          "sha256": "44f54eda4f1d96da9f176254b413d324372f312896bd75d659a9f866a1b55095",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showPlaylistMetaDialog",
+          "file": "build/visual-audit/refresh-light/showPlaylistMetaDialog.png",
+          "sha256": "19c26927a7adf355496ed8814501d7dedfca6691e7d30b226745a1e00b438a43",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showEditDialog",
+          "file": "build/visual-audit/refresh-light/showEditDialog.png",
+          "sha256": "6b8b7d47ed4af31d674cfb76e92a46d2af7c6c21c73382f528da42c838e3642f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showAudioMetadataEditDialog",
+          "file": "build/visual-audit/refresh-light/showAudioMetadataEditDialog.png",
+          "sha256": "bfd8c51a95c25a53256d78db7a644683c0cb6dada37efa97fdd7bb9bb1989b2b",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "流动的声音",
+              "widthDp": 272.38095,
+              "heightDp": 25.142857
+            }
+          ]
+        },
+        {
+          "name": "showTrackDetailsDialog",
+          "file": "build/visual-audit/refresh-light/showTrackDetailsDialog.png",
+          "sha256": "c128b66903eb0c251160b404f44bbd78de23e115cb7fd091521efcf80d158be6",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showNowPlayingMenu",
+          "file": "build/visual-audit/refresh-light/showNowPlayingMenu.png",
+          "sha256": "c1366797890b31d69a6329b1523ed6065d974a9cf2e8496d438f13df40895dd1",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showAddToPlaylistDialog",
+          "file": "build/visual-audit/refresh-light/showAddToPlaylistDialog.png",
+          "sha256": "2c3744db5868933567f0cc59b5055d3804c0f62480dd9f70e9b65ab7ab66ad8d",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showSaveEqualizerPresetDialog",
+          "file": "build/visual-audit/refresh-light/showSaveEqualizerPresetDialog.png",
+          "sha256": "8ad4f7dacc97dce680b2fd8a5d278fcc1e2ad7aca6e68bfe8140a848427d779b",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showSubsonicEditDialog",
+          "file": "build/visual-audit/refresh-light/showSubsonicEditDialog.png",
+          "sha256": "dba6ff05a78d5b0bc89b0063db3b870e3e4c1533dd7bfbdbd7da864774ded587",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showWebDavEditDialog",
+          "file": "build/visual-audit/refresh-light/showWebDavEditDialog.png",
+          "sha256": "af604ad494d52714cfcd0a502b5571459a850560c039391ba95474f0d0d8eb08",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showCreatePlaylistDialog",
+          "file": "build/visual-audit/refresh-light/showCreatePlaylistDialog.png",
+          "sha256": "7c8344c4bb1383a5ca021fb3a272cbbd8aa9b2d7d85d80b1cce1a75df997256e",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showCreateSubsonicPlaylistDialog",
+          "file": "build/visual-audit/refresh-light/showCreateSubsonicPlaylistDialog.png",
+          "sha256": "1acc3995268d905955050dd598ce17bab3386a82004fee940570ed37d0284cab",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "server_form_keyboard",
+          "file": "build/visual-audit/refresh-light/server_form_keyboard.png",
+          "sha256": "dba6ff05a78d5b0bc89b0063db3b870e3e4c1533dd7bfbdbd7da864774ded587",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "server_keyboard_visible",
+          "file": "build/visual-audit/refresh-light/server_keyboard_visible.png",
+          "sha256": "cc4cbd7d01ba7d962b06a7b1df038003df3f84b755331627212dfc6bdd17172f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "saved_theme",
+          "file": "build/visual-audit/refresh-light/saved_theme.png",
+          "sha256": "b35a46cd4b7747796d535f4dd5bfc898288f1e8b6095d3f03e264706afd4606d",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_redeem_web_notice",
+          "file": "build/visual-audit/refresh-light/dizzylab_redeem_web_notice.png",
+          "sha256": "c955afb9b763f27b5626703b0406e6df95b81d64618d11f2f87be55b1675a8ea",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "scan_folders",
+          "file": "build/visual-audit/refresh-light/scan_folders.png",
+          "sha256": "5619564eaeeb6126b1dd4263fd02595660b7e72110640505de78f33bdc4fcf7d",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "saved_dark_mode",
+          "file": "build/visual-audit/refresh-light/saved_dark_mode.png",
+          "sha256": "e7802f7875461ce0c1f751e05c948b330ef5100b36edf62553d7670c1dcc7bb0",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "system_mode",
+          "file": "build/visual-audit/refresh-light/system_mode.png",
+          "sha256": "b35a46cd4b7747796d535f4dd5bfc898288f1e8b6095d3f03e264706afd4606d",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "first_launch",
+          "file": "build/visual-audit/refresh-light/first_launch.png",
+          "sha256": "7184771516205e7966492d192975db4e7f21ea7bc0805213986085baeb6e77bc",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "background_image",
+          "file": "build/visual-audit/refresh-light/background_image.png",
+          "sha256": "e2ad23bb65b98e1c0d7cf7747641fcb3712d1ae454dbc70e8e2d82832cdde582",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "mini_unframed",
+          "file": "build/visual-audit/refresh-light/mini_unframed.png",
+          "sha256": "7bb5cc02d3ed065904bb6c941d1fc94d31c720523837065713c5152943dcacce",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "",
+              "widthDp": 319.2381,
+              "heightDp": 44.190475
+            }
+          ]
+        },
+        {
+          "name": "mini_seek_does_not_skip",
+          "file": "build/visual-audit/refresh-light/mini_seek_does_not_skip.png",
+          "sha256": "57408079db125f800afb1af051945d1b8ff93fea2e83c443bc68463538e34b9f",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "",
+              "widthDp": 319.2381,
+              "heightDp": 44.190475
+            }
+          ]
+        },
+        {
+          "name": "mini_swipe_changes_track",
+          "file": "build/visual-audit/refresh-light/mini_swipe_changes_track.png",
+          "sha256": "5324efb62888d4e78ce711c12f971321e34b8157912a4118a369de4c6cb64cd7",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "",
+              "widthDp": 319.2381,
+              "heightDp": 44.190475
+            }
+          ]
+        },
+        {
+          "name": "long_title_single_line",
+          "file": "build/visual-audit/refresh-light/long_title_single_line.png",
+          "sha256": "b946d469c8199c299daa9306d0e956c9540378f2a79144ceda37fdf6173f350d",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "long_title_original_tap_gesture",
+          "file": "build/visual-audit/refresh-light/long_title_original_tap_gesture.png",
+          "sha256": "6f374ad577716c3e2c55542462549c91523d09f1476d85c16b748f33610fef53",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "long_title_original_up_gesture",
+          "file": "build/visual-audit/refresh-light/long_title_original_up_gesture.png",
+          "sha256": "b43ef55436fdc1bd48d84aebc865aa5a84df729c45b17605d818db6edc8adb44",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "source_dropdown_affordance",
+          "file": "build/visual-audit/refresh-light/source_dropdown_affordance.png",
+          "sha256": "5cd4fc737ba0268484aa6de3636d1abe432711f8f9796583183cf5d224b8aa95",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "player_theme_dark",
+          "file": "build/visual-audit/refresh-light/player_theme_dark.png",
+          "sha256": "b210c5ac3c61ec9efba251cc55d0e4c862f860dc8aed5d8f3f4aedcd5b561170",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "player_theme_light",
+          "file": "build/visual-audit/refresh-light/player_theme_light.png",
+          "sha256": "7e1e157900ba1f924363e6aedb2178bbd10c25ba9ba9675c18614795b443f3fe",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_long_list",
+          "file": "build/visual-audit/refresh-light/dizzylab_long_list.png",
+          "sha256": "09ee02e96f1e77ff9df42cf4df2a61bb564c1bb84c36e0dcc04c613d58e5f13f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_append_keeps_position",
+          "file": "build/visual-audit/refresh-light/dizzylab_append_keeps_position.png",
+          "sha256": "b2a380b4bcaced9f8af3eb0083d7c271b95bb9169ad723700b606b73e10fd455",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_load_more_affordance",
+          "file": "build/visual-audit/refresh-light/dizzylab_load_more_affordance.png",
+          "sha256": "ec7d354680ac57ebfe1bba8fb86d31f722116bce2c9d7cc2ba8529e802cd61d7",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_detail_back_keeps_position",
+          "file": "build/visual-audit/refresh-light/dizzylab_detail_back_keeps_position.png",
+          "sha256": "173b206a70d1717e9c1439ea534328505b3aad0c51989e3af6718fad981a6694",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_logs_switch_reachable",
+          "file": "build/visual-audit/refresh-light/cache_logs_switch_reachable.png",
+          "sha256": "1b2aafeae684603f52ce2162cef6192e07559462d2fa01441139dfe8a0964c04",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "保留目录索引，0 B · 上限 32 MiB",
+              "widthDp": 52.190475,
+              "heightDp": 46.857143
+            }
+          ]
+        },
+        {
+          "name": "cache_logs_actions_reachable",
+          "file": "build/visual-audit/refresh-light/cache_logs_actions_reachable.png",
+          "sha256": "8186be3ebe3b52fcc4c652cc80c29980f65e2e43c672021b0eb06605c0f9df2d",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_temporary_switch_reachable",
+          "file": "build/visual-audit/refresh-light/cache_temporary_switch_reachable.png",
+          "sha256": "e1e2dcf833d349ad008302fbfa158f37a36e875339bbb3cd319370ce3c09dc96",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "保留运行日志，207.7 KB · 上限 32 MiB",
+              "widthDp": 52.190475,
+              "heightDp": 24.380953
+            }
+          ]
+        },
+        {
+          "name": "cache_temporary_actions_reachable",
+          "file": "build/visual-audit/refresh-light/cache_temporary_actions_reachable.png",
+          "sha256": "7cf9352b49f8410e8b90fc78811bca7c764afe0efa57633d656fb7d118dbb026",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_settings_bottom",
+          "file": "build/visual-audit/refresh-light/cache_settings_bottom.png",
+          "sha256": "92d0202f50960cf5ad312cfd58390a7988285af4fb7d8a3880cba210b5e0b7ce",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "保留转换与导出临时文件，0 B · 上限 64 MiB",
+              "widthDp": 52.190475,
+              "heightDp": 30.095238
+            }
+          ]
+        },
+        {
+          "name": "showLogRetentionDialog",
+          "file": "build/visual-audit/refresh-light/showLogRetentionDialog.png",
+          "sha256": "9917f5d12249c39abbdfa85f4a9f3d495def4e8498bd54e7fb4b8e8a2291a9d7",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showLogSelectionDialog",
+          "file": "build/visual-audit/refresh-light/showLogSelectionDialog.png",
+          "sha256": "dcc2002974b10b1ed680b6f6d182cc18b682cb3b2f89fe263a3f23d14bc0648c",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "refresh_settings",
+          "file": "build/visual-audit/refresh-light/refresh_settings.png",
+          "sha256": "8c14d4dc093bc76cf6e0ead8b5429c6096c8739336cb80ebd48c623c2731d58a",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_guest",
+          "file": "build/visual-audit/refresh-light/dizzylab_guest.png",
+          "sha256": "ecc89999954ef4a89b503417f53b7dfdb372aa18c901a31779dfe3ed1f9caf89",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_error",
+          "file": "build/visual-audit/refresh-light/dizzylab_error.png",
+          "sha256": "1a17d3ee84f7b426efcf9bb5040378b1be4841e2bea69c9ced5ffffd5aaa1786",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "搜索 Dizzylab 专辑",
+              "widthDp": 257.14285,
+              "heightDp": 36.190475
+            },
+            {
+              "label": "搜索",
+              "widthDp": 77.71429,
+              "heightDp": 36.190475
+            }
+          ]
+        },
+        {
+          "name": "empty_library",
+          "file": "build/visual-audit/refresh-light/empty_library.png",
+          "sha256": "b03739cd4438dd225ca1ee2234d8da585ced73d793003c24926797c164548429",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        }
+      ]
+    },
+    {
+      "run": "refresh-dark",
+      "scope": "full",
+      "theme": "dark",
+      "fontScale": 1,
+      "widthDp": 375,
+      "heightDp": 750,
+      "androidApi": "37",
+      "instrumentationSha256": "362f0a4afd63f5c241b2f0a9b92ab0b20a6cbc5b2ea661c2496878c6bec39d34",
+      "captureRecords": 106,
+      "assertions": [
+        {
+          "name": "mini_unframed",
+          "ok": true
+        },
+        {
+          "name": "mini_seek_does_not_skip",
+          "ok": true
+        },
+        {
+          "name": "mini_swipe_changes_track",
+          "ok": true
+        },
+        {
+          "name": "long_title_single_line",
+          "ok": true
+        },
+        {
+          "name": "long_title_original_tap_gesture",
+          "ok": true
+        },
+        {
+          "name": "long_title_original_up_gesture",
+          "ok": true
+        },
+        {
+          "name": "source_dropdown_affordance",
+          "ok": true
+        },
+        {
+          "name": "player_theme_dark",
+          "ok": true
+        },
+        {
+          "name": "player_theme_light",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_long_list",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_append_keeps_position",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_load_more_affordance",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_detail_back_keeps_position",
+          "ok": true
+        },
+        {
+          "name": "cache_logs_switch_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_logs_actions_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_temporary_switch_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_temporary_actions_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_settings_bottom",
+          "ok": true
+        }
+      ],
+      "screenshots": [
+        {
+          "name": "playlists",
+          "file": "build/visual-audit/refresh-dark/playlists.png",
+          "sha256": "1d13877b1dce53dec390af8204e1b3bff782632f995e87fda2a10c26defea769",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library",
+          "file": "build/visual-audit/refresh-dark/library.png",
+          "sha256": "ba6277a077297d2339fcda071588068b9b74b31f510089c34608e3321f969fec",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "scan",
+          "file": "build/visual-audit/refresh-dark/scan.png",
+          "sha256": "f2a592136f446f335083571f5303c0cb1d7d100a96c762ab80ea6a5251728493",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "now_playing",
+          "file": "build/visual-audit/refresh-dark/now_playing.png",
+          "sha256": "22ccbd51019be900b9472ccac2ed8f2c26696f3b09a6dec757bf53015fcd1e29",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "settings",
+          "file": "build/visual-audit/refresh-dark/settings.png",
+          "sha256": "496a9d4faad35d3e5d281cc04c93e5642ab0815262e213ccbf20c1a078d58aba",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "streaming",
+          "file": "build/visual-audit/refresh-dark/streaming.png",
+          "sha256": "5da87fca18b49c1e70e249e5384e0457466e0c3b0ba4e9383f390363317fcef6",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_account",
+          "file": "build/visual-audit/refresh-dark/dizzylab_account.png",
+          "sha256": "a8411caaea7c9a94870a5b3d0f840492886792cd6c79ac0c6bc2184c6bdea8ed",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library_filters",
+          "file": "build/visual-audit/refresh-dark/library_filters.png",
+          "sha256": "9aa1bb62f6976697172c3bc4f169d50d2d03f6f63d22c2deceecad1764a5602c",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "",
+              "widthDp": 319.2381,
+              "heightDp": 44.190475
+            }
+          ]
+        },
+        {
+          "name": "playlist_detail",
+          "file": "build/visual-audit/refresh-dark/playlist_detail.png",
+          "sha256": "085ea4203908ba523b8d2d82f4a30f6bd466cd3c5a2109fe1942674b99a53453",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_music",
+          "file": "build/visual-audit/refresh-dark/dizzylab_music.png",
+          "sha256": "f734c01c2474c01128c95b7e3bdc2de3c67bc4e48bf0af3af8d2b4a73a812c68",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_album",
+          "file": "build/visual-audit/refresh-dark/dizzylab_album.png",
+          "sha256": "5496763668fa405e49c7c6a21cdbf6c9246b9e5ac72eb0089835bdfc4c6e6be0",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "晨光序曲 · Morning Light：更多操作",
+              "widthDp": 48,
+              "heightDp": 8.380953
+            }
+          ]
+        },
+        {
+          "name": "dizzylab_feed",
+          "file": "build/visual-audit/refresh-dark/dizzylab_feed.png",
+          "sha256": "b78dddf86a57c45055cb18b3927f80798c06bd4ea4c3df7c2edacd4aada1a0bf",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_following",
+          "file": "build/visual-audit/refresh-dark/dizzylab_following.png",
+          "sha256": "ca1b4b38e0b63c8a503d50a847a66b71785f0315cbf64a5037bffa045463969e",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "webdav_browser",
+          "file": "build/visual-audit/refresh-dark/webdav_browser.png",
+          "sha256": "fef027a450775e14bbd24b3acc57bcff0b414d75c84ae97bbd16de6d6797514f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_home",
+          "file": "build/visual-audit/refresh-dark/subsonic_home.png",
+          "sha256": "7ffcc259855bcc794398eded384084a3e3aaff7730f63dddcf41ba8b07cd581f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_search",
+          "file": "build/visual-audit/refresh-dark/subsonic_search.png",
+          "sha256": "70aeb2f36c50397f036c9a80563c55c361b99e0075ea47d5b918d05af99b6c55",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_artists",
+          "file": "build/visual-audit/refresh-dark/subsonic_artists.png",
+          "sha256": "6d6d7e3da3a200a376278f25d74a8d90acc59be3a233b3e888f6367747d9ddf8",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_songs",
+          "file": "build/visual-audit/refresh-dark/subsonic_songs.png",
+          "sha256": "0ffe9a0bd4084eeac4cacbd6083fcf0a88a8cb198b7d5ec9c217f04462fb9934",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_albums",
+          "file": "build/visual-audit/refresh-dark/subsonic_albums.png",
+          "sha256": "9d7a955f68c7cddff5022de5e9af1c83911f70373d26a8158113491532b4b78c",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_playlists",
+          "file": "build/visual-audit/refresh-dark/subsonic_playlists.png",
+          "sha256": "79668bf3dd20e81a9cc6cf0686e1355573473489060d8e477b804ac85384b310",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_artist_detail",
+          "file": "build/visual-audit/refresh-dark/subsonic_artist_detail.png",
+          "sha256": "9d04b8fce054db612fa4ff69a7b9b257804563507672072233ea6ae3c8100e98",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_album_detail",
+          "file": "build/visual-audit/refresh-dark/subsonic_album_detail.png",
+          "sha256": "60ad3bbe95491a3b8fc72139a6bcc57f6c305bd1c57bd02c49cbb842e13017f3",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_playlist_detail",
+          "file": "build/visual-audit/refresh-dark/subsonic_playlist_detail.png",
+          "sha256": "c8b300e13703dd28736e34ceaf5b899f53742215c53cdb4a74d0c7abcb5269e6",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library_selection",
+          "file": "build/visual-audit/refresh-dark/library_selection.png",
+          "sha256": "5e8dfff6b085e96caf21a6a0d0de4417e91d3d64ca7566a9be1d9f8ed1eb68d7",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showAccountDialog",
+          "file": "build/visual-audit/refresh-dark/showAccountDialog.png",
+          "sha256": "99d229f41587e3d380aad58bf82e0ccc9a526acfdab9b97aaec41e34fba8cfe0",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showLocalProfileDialog",
+          "file": "build/visual-audit/refresh-dark/showLocalProfileDialog.png",
+          "sha256": "599b3b6cbcefd7920e51d2dd401edfc0485d4f3c8be33e83be1802adbbf43baf",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showStreamingAccountsDialog",
+          "file": "build/visual-audit/refresh-dark/showStreamingAccountsDialog.png",
+          "sha256": "fb0893664cfc7c87adde1d636f2bf5c2cf7879c2bbb4e45f54b52b43c3a1abaa",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showAppearanceSettingsDialog",
+          "file": "build/visual-audit/refresh-dark/showAppearanceSettingsDialog.png",
+          "sha256": "b7d55ec197b7b960fd6db29edf383bd6deb64ec85d073e93a18fed62c4ea8212",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showDarkModeDialog",
+          "file": "build/visual-audit/refresh-dark/showDarkModeDialog.png",
+          "sha256": "ee7ec0530c28371a99fb12caa66ef3a8d9e97536f9984c1fb70db1b16599a528",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showThemeSettingsDialog",
+          "file": "build/visual-audit/refresh-dark/showThemeSettingsDialog.png",
+          "sha256": "56ed940bf9e1ced46224ab62e6ff30f5863b0db7584b44b1b3026dcfe2b07c6f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showBackgroundSettingsDialog",
+          "file": "build/visual-audit/refresh-dark/showBackgroundSettingsDialog.png",
+          "sha256": "8c9c21f8cacc45a2bb5d1f220faf45e6c2edcbdc8836ab0c88cc65bf1dda1ca9",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showPermissionSettingsDialog",
+          "file": "build/visual-audit/refresh-dark/showPermissionSettingsDialog.png",
+          "sha256": "19e214a98228e884c32a91f8773d20d6b6ec2956c74507cb54b6c84ed9bd79d6",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showAllFilesAccessDialog",
+          "file": "build/visual-audit/refresh-dark/showAllFilesAccessDialog.png",
+          "sha256": "e730a72ab04aa4a3da01872b65f193526e67e28149885d566c42b818ecf6d00f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showNotificationSettingsDialog",
+          "file": "build/visual-audit/refresh-dark/showNotificationSettingsDialog.png",
+          "sha256": "cad1235a31117e09d196168c3c99b800aca9e3bab29b2bd0dc003858657a1fb1",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showPlaybackSettingsDialog",
+          "file": "build/visual-audit/refresh-dark/showPlaybackSettingsDialog.png",
+          "sha256": "39c38b3b8a647caffad4f30049592f9a690aad6ff2c9ded0b8f384aed13ae697",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showStreamingSettingsDialog",
+          "file": "build/visual-audit/refresh-dark/showStreamingSettingsDialog.png",
+          "sha256": "0141176f1215d1bbe5f4398bd2b61b39faa968754aa716056ab5940610d286f8",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showEqualizerDialog",
+          "file": "build/visual-audit/refresh-dark/showEqualizerDialog.png",
+          "sha256": "a36e3138678650624567efee4b175fa13d7c73493ca84f4ee61a1ff4dd4e01a6",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showFloatingLyricsSettingsDialog",
+          "file": "build/visual-audit/refresh-dark/showFloatingLyricsSettingsDialog.png",
+          "sha256": "7ebb0ded95e508efa53229eb0492417275902fe22bfe087b572eae3352d19ce5",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showStorageSettingsDialog",
+          "file": "build/visual-audit/refresh-dark/showStorageSettingsDialog.png",
+          "sha256": "113abdd7ce97efd2e9a20719dd68cc4c61e4998eb7741da029b8a2a7f8af997a",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showCacheSettingsDialog",
+          "file": "build/visual-audit/refresh-dark/showCacheSettingsDialog.png",
+          "sha256": "564646b4177abc13bdfe42fcc0c69b970849025adc65f29ece8a4eab1c4598d0",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showDiagnosticsDialog",
+          "file": "build/visual-audit/refresh-dark/showDiagnosticsDialog.png",
+          "sha256": "4242dc39cc008753effa56ff8378ccd8a9eee0c94d135ed514eb354d6fdffaba",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showLogPreviewDialog",
+          "file": "build/visual-audit/refresh-dark/showLogPreviewDialog.png",
+          "sha256": "77a7c6fab3e5964d3ead33c0210689ceb5ee17602419f7ad2997594688af273e",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showScanSettingsDialog",
+          "file": "build/visual-audit/refresh-dark/showScanSettingsDialog.png",
+          "sha256": "a4d9295c6d8b8b2c5d34927bb683940a7d8cb0247cba5176043e4be587bc36e6",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showStreamCacheLimitDialog",
+          "file": "build/visual-audit/refresh-dark/showStreamCacheLimitDialog.png",
+          "sha256": "4e7428944e3bd717edf0a35a92e395f58e3a192914f7cb737b4b08b7f969da1e",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showOutputDirectoryDialog",
+          "file": "build/visual-audit/refresh-dark/showOutputDirectoryDialog.png",
+          "sha256": "ab92e7d5c51af6b762d933e61815377552c795938fdef7d12e6c4a59d8e44f2e",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showConfigDialog",
+          "file": "build/visual-audit/refresh-dark/showConfigDialog.png",
+          "sha256": "084ea9cc3b220d79d67700272347e2b33dc81588575d40108fe8ee5de3f5b395",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showDownloadListDialog",
+          "file": "build/visual-audit/refresh-dark/showDownloadListDialog.png",
+          "sha256": "fcec8cd174de9c6ba7aefaab8f88649a07a70cbbd9aa343e0570ee70353d6b0d",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showSoftwareDetailsDialog",
+          "file": "build/visual-audit/refresh-dark/showSoftwareDetailsDialog.png",
+          "sha256": "83fbb58c551e72f9529efd68c68a42763a1c1de6b3d4ee23d23152719c70f2c2",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showUpdateSettingsDialog",
+          "file": "build/visual-audit/refresh-dark/showUpdateSettingsDialog.png",
+          "sha256": "1f6fce98c70741ac20a423b071858de25b1a04ea55f393683428e2806b814c3c",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showReadmeDialog",
+          "file": "build/visual-audit/refresh-dark/showReadmeDialog.png",
+          "sha256": "62559b8ba535d15ded6b35487a9f012260a60966db2e4ed8d477073f3b7a33d5",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showPlaybackModeDialog",
+          "file": "build/visual-audit/refresh-dark/showPlaybackModeDialog.png",
+          "sha256": "dcea2b1d1b5b7f898a2a995ce8e79f863220bfc2087ec5cbe53212b5861323ad",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showSpeedDialog",
+          "file": "build/visual-audit/refresh-dark/showSpeedDialog.png",
+          "sha256": "7d4d3c8763b1eaafc9818020db3d4eb5cf1051f344189a430fa8c8dde48d7769",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showCurrentQueueDialog",
+          "file": "build/visual-audit/refresh-dark/showCurrentQueueDialog.png",
+          "sha256": "3b6de885862981fd60e84cc7976ee82f6a85c17a5dae9d67a051b5a8810e8e87",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showVolumeDialog",
+          "file": "build/visual-audit/refresh-dark/showVolumeDialog.png",
+          "sha256": "8a1cf1bc9f47ae05dd54055e21fd7cc7f9277b63827124c358d8114e98dbddc1",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showSubsonicManagementDialog",
+          "file": "build/visual-audit/refresh-dark/showSubsonicManagementDialog.png",
+          "sha256": "d94aaf48371e9b3af856ce3b89abcfc7b3f029c65fd7f890463b4f306aa6c3aa",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showWebDavManagementDialog",
+          "file": "build/visual-audit/refresh-dark/showWebDavManagementDialog.png",
+          "sha256": "d631a7935f9668b6d380b644f48e9a0f567220715ada36fc838a31e9c57e1418",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showDizzylabRedemption",
+          "file": "build/visual-audit/refresh-dark/showDizzylabRedemption.png",
+          "sha256": "a008ec48cc7562e2b0bfd7351dbe9dc4048ca52c5e17563778bbaeda4594d075",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cdk_inline_error",
+          "file": "build/visual-audit/refresh-dark/cdk_inline_error.png",
+          "sha256": "d937538b64931d8d93cbfb3adbbd5e7f878e34b923714f9d7873d10cd1b65488",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "webview_chrome",
+          "file": "build/visual-audit/refresh-dark/webview_chrome.png",
+          "sha256": "0ce6b2f92322f033785388d4951a8d1497b6f32d480341d379f160bc1aceaa13",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showPlaylistMetaDialog",
+          "file": "build/visual-audit/refresh-dark/showPlaylistMetaDialog.png",
+          "sha256": "9229ef20d1da32acfc7b6a86295d76b747b9a0faae6e91d1c5f5eb1e5a207af1",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showEditDialog",
+          "file": "build/visual-audit/refresh-dark/showEditDialog.png",
+          "sha256": "22b08f6bcda1abf198c1de4ec485700df5a1264ffe46be0066ccdea386083564",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showAudioMetadataEditDialog",
+          "file": "build/visual-audit/refresh-dark/showAudioMetadataEditDialog.png",
+          "sha256": "12b047e89dbcab951dd7fe12fa17e48078bac474b13da71d8b37ac016e7bc036",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "流动的声音",
+              "widthDp": 272.38095,
+              "heightDp": 25.142857
+            }
+          ]
+        },
+        {
+          "name": "showTrackDetailsDialog",
+          "file": "build/visual-audit/refresh-dark/showTrackDetailsDialog.png",
+          "sha256": "0cc6c4a5977feb09d8dd1b3b99cb75134cb565be2cc58dfc920fef807f05b4e9",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showNowPlayingMenu",
+          "file": "build/visual-audit/refresh-dark/showNowPlayingMenu.png",
+          "sha256": "da81f3d8de13a75c9ede973ad97d2d7d21ca41717ab30358ad96528b6fb2ce29",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showAddToPlaylistDialog",
+          "file": "build/visual-audit/refresh-dark/showAddToPlaylistDialog.png",
+          "sha256": "0e9d3901b2645b6674e0ea19d5aa2df971b052c377b3c35eaf0d451dbdc29959",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showSaveEqualizerPresetDialog",
+          "file": "build/visual-audit/refresh-dark/showSaveEqualizerPresetDialog.png",
+          "sha256": "a6795591c81e66b11d55c24d0390cb8878ad79ae02a9b507d30bd8e950ed9826",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showSubsonicEditDialog",
+          "file": "build/visual-audit/refresh-dark/showSubsonicEditDialog.png",
+          "sha256": "638b31bba276aba41fcaacf75374068de09d7638853c456b58fe2642c4b6255f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showWebDavEditDialog",
+          "file": "build/visual-audit/refresh-dark/showWebDavEditDialog.png",
+          "sha256": "46850fc61f00b72393faea76cbf625a1864bd03acbb30b813ee80db2f2461051",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showCreatePlaylistDialog",
+          "file": "build/visual-audit/refresh-dark/showCreatePlaylistDialog.png",
+          "sha256": "9e9b2fd067a6cb26099b20b4aa97d8dbe04ea546cff9a4632fd84bf28d0d3e50",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showCreateSubsonicPlaylistDialog",
+          "file": "build/visual-audit/refresh-dark/showCreateSubsonicPlaylistDialog.png",
+          "sha256": "619e6504b5978dcc701a4893eafe513c33bc3b6cbe67f02a314a6510d2704613",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "server_form_keyboard",
+          "file": "build/visual-audit/refresh-dark/server_form_keyboard.png",
+          "sha256": "638b31bba276aba41fcaacf75374068de09d7638853c456b58fe2642c4b6255f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "server_keyboard_visible",
+          "file": "build/visual-audit/refresh-dark/server_keyboard_visible.png",
+          "sha256": "25e90693864d7e7f75794193e7680af078b4c65fc1f1ea980ce6dffb5b4e8723",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "saved_theme",
+          "file": "build/visual-audit/refresh-dark/saved_theme.png",
+          "sha256": "dc590bc14ac019841e6420901bb68c61d1b04b7d9d23b394fe7ee38db10ac2d1",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_redeem_web_notice",
+          "file": "build/visual-audit/refresh-dark/dizzylab_redeem_web_notice.png",
+          "sha256": "600db75b136d19fc5fc37639d5f7836be773eae7fbb0bac7105170d43a98118f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "scan_folders",
+          "file": "build/visual-audit/refresh-dark/scan_folders.png",
+          "sha256": "80967a5f9fe7695902855a425e856ffaf69904bb077ffbb7cb800c5c32e82a00",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "saved_dark_mode",
+          "file": "build/visual-audit/refresh-dark/saved_dark_mode.png",
+          "sha256": "dc590bc14ac019841e6420901bb68c61d1b04b7d9d23b394fe7ee38db10ac2d1",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "system_mode",
+          "file": "build/visual-audit/refresh-dark/system_mode.png",
+          "sha256": "dc590bc14ac019841e6420901bb68c61d1b04b7d9d23b394fe7ee38db10ac2d1",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "first_launch",
+          "file": "build/visual-audit/refresh-dark/first_launch.png",
+          "sha256": "3479e55628290b70a6b739f0994b8931f37a4bbac85b89eb78a91eb868b6528a",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "background_image",
+          "file": "build/visual-audit/refresh-dark/background_image.png",
+          "sha256": "d2426cc73774e34fac826206fccd490264a8ebbfa3fcd3d01c62c1db56e67e47",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "mini_unframed",
+          "file": "build/visual-audit/refresh-dark/mini_unframed.png",
+          "sha256": "ca456f95c6dfa0ff85ce79deac22ebbbfa13adb98226769f443c60de88254bf8",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "",
+              "widthDp": 319.2381,
+              "heightDp": 44.190475
+            }
+          ]
+        },
+        {
+          "name": "mini_seek_does_not_skip",
+          "file": "build/visual-audit/refresh-dark/mini_seek_does_not_skip.png",
+          "sha256": "3ac3628636762d2d375d5b4844ba72d333647454f226f09b98b331b429b94fbe",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "",
+              "widthDp": 319.2381,
+              "heightDp": 44.190475
+            }
+          ]
+        },
+        {
+          "name": "mini_swipe_changes_track",
+          "file": "build/visual-audit/refresh-dark/mini_swipe_changes_track.png",
+          "sha256": "d67c311dfb07346704dcefb10a99881e4fc23a63d1f4c0b5e1e64fa43899328c",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "",
+              "widthDp": 319.2381,
+              "heightDp": 44.190475
+            }
+          ]
+        },
+        {
+          "name": "long_title_single_line",
+          "file": "build/visual-audit/refresh-dark/long_title_single_line.png",
+          "sha256": "8571a9f886f7d28a2296163e5de37e80ea71c49d5e8b44392964091598d3a898",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "long_title_original_tap_gesture",
+          "file": "build/visual-audit/refresh-dark/long_title_original_tap_gesture.png",
+          "sha256": "fe91238ca6fe8c477ac9a61d106d9c36935f4ffd95dc6f546ffdae457f44884f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "long_title_original_up_gesture",
+          "file": "build/visual-audit/refresh-dark/long_title_original_up_gesture.png",
+          "sha256": "ee73ea775f5ffc21c9f5433d926b221a4131f874fb21a4be72726a06824569cd",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "source_dropdown_affordance",
+          "file": "build/visual-audit/refresh-dark/source_dropdown_affordance.png",
+          "sha256": "8539a1f2fdf1f68880ca45f96c818e197e8561c495446174f07c8982701ac65a",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "player_theme_dark",
+          "file": "build/visual-audit/refresh-dark/player_theme_dark.png",
+          "sha256": "fe91238ca6fe8c477ac9a61d106d9c36935f4ffd95dc6f546ffdae457f44884f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "player_theme_light",
+          "file": "build/visual-audit/refresh-dark/player_theme_light.png",
+          "sha256": "7c21265f29866d99b1749b48f3876ac224557a635655acc8180017c46d528355",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_long_list",
+          "file": "build/visual-audit/refresh-dark/dizzylab_long_list.png",
+          "sha256": "bcdcbf77cbf0eeef0219197ae2a7ec1e21a755ff2dff842c2759c02c3f102f50",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_append_keeps_position",
+          "file": "build/visual-audit/refresh-dark/dizzylab_append_keeps_position.png",
+          "sha256": "3cc175648157910937485398a3006432d2a545782c47306e2883abb5a369558d",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_load_more_affordance",
+          "file": "build/visual-audit/refresh-dark/dizzylab_load_more_affordance.png",
+          "sha256": "26f25e0aff386e5a473a55ce850b4afa0e138bf4c059913e09bdba32ddff6216",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_detail_back_keeps_position",
+          "file": "build/visual-audit/refresh-dark/dizzylab_detail_back_keeps_position.png",
+          "sha256": "3d613f360d169b25267d6b74d0dffb6330a3e9c8d55fcce217dee91cc5286ff4",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_logs_switch_reachable",
+          "file": "build/visual-audit/refresh-dark/cache_logs_switch_reachable.png",
+          "sha256": "cba66372e842f1fbe7b94ba631b1398295bc1b34c7f84fae43b7db8b4e2c2718",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "保留目录索引，0 B · 上限 32 MiB",
+              "widthDp": 52.190475,
+              "heightDp": 46.857143
+            }
+          ]
+        },
+        {
+          "name": "cache_logs_actions_reachable",
+          "file": "build/visual-audit/refresh-dark/cache_logs_actions_reachable.png",
+          "sha256": "9b26d76ea08a8c1bf20b1ba5fbf815a18466e2c6283734296ae314a19652e844",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_temporary_switch_reachable",
+          "file": "build/visual-audit/refresh-dark/cache_temporary_switch_reachable.png",
+          "sha256": "90711259279ef57ad6fa6e88d80489f8d0a9f5d05c1c905afc3efb216e1aaeb9",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "保留运行日志，359.0 KB · 上限 32 MiB",
+              "widthDp": 52.190475,
+              "heightDp": 24.380953
+            }
+          ]
+        },
+        {
+          "name": "cache_temporary_actions_reachable",
+          "file": "build/visual-audit/refresh-dark/cache_temporary_actions_reachable.png",
+          "sha256": "514a44eae7d7fa74272ac778a8b2c21ef010f905ced8a0dcba1a804aaf3c7c1e",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_settings_bottom",
+          "file": "build/visual-audit/refresh-dark/cache_settings_bottom.png",
+          "sha256": "2894a0281031774095ef6dc9828d7cfa7c6e16e74364472574dff1d57cda754c",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "保留转换与导出临时文件，0 B · 上限 64 MiB",
+              "widthDp": 52.190475,
+              "heightDp": 30.095238
+            }
+          ]
+        },
+        {
+          "name": "showLogRetentionDialog",
+          "file": "build/visual-audit/refresh-dark/showLogRetentionDialog.png",
+          "sha256": "4588e5b17960bf4f7a166a37446b513414fe2441ea31782156cdd3e4e4d1a1d0",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showLogSelectionDialog",
+          "file": "build/visual-audit/refresh-dark/showLogSelectionDialog.png",
+          "sha256": "cebe83705ad6c3166ed0b360f2d91a7d5eeeb2afb46f94060652ee12baff5134",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "refresh_settings",
+          "file": "build/visual-audit/refresh-dark/refresh_settings.png",
+          "sha256": "724182429d98bfa71d72dc34abd3020e11bd6be06fc72e65ff841b1fc5dda8a4",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_guest",
+          "file": "build/visual-audit/refresh-dark/dizzylab_guest.png",
+          "sha256": "b723a67374eff4f6e46d847b78abb656fe56294e5c633e974ee8ee128c2bedf0",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_error",
+          "file": "build/visual-audit/refresh-dark/dizzylab_error.png",
+          "sha256": "c28717c99c44ef10fd48e6c8a5447936d1dab0a70c76357af64489027a48da10",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "搜索 Dizzylab 专辑",
+              "widthDp": 257.14285,
+              "heightDp": 36.190475
+            },
+            {
+              "label": "搜索",
+              "widthDp": 77.71429,
+              "heightDp": 36.190475
+            }
+          ]
+        },
+        {
+          "name": "empty_library",
+          "file": "build/visual-audit/refresh-dark/empty_library.png",
+          "sha256": "62fcf114e8616ae0f0f45a63afa53a128ff310eeb625bc3a4cbecf2286cba4a5",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        }
+      ]
+    },
+    {
+      "run": "refresh-large-accepted",
+      "scope": "full",
+      "theme": "amber",
+      "fontScale": 2,
+      "widthDp": 375,
+      "heightDp": 750,
+      "androidApi": "37",
+      "instrumentationSha256": "9f67428ae2c46a349890a078e15a9b20931fd33a3eca4fc39b9b3eb5a0cd3404",
+      "captureRecords": 106,
+      "assertions": [
+        {
+          "name": "mini_unframed",
+          "ok": true
+        },
+        {
+          "name": "mini_compact_density",
+          "ok": true
+        },
+        {
+          "name": "mini_swipe_changes_track",
+          "ok": true
+        },
+        {
+          "name": "long_title_single_line",
+          "ok": true
+        },
+        {
+          "name": "long_title_original_tap_gesture",
+          "ok": true
+        },
+        {
+          "name": "long_title_original_up_gesture",
+          "ok": true
+        },
+        {
+          "name": "source_dropdown_affordance",
+          "ok": true
+        },
+        {
+          "name": "player_theme_dark",
+          "ok": true
+        },
+        {
+          "name": "player_theme_light",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_long_list",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_append_keeps_position",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_load_more_affordance",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_detail_back_keeps_position",
+          "ok": true
+        },
+        {
+          "name": "cache_logs_switch_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_logs_actions_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_temporary_switch_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_temporary_actions_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_settings_bottom",
+          "ok": true
+        }
+      ],
+      "screenshots": [
+        {
+          "name": "playlists",
+          "file": "build/visual-audit/refresh-large-accepted/playlists.png",
+          "sha256": "c4106e012088f9fe0860ae96bc23c251ab0295a4bd839f5db75cbad2e8f22722",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library",
+          "file": "build/visual-audit/refresh-large-accepted/library.png",
+          "sha256": "2d6d2e1c4e3c9dc25bd18deca030d611e0fd0f6ba8f274745ebaff91e52f3f81",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "雨后的城市与一段特别长的歌曲标题，用于验证大字体排版：更多操作",
+              "widthDp": 48,
+              "heightDp": 28.571428
+            }
+          ]
+        },
+        {
+          "name": "scan",
+          "file": "build/visual-audit/refresh-large-accepted/scan.png",
+          "sha256": "34fef00e63355f130a6b680628e0b2ea4f0787d7f330ca6667ca4fc9cd29b1aa",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "now_playing",
+          "file": "build/visual-audit/refresh-large-accepted/now_playing.png",
+          "sha256": "a121bc65ead6f73741c77d65cd5fb325aa05e6226c657f3dce745b89ad575e62",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "播放模式：顺序播放",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "上一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放",
+              "widthDp": 72,
+              "heightDp": 8.761905
+            },
+            {
+              "label": "下一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放选项",
+              "widthDp": 62.095238,
+              "heightDp": 2.2857144
+            }
+          ]
+        },
+        {
+          "name": "settings",
+          "file": "build/visual-audit/refresh-large-accepted/settings.png",
+          "sha256": "325a2d3f144b57e311fa4a8fd350d606a4920d4498c84fca301d0ee20a8ac01d",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "streaming",
+          "file": "build/visual-audit/refresh-large-accepted/streaming.png",
+          "sha256": "34186f4866d0ea242c4064fd0774f2c7bd191e2f9ff36ebd18f59527a14465f0",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_account",
+          "file": "build/visual-audit/refresh-large-accepted/dizzylab_account.png",
+          "sha256": "65026fd4d71896c5300469e7101c3b14be1bfa43100266e22eb54f5716a95421",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library_filters",
+          "file": "build/visual-audit/refresh-large-accepted/library_filters.png",
+          "sha256": "db1bce95f60a54fcd7aad3acbad48d7f19b7bbbe86eac5f208ca307d547647da",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "",
+              "widthDp": 319.2381,
+              "heightDp": 5.3333335
+            }
+          ]
+        },
+        {
+          "name": "playlist_detail",
+          "file": "build/visual-audit/refresh-large-accepted/playlist_detail.png",
+          "sha256": "90d2712ddb3696d536c546579dbcc1732df4fbe7ce16a8e1cd87a84183c6679f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_music",
+          "file": "build/visual-audit/refresh-large-accepted/dizzylab_music.png",
+          "sha256": "e40618366ecc08524d7815b3d2bf63a7d8557febeb99949add74edb06afec007",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_album",
+          "file": "build/visual-audit/refresh-large-accepted/dizzylab_album.png",
+          "sha256": "75da613481ff88f4ad7e49d3f4a76a5a2a39483983d4be6e417d842dfd64a7c4",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_feed",
+          "file": "build/visual-audit/refresh-large-accepted/dizzylab_feed.png",
+          "sha256": "ab56a6319f5762bb6dc7ae5547af7b37dc707b617c7d6958e7c09d1e53b31e5c",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_following",
+          "file": "build/visual-audit/refresh-large-accepted/dizzylab_following.png",
+          "sha256": "bcf8b993683fe47a65acc560b3348a5df8f2e436bbcba134047e9ec8b8b571b6",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "webdav_browser",
+          "file": "build/visual-audit/refresh-large-accepted/webdav_browser.png",
+          "sha256": "fe51da3864c0ea63565529eea344163b8a74ab61ed6c71c016d769905e5545cb",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_home",
+          "file": "build/visual-audit/refresh-large-accepted/subsonic_home.png",
+          "sha256": "a2910f0c24b9e884e6cecf274b384bf9aec2b7e21f260fb2830676b8ca2fd392",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_search",
+          "file": "build/visual-audit/refresh-large-accepted/subsonic_search.png",
+          "sha256": "28abbfb07ee47b28bbdb4f0676ffff57e279a0b21c015477466fcd2480e7dd9c",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_artists",
+          "file": "build/visual-audit/refresh-large-accepted/subsonic_artists.png",
+          "sha256": "d00d21372eb08467406b8a6e5cb5c737243f9b20ce1e4a40dfb119ee5230754c",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_songs",
+          "file": "build/visual-audit/refresh-large-accepted/subsonic_songs.png",
+          "sha256": "45f67aba5efc74b483cbdf7c122d101bff2dd467ef51263018b9ab9ef7e75383",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_albums",
+          "file": "build/visual-audit/refresh-large-accepted/subsonic_albums.png",
+          "sha256": "14f2523f271e738630fe295d9db655525f7c767de9045e794c7b82ef85a3eff3",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_playlists",
+          "file": "build/visual-audit/refresh-large-accepted/subsonic_playlists.png",
+          "sha256": "8125190f3ce65120bc46daacccfcaca77c7bd06bc0d5670d8f29bd56e66e9dfa",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_artist_detail",
+          "file": "build/visual-audit/refresh-large-accepted/subsonic_artist_detail.png",
+          "sha256": "0c3741b8f9b85947f60a32a570e42529d45957cb293d0edd332b72f9601864fa",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_album_detail",
+          "file": "build/visual-audit/refresh-large-accepted/subsonic_album_detail.png",
+          "sha256": "5b00a7d5f4bed43529d88e473dde3d6bc14febe153b7662bae4112260657888a",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_playlist_detail",
+          "file": "build/visual-audit/refresh-large-accepted/subsonic_playlist_detail.png",
+          "sha256": "4ebea501744074bd4dd4c2d0388804e850d1b3bcc98f9f608e7d39ea8ab06a93",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library_selection",
+          "file": "build/visual-audit/refresh-large-accepted/library_selection.png",
+          "sha256": "07e1d89dd70348f70df5bf838c153f3a5a82c98be9c7b4cd7d7a0ac123fd5065",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "歌词",
+              "widthDp": 40.38095,
+              "heightDp": 53.714287
+            }
+          ]
+        },
+        {
+          "name": "showAccountDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showAccountDialog.png",
+          "sha256": "456aede4a48dc8da87f8aec2e1ff9f5d2cf34cf60375215c493b4b154c391971",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showLocalProfileDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showLocalProfileDialog.png",
+          "sha256": "85bbce8e4a633ae5d80f7da85ecfd6998db28b95541e74e0b73eb662a1c6bbb2",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showStreamingAccountsDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showStreamingAccountsDialog.png",
+          "sha256": "c6d25102ef1f8170424bbb9f3f833cf1a8f31fb5a40b913f1a054a28f1c891b2",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showAppearanceSettingsDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showAppearanceSettingsDialog.png",
+          "sha256": "bf562134c30dd26f21dab4f78a6ce96a9e77b6b64981dbf343c874f589bcbc7a",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showDarkModeDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showDarkModeDialog.png",
+          "sha256": "db8f33c35d3cc09db21ea4ba575390a2883685521803d78cec1918b4b8b128fa",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showThemeSettingsDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showThemeSettingsDialog.png",
+          "sha256": "72cd3ac68020b083a552dcc80261c377e8a302376f66ee6ea55b824f0b107af0",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showBackgroundSettingsDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showBackgroundSettingsDialog.png",
+          "sha256": "2ecb1a1d8d580cc5a7d4829a5e24f130d355869c63a467ff8d2020cffb6fa110",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "完成",
+              "widthDp": 76.57143,
+              "heightDp": 25.904762
+            }
+          ]
+        },
+        {
+          "name": "showPermissionSettingsDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showPermissionSettingsDialog.png",
+          "sha256": "e9284b1ed1651d9eb554bbf83575313d967d8d5079fb27b86815addf76b19798",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showAllFilesAccessDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showAllFilesAccessDialog.png",
+          "sha256": "7ee0e0d7671c0b929efce63869899b2ea4bbe009bebc2ddafebac1e6b491432d",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showNotificationSettingsDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showNotificationSettingsDialog.png",
+          "sha256": "6a5e98f23b5e4c16ac863652bf0de10a593716dd669a0511d6f3e12d0397fb4f",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "锁屏显示播放控件，在锁屏查看封面与播放进度",
+              "widthDp": 52.190475,
+              "heightDp": 15.619047
+            }
+          ]
+        },
+        {
+          "name": "showPlaybackSettingsDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showPlaybackSettingsDialog.png",
+          "sha256": "deba8c7d51234416815a934421c67f2023b9c263d6d6fb426e3c5d397ca3f948",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showStreamingSettingsDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showStreamingSettingsDialog.png",
+          "sha256": "6598cf921227405b117c36f05f69b8bcad807db55bee0804d294110324ae4683",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showEqualizerDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showEqualizerDialog.png",
+          "sha256": "9b72ead5df57e1dcb36d7c34f2e2e7eea0ad289fa990f00a228e68e30cff6493",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "取消",
+              "widthDp": 76.57143,
+              "heightDp": 25.904762
+            }
+          ]
+        },
+        {
+          "name": "showFloatingLyricsSettingsDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showFloatingLyricsSettingsDialog.png",
+          "sha256": "a352f08228eb233a8054565447a3c5d38ed01fa789cfef92fd0b550e24b033a0",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showStorageSettingsDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showStorageSettingsDialog.png",
+          "sha256": "1beb9a5ae6719f54acb15d7b71096f82aca93c8daddf4e33bf76b74f3b49120c",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showCacheSettingsDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showCacheSettingsDialog.png",
+          "sha256": "7963a449f1e5546a556a70eae2f1d998dda0731437c30e3c3dab39ccde169832",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showDiagnosticsDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showDiagnosticsDialog.png",
+          "sha256": "e4b06b6269cc5218713885e743cc41b9b7b05e60a7e8899230b2cfde875253ee",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showLogPreviewDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showLogPreviewDialog.png",
+          "sha256": "4933eb20b5821d72d8dd8f33c0e24373807c6f3cf0ae06903141c89e8ca8ea48",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showScanSettingsDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showScanSettingsDialog.png",
+          "sha256": "eeac6b1365adcad9b1554845477a09fb08d30bc95856bac1b9c058e45b456f73",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showStreamCacheLimitDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showStreamCacheLimitDialog.png",
+          "sha256": "544d21dfde86bca223bed0c08690bf15289846999e2bdb45cd205c27f18521c8",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showOutputDirectoryDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showOutputDirectoryDialog.png",
+          "sha256": "b9bdf5915d538f21aaae0d50f85cd24f9b6da0e93ad2e2a2df9c7e79789d800d",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showConfigDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showConfigDialog.png",
+          "sha256": "25f1950588f6a46d3f419f565daddd7773447aa2eb13b9446343181f87dcbfcd",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showDownloadListDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showDownloadListDialog.png",
+          "sha256": "47506417cc3f9debe1ea64e09a8a4ef062a7ba5c3f18e4a99563f6587c97d2fb",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showSoftwareDetailsDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showSoftwareDetailsDialog.png",
+          "sha256": "6ac459713f349374b7dd9a6659ac123ef1a539f1041d0c2a11c4a668500de899",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showUpdateSettingsDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showUpdateSettingsDialog.png",
+          "sha256": "e36aafa439284d42efcd42ed85820ff2a305b228fd0b54d33bf1fa24b3f900ed",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "取消",
+              "widthDp": 76.57143,
+              "heightDp": 25.904762
+            }
+          ]
+        },
+        {
+          "name": "showReadmeDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showReadmeDialog.png",
+          "sha256": "bace16bf15ce8ab69c3e8211ed9a86f81337dd162f63eaea1d3f528b71450b37",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showPlaybackModeDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showPlaybackModeDialog.png",
+          "sha256": "0fdc6ff01859beb2ae469ebc95194265a8ab49d026d4e390ea640368b91d14f5",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showSpeedDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showSpeedDialog.png",
+          "sha256": "56606637ebb5d1ea1931ad890936567eba6ec17e4a0c4d9dc823efb1a51f4974",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showCurrentQueueDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showCurrentQueueDialog.png",
+          "sha256": "7077c2e3c30e1ab8811a83921ea28f03e67bc0b569ad23f71e7df6ab4c4d6823",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showVolumeDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showVolumeDialog.png",
+          "sha256": "f648e225990a46f9e3a059336c9f3a97fd0878b04f4c504654f962aebace0c9f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showSubsonicManagementDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showSubsonicManagementDialog.png",
+          "sha256": "aa626ed58ab0ff54e032665fdb84fc0e8b068fec3c9b4f202e07697dae576ac5",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showWebDavManagementDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showWebDavManagementDialog.png",
+          "sha256": "6ce144d8ae89bd6b952afb7cefe1572be6cb846c9c89643abfc25715c7f1536a",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showDizzylabRedemption",
+          "file": "build/visual-audit/refresh-large-accepted/showDizzylabRedemption.png",
+          "sha256": "855079cb0b73a9f8fefe8ec91c549b2bb268e26db193f8bbe070f6e81faeeb11",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cdk_inline_error",
+          "file": "build/visual-audit/refresh-large-accepted/cdk_inline_error.png",
+          "sha256": "dc2e57b96dc7847a3b95cc0f7df81f967513d8aa85905b3f721522fbc217daf5",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "webview_chrome",
+          "file": "build/visual-audit/refresh-large-accepted/webview_chrome.png",
+          "sha256": "82cee859ffb502b1f459f07b94728ac39f4246f165555965ec05dd4d50359ce5",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showPlaylistMetaDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showPlaylistMetaDialog.png",
+          "sha256": "3a43d3dee7b98be777f3d83a27d98206df6fcc83bb577548b25a41d69a54aae2",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showEditDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showEditDialog.png",
+          "sha256": "8407656b88edf0006028b0f73dd5d6af92ef3e61be98a26bef0702d345a5e8f1",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showAudioMetadataEditDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showAudioMetadataEditDialog.png",
+          "sha256": "add7a858bf39bbe84e35293ff33a93d6b9380fa57e1fd1259833e77731aab69a",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "歌词",
+              "widthDp": 272.38095,
+              "heightDp": 22.857143
+            }
+          ]
+        },
+        {
+          "name": "showTrackDetailsDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showTrackDetailsDialog.png",
+          "sha256": "ae23c524ff8317cb01516a3b0bed9cd04aeade7fc07e55f2b6b4630fc4dace60",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showNowPlayingMenu",
+          "file": "build/visual-audit/refresh-large-accepted/showNowPlayingMenu.png",
+          "sha256": "77854a34a0df78b69c3ebfeb0b6eecb4dfda8348c49594a27e37fcbefb77a9e8",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showAddToPlaylistDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showAddToPlaylistDialog.png",
+          "sha256": "8f162fb11d30b0edb6e3bcf6665f9f3c525cf7314359a629458e1d677e759adc",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showSaveEqualizerPresetDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showSaveEqualizerPresetDialog.png",
+          "sha256": "42ab8156cce28176faafae20dc4f5055cbfd1a625d9322ea9fd66751c4c26d89",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showSubsonicEditDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showSubsonicEditDialog.png",
+          "sha256": "97c79d8a7684eead8945b6d5132fb6c27b67e0149712465036b3a683676158ea",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "用户名",
+              "widthDp": 272.38095,
+              "heightDp": 17.52381
+            }
+          ]
+        },
+        {
+          "name": "showWebDavEditDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showWebDavEditDialog.png",
+          "sha256": "ccf43c6ba858f33fd5f141528b865bddccffe199fa62f2e4bc604e32b64bfb0e",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "密码（选填）",
+              "widthDp": 272.38095,
+              "heightDp": 17.52381
+            }
+          ]
+        },
+        {
+          "name": "showCreatePlaylistDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showCreatePlaylistDialog.png",
+          "sha256": "2ded72cb485d6e60ebe7981776bfc371582e11209427913c8a9a2f0b2c0ef2b0",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showCreateSubsonicPlaylistDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showCreateSubsonicPlaylistDialog.png",
+          "sha256": "8f43ced1f588a03d703edb3af5d9ceb03a3a5efe5779cc04d128e2b1ffe5a560",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "server_form_keyboard",
+          "file": "build/visual-audit/refresh-large-accepted/server_form_keyboard.png",
+          "sha256": "97c79d8a7684eead8945b6d5132fb6c27b67e0149712465036b3a683676158ea",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "用户名",
+              "widthDp": 272.38095,
+              "heightDp": 17.52381
+            }
+          ]
+        },
+        {
+          "name": "server_keyboard_visible",
+          "file": "build/visual-audit/refresh-large-accepted/server_keyboard_visible.png",
+          "sha256": "f93e90210f4c2d4bdd41b2f07d48a7b230905279c024c9a5e9250660eca24214",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "用户名",
+              "widthDp": 272.38095,
+              "heightDp": 17.52381
+            }
+          ]
+        },
+        {
+          "name": "saved_theme",
+          "file": "build/visual-audit/refresh-large-accepted/saved_theme.png",
+          "sha256": "f4ada70384c3dc7ccf703a2bbcb85549b7c23911a0878aea1a67b5427df3153d",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_redeem_web_notice",
+          "file": "build/visual-audit/refresh-large-accepted/dizzylab_redeem_web_notice.png",
+          "sha256": "9e20829d200fe6082e19959dc2c81a103c6981595e7e29d2d8bbe32ba6696df8",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "scan_folders",
+          "file": "build/visual-audit/refresh-large-accepted/scan_folders.png",
+          "sha256": "84ec920ac4a3817147b303edb82a506be8d1a9b74f79250568de332b3d726200",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "saved_dark_mode",
+          "file": "build/visual-audit/refresh-large-accepted/saved_dark_mode.png",
+          "sha256": "38d5f70b010de379223e76536bad85184ec2416735fc7e738f3e3880903d5a0f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "system_mode",
+          "file": "build/visual-audit/refresh-large-accepted/system_mode.png",
+          "sha256": "f4ada70384c3dc7ccf703a2bbcb85549b7c23911a0878aea1a67b5427df3153d",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "first_launch",
+          "file": "build/visual-audit/refresh-large-accepted/first_launch.png",
+          "sha256": "d6f7c9f4a11c5002381b6d1f780bfd999014c28e4515970e026d0c7ed39e83a6",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "background_image",
+          "file": "build/visual-audit/refresh-large-accepted/background_image.png",
+          "sha256": "185cfe44c663e3d3b10252d81ff6a158e654f3112a2e24d82a7262b36b06916f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "mini_unframed",
+          "file": "build/visual-audit/refresh-large-accepted/mini_unframed.png",
+          "sha256": "029f4cf63b66a28325e32ac6a1a27533c463d189eac1eaa10b17c972c6b6eacf",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "",
+              "widthDp": 319.2381,
+              "heightDp": 5.3333335
+            }
+          ]
+        },
+        {
+          "name": "mini_compact_density",
+          "file": "build/visual-audit/refresh-large-accepted/mini_compact_density.png",
+          "sha256": "029f4cf63b66a28325e32ac6a1a27533c463d189eac1eaa10b17c972c6b6eacf",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "",
+              "widthDp": 319.2381,
+              "heightDp": 5.3333335
+            }
+          ]
+        },
+        {
+          "name": "mini_swipe_changes_track",
+          "file": "build/visual-audit/refresh-large-accepted/mini_swipe_changes_track.png",
+          "sha256": "c0609c4f44d92092a721116536f17138baaa485aa58ec6a68138b1f606c14a3f",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "",
+              "widthDp": 319.2381,
+              "heightDp": 5.3333335
+            }
+          ]
+        },
+        {
+          "name": "long_title_single_line",
+          "file": "build/visual-audit/refresh-large-accepted/long_title_single_line.png",
+          "sha256": "f102be6ad5cad0569dd32f219a25a61526e5c2f416e096ceeefbe66fc27e7a23",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "播放模式：顺序播放",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "上一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放",
+              "widthDp": 72,
+              "heightDp": 8.761905
+            },
+            {
+              "label": "下一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放选项",
+              "widthDp": 62.095238,
+              "heightDp": 2.2857144
+            }
+          ]
+        },
+        {
+          "name": "long_title_original_tap_gesture",
+          "file": "build/visual-audit/refresh-large-accepted/long_title_original_tap_gesture.png",
+          "sha256": "6e3931ca654ab42c839915fe5353418c66c90d54ff6f2acc2ccd6cb7db3994c2",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "播放模式：顺序播放",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "上一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放",
+              "widthDp": 72,
+              "heightDp": 8.761905
+            },
+            {
+              "label": "下一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放选项",
+              "widthDp": 62.095238,
+              "heightDp": 2.2857144
+            }
+          ]
+        },
+        {
+          "name": "long_title_original_up_gesture",
+          "file": "build/visual-audit/refresh-large-accepted/long_title_original_up_gesture.png",
+          "sha256": "a54b653af47596214070f4c8ba9315bf44897af62532dbc651d98d46ab89dbbd",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "source_dropdown_affordance",
+          "file": "build/visual-audit/refresh-large-accepted/source_dropdown_affordance.png",
+          "sha256": "7bf7bdf75c4ac67b9d0519965008a4d25f4ba8854170e0df65c4115ace8ae482",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "player_theme_dark",
+          "file": "build/visual-audit/refresh-large-accepted/player_theme_dark.png",
+          "sha256": "4e3e9a9b9beee51aab77cabee78363c36e852f9935b3f9352d9f65a2ae091c7f",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "播放模式：顺序播放",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "上一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放",
+              "widthDp": 72,
+              "heightDp": 8.761905
+            },
+            {
+              "label": "下一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放选项",
+              "widthDp": 62.095238,
+              "heightDp": 2.2857144
+            }
+          ]
+        },
+        {
+          "name": "player_theme_light",
+          "file": "build/visual-audit/refresh-large-accepted/player_theme_light.png",
+          "sha256": "6e3931ca654ab42c839915fe5353418c66c90d54ff6f2acc2ccd6cb7db3994c2",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "播放模式：顺序播放",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "上一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放",
+              "widthDp": 72,
+              "heightDp": 8.761905
+            },
+            {
+              "label": "下一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放选项",
+              "widthDp": 62.095238,
+              "heightDp": 2.2857144
+            }
+          ]
+        },
+        {
+          "name": "dizzylab_long_list",
+          "file": "build/visual-audit/refresh-large-accepted/dizzylab_long_list.png",
+          "sha256": "f66ab2d27e78ae83a8f76246d830cc79ad600652b9162b6c62abb0a0e59e410f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_append_keeps_position",
+          "file": "build/visual-audit/refresh-large-accepted/dizzylab_append_keeps_position.png",
+          "sha256": "67b137de5ddb27e85e8af72ad698f9057fa50a38eee6b283ebb82098c820be0f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_load_more_affordance",
+          "file": "build/visual-audit/refresh-large-accepted/dizzylab_load_more_affordance.png",
+          "sha256": "1483250b195712512552ca0c635a4762c7ef9d948942f41bcab041125aa348fc",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_detail_back_keeps_position",
+          "file": "build/visual-audit/refresh-large-accepted/dizzylab_detail_back_keeps_position.png",
+          "sha256": "9e3b29fdcd4fb200e491ce94ce1b27b554f355c9fd9b17037e08d0d4b7af8920",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_logs_switch_reachable",
+          "file": "build/visual-audit/refresh-large-accepted/cache_logs_switch_reachable.png",
+          "sha256": "a811a0bb3f970ae7888e4174bca199a101db62944d72f769ed8662b2b085a587",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_logs_actions_reachable",
+          "file": "build/visual-audit/refresh-large-accepted/cache_logs_actions_reachable.png",
+          "sha256": "91e44c58a331d850d12a9fe234d389165cd9824ad551a2c701535171f22fac75",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_temporary_switch_reachable",
+          "file": "build/visual-audit/refresh-large-accepted/cache_temporary_switch_reachable.png",
+          "sha256": "641320cfebf0344a7f4e21d3c5385119411e62f4280a0cbb85222bd8740a94b3",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_temporary_actions_reachable",
+          "file": "build/visual-audit/refresh-large-accepted/cache_temporary_actions_reachable.png",
+          "sha256": "66665a6b668c2583e9c672b8386c0665f9ca0d3cb953cbb495d6809c108925f4",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_settings_bottom",
+          "file": "build/visual-audit/refresh-large-accepted/cache_settings_bottom.png",
+          "sha256": "9f3da4d46050b146b21d7779344317878370d8361b4ed394dd8080fe096579d1",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showLogRetentionDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showLogRetentionDialog.png",
+          "sha256": "f31430118d2f32af202bb7abf55fc5e4f3957095ad914a9ed03ae817ce727e9b",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showLogSelectionDialog",
+          "file": "build/visual-audit/refresh-large-accepted/showLogSelectionDialog.png",
+          "sha256": "d8efb37f3f043857556994025f4210c186a80275c00be9ab8f8e41c409fbb7ce",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "runtime-20261030-022952-aab41323.log，10-30 02:31 · 150.3 KB",
+              "widthDp": 52.190475,
+              "heightDp": 3.8095238
+            },
+            {
+              "label": "取消",
+              "widthDp": 76.57143,
+              "heightDp": 25.904762
+            }
+          ]
+        },
+        {
+          "name": "refresh_settings",
+          "file": "build/visual-audit/refresh-large-accepted/refresh_settings.png",
+          "sha256": "44114f49b3b1fe6d0d136ab0509cdf55d513b66540b05bfbddf06cf7e6ec3d97",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_guest",
+          "file": "build/visual-audit/refresh-large-accepted/dizzylab_guest.png",
+          "sha256": "59c1421eea09e393cc9043a1c5a81d0587dc0d19c0040ca7977965d026eb781e",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_error",
+          "file": "build/visual-audit/refresh-large-accepted/dizzylab_error.png",
+          "sha256": "d4b506fe6b55e40299edb27d6d572e5e7ad71078c1be09a819625e105560cbc4",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "empty_library",
+          "file": "build/visual-audit/refresh-large-accepted/empty_library.png",
+          "sha256": "56a5a438997b6a234ae52a87566d0618f0539015088163940efbed1d99ddce14",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        }
+      ]
+    },
+    {
+      "run": "refresh-small",
+      "scope": "pages",
+      "theme": "light",
+      "fontScale": 1,
+      "widthDp": 320,
+      "heightDp": 640,
+      "androidApi": "37",
+      "instrumentationSha256": "9f67428ae2c46a349890a078e15a9b20931fd33a3eca4fc39b9b3eb5a0cd3404",
+      "captureRecords": 27,
+      "assertions": [],
+      "screenshots": [
+        {
+          "name": "playlists",
+          "file": "build/visual-audit/refresh-small/playlists.png",
+          "sha256": "9560aa7d46220721fa300547d6cf921428912a99c3368e6f9992319030fed812",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library",
+          "file": "build/visual-audit/refresh-small/library.png",
+          "sha256": "3a4e48a247524c4a32a36991a9cef8831f0db8c80096a5f0cb5b1c78eeb54100",
+          "smallTargets": [
+            {
+              "label": "远方来信 · A Letter from Afar：更多操作",
+              "widthDp": 48,
+              "heightDp": 15.238095
+            }
+          ],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "scan",
+          "file": "build/visual-audit/refresh-small/scan.png",
+          "sha256": "f95101ec258fb265c6c4a91e0da97dd9640d05e1a1da2d060be58a7ac84d76be",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "now_playing",
+          "file": "build/visual-audit/refresh-small/now_playing.png",
+          "sha256": "ed577b4a04a72a3e03e83da8ff21519244cff998720baf912536f331b606e19d",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "播放模式：顺序播放",
+              "widthDp": 48,
+              "heightDp": 3.047619
+            },
+            {
+              "label": "上一首",
+              "widthDp": 48,
+              "heightDp": 3.047619
+            },
+            {
+              "label": "播放",
+              "widthDp": 72,
+              "heightDp": 11.047619
+            },
+            {
+              "label": "下一首",
+              "widthDp": 48,
+              "heightDp": 3.047619
+            },
+            {
+              "label": "播放选项",
+              "widthDp": 48.38095,
+              "heightDp": 3.047619
+            }
+          ]
+        },
+        {
+          "name": "settings",
+          "file": "build/visual-audit/refresh-small/settings.png",
+          "sha256": "aca28e9c85164b8d6cf5b6cfe0a7a43b80da62e51f11f100b739b9fc3eb9fd1c",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "streaming",
+          "file": "build/visual-audit/refresh-small/streaming.png",
+          "sha256": "6422e47fababd6244f09d5f6f74a0347325494dcb87426ad2506b72222a7dff6",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_account",
+          "file": "build/visual-audit/refresh-small/dizzylab_account.png",
+          "sha256": "48c48a9570cc3bea8e8f5432bac1432bd890b317d14bf7896a860d3339ebf30b",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library_filters",
+          "file": "build/visual-audit/refresh-small/library_filters.png",
+          "sha256": "7d448e00ad455e783849afc7b1af437dbfaca485f199a7bce78fed5ac138b07d",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "",
+              "widthDp": 264.38095,
+              "heightDp": 20.571428
+            }
+          ]
+        },
+        {
+          "name": "playlist_detail",
+          "file": "build/visual-audit/refresh-small/playlist_detail.png",
+          "sha256": "57b3eee7032ceb18767d76d6a7f4cd20db63728f72455db59a5c5ee46bd3db3c",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "远方来信 · A Letter from Afar：更多操作",
+              "widthDp": 48,
+              "heightDp": 1.5238096
+            }
+          ]
+        },
+        {
+          "name": "dizzylab_music",
+          "file": "build/visual-audit/refresh-small/dizzylab_music.png",
+          "sha256": "bdbbcef82d3a8f5929f291a737e80e65e8254be371f02771627dfadebd7ec822",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_album",
+          "file": "build/visual-audit/refresh-small/dizzylab_album.png",
+          "sha256": "91374dda93a9708f30501b99856db9448bde2b917be3435b7060e2e108f1fd87",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "播放全部",
+              "widthDp": 139.80952,
+              "heightDp": 19.047619
+            },
+            {
+              "label": "喜欢专辑",
+              "widthDp": 140.19048,
+              "heightDp": 19.047619
+            }
+          ]
+        },
+        {
+          "name": "dizzylab_feed",
+          "file": "build/visual-audit/refresh-small/dizzylab_feed.png",
+          "sha256": "9afe9ffacc15b1508e6ce1b1ef1bdcb38424529ff22b5171d676a3c38714bc9c",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_following",
+          "file": "build/visual-audit/refresh-small/dizzylab_following.png",
+          "sha256": "dfa91839a27414d89365076b29d3266a6bfa4297b702102b916f81f558ace633",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "webdav_browser",
+          "file": "build/visual-audit/refresh-small/webdav_browser.png",
+          "sha256": "b00ef36cce3925bd7728947ee4fe771e8a7c7d877a4f83ce647225caed2bcc1a",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_home",
+          "file": "build/visual-audit/refresh-small/subsonic_home.png",
+          "sha256": "6d6e4e18fdcc3c006c82b5206e05b7c84ea71af0e6bf6b0040e3713161e7edca",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_search",
+          "file": "build/visual-audit/refresh-small/subsonic_search.png",
+          "sha256": "477d2e17f706c8c683d760e601bdcbc43516314a30425a8e60e89a72655cd0c5",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_artists",
+          "file": "build/visual-audit/refresh-small/subsonic_artists.png",
+          "sha256": "a6f9485691637589b3dda5c3dab171941faa5e2f25da2d08d04852d5fc513ec7",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_songs",
+          "file": "build/visual-audit/refresh-small/subsonic_songs.png",
+          "sha256": "b3f764a3baf7f8766a0fcac857424a66059cf6d83a9292b404381f856f013ac6",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "更多操作",
+              "widthDp": 48,
+              "heightDp": 15.619047
+            }
+          ]
+        },
+        {
+          "name": "subsonic_albums",
+          "file": "build/visual-audit/refresh-small/subsonic_albums.png",
+          "sha256": "170326db957dbf57b50997c92726c30669b3c5a554f48f72e531c1a31276e0ac",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_playlists",
+          "file": "build/visual-audit/refresh-small/subsonic_playlists.png",
+          "sha256": "5c670f9c3c3ea8e0ae343060ddcc407f99f547abe58912ce91ba6d62914cd72c",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_artist_detail",
+          "file": "build/visual-audit/refresh-small/subsonic_artist_detail.png",
+          "sha256": "2ab073c68ecdf5dc452d3794b4883607abf1212cbc1b461babf6ea1fd694100d",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_album_detail",
+          "file": "build/visual-audit/refresh-small/subsonic_album_detail.png",
+          "sha256": "c9eee92c1f8d02e493898205ac6ac2fb1869ca4f768048fd0acdd5e6fa0a8e86",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_playlist_detail",
+          "file": "build/visual-audit/refresh-small/subsonic_playlist_detail.png",
+          "sha256": "ff45eb5248e9536bdee2a5d818ea2b683b20b403fab93b7f3a2189420d6635e7",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library_selection",
+          "file": "build/visual-audit/refresh-small/library_selection.png",
+          "sha256": "9465143362052726379db6df58ffc80b0b19be70d80ce745172d58c32c651699",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "元数据",
+              "widthDp": 11.047619,
+              "heightDp": 55.61905
+            }
+          ]
+        },
+        {
+          "name": "dizzylab_guest",
+          "file": "build/visual-audit/refresh-small/dizzylab_guest.png",
+          "sha256": "6beefcc5286c1ea17d613241352605a8ce060deb047f14b36d6be1ec90a9c579",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_error",
+          "file": "build/visual-audit/refresh-small/dizzylab_error.png",
+          "sha256": "d56f4a4c3423c6e7b5d84802a62c37f35fed429c70dbc1130285911ce0cccfe1",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "empty_library",
+          "file": "build/visual-audit/refresh-small/empty_library.png",
+          "sha256": "9e786296903ef0fe180e3ef66ae1c55327ac0faa7deea8b7bc667776ac64b240",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        }
+      ]
+    },
+    {
+      "run": "refresh-landscape",
+      "scope": "pages",
+      "theme": "dark",
+      "fontScale": 1,
+      "widthDp": 750,
+      "heightDp": 375,
+      "androidApi": "37",
+      "instrumentationSha256": "9f67428ae2c46a349890a078e15a9b20931fd33a3eca4fc39b9b3eb5a0cd3404",
+      "captureRecords": 27,
+      "assertions": [],
+      "screenshots": [
+        {
+          "name": "playlists",
+          "file": "build/visual-audit/refresh-landscape/playlists.png",
+          "sha256": "a6c7a6060a51616e7e20a6d306650c245e1c1b0d2faca5b481c7c208cdbd1ed9",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library",
+          "file": "build/visual-audit/refresh-landscape/library.png",
+          "sha256": "4f85790c6c305cbf1ba29fbae8a90d8867817ba130018c90cfbce8a0d92db072",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "scan",
+          "file": "build/visual-audit/refresh-landscape/scan.png",
+          "sha256": "ee7bfa21c593f6b2277bdbfc420c975e377776a85e7469caf669029b90fbb15e",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "now_playing",
+          "file": "build/visual-audit/refresh-landscape/now_playing.png",
+          "sha256": "beb28246b76c3282bb6d4e6fe96509b418e195bb1370ea67ef39421040d91a77",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "播放模式：顺序播放",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            },
+            {
+              "label": "上一首",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            },
+            {
+              "label": "播放",
+              "widthDp": 72,
+              "heightDp": 27.809525
+            },
+            {
+              "label": "下一首",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            },
+            {
+              "label": "播放选项",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            }
+          ]
+        },
+        {
+          "name": "settings",
+          "file": "build/visual-audit/refresh-landscape/settings.png",
+          "sha256": "ad7c536fcfbe93666d940d4ad4bf164b0a345e15d57c581c572a492cdb094fa3",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "streaming",
+          "file": "build/visual-audit/refresh-landscape/streaming.png",
+          "sha256": "3e6c98c11dd0169ec5e76cbf03d6032e1047b804f2d0c48e0bd02a503a871c6e",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_account",
+          "file": "build/visual-audit/refresh-landscape/dizzylab_account.png",
+          "sha256": "acd57ba635bd860ad0d63c3878be7c5a28dcd225ec97d30be6b7c197251e301f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library_filters",
+          "file": "build/visual-audit/refresh-landscape/library_filters.png",
+          "sha256": "1d83c9ac1dc25d38eafe0e96ff9660615432ff425e8f159e93fd9c9789a0f39f",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "",
+              "widthDp": 598.0952,
+              "heightDp": 12.190476
+            }
+          ]
+        },
+        {
+          "name": "playlist_detail",
+          "file": "build/visual-audit/refresh-landscape/playlist_detail.png",
+          "sha256": "3e4e70ca1b4438cc727305c430abf50d4971c23be8e875305fb5b7f1985e2fd1",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_music",
+          "file": "build/visual-audit/refresh-landscape/dizzylab_music.png",
+          "sha256": "6a348fd048dadb6c7f15b1a9343edfe5d661ac76f8ac49165b3e57ae33285901",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_album",
+          "file": "build/visual-audit/refresh-landscape/dizzylab_album.png",
+          "sha256": "c5f9e9d42736e13063a6955c5def24cda2b96c3f204e263835f4fbc829e7bf98",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_feed",
+          "file": "build/visual-audit/refresh-landscape/dizzylab_feed.png",
+          "sha256": "4ede7e4ef7a06d6790192143e7f8c4f2ff53912e01a8326b63db32d52c15bc69",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_following",
+          "file": "build/visual-audit/refresh-landscape/dizzylab_following.png",
+          "sha256": "d479c7ce67f34e19e760e9240721dd5b9b7d82b5150cab4dca9f552cf63f4451",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "webdav_browser",
+          "file": "build/visual-audit/refresh-landscape/webdav_browser.png",
+          "sha256": "603bf98f81c00f58bbd8598ad824a3a37d4fa928a55afbdae56ce42150a28263",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_home",
+          "file": "build/visual-audit/refresh-landscape/subsonic_home.png",
+          "sha256": "e65b35cbb7180b8a00806eb8a601bf42106150d2a45a0307a73ddaadab227076",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_search",
+          "file": "build/visual-audit/refresh-landscape/subsonic_search.png",
+          "sha256": "b49281eb66a103db9b127918a913498419e2f93c7ae5ca317dfb329986801b13",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "返回上一层",
+              "widthDp": 621.7143,
+              "heightDp": 25.52381
+            }
+          ]
+        },
+        {
+          "name": "subsonic_artists",
+          "file": "build/visual-audit/refresh-landscape/subsonic_artists.png",
+          "sha256": "409ba2ec9227a0bc1ac339fe884ea12532bc0873ad67eaf3dc94a6986641fbd8",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "返回上一层",
+              "widthDp": 621.7143,
+              "heightDp": 25.52381
+            }
+          ]
+        },
+        {
+          "name": "subsonic_songs",
+          "file": "build/visual-audit/refresh-landscape/subsonic_songs.png",
+          "sha256": "7be2e9a50612930c5bad3a2dee35aa812306ea175198bf7c88d7ff2a3b4dc0e0",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "返回上一层",
+              "widthDp": 621.7143,
+              "heightDp": 25.52381
+            }
+          ]
+        },
+        {
+          "name": "subsonic_albums",
+          "file": "build/visual-audit/refresh-landscape/subsonic_albums.png",
+          "sha256": "9112bd60d466e4186f5ad8204d5bd7e525637d3f01bf888346a7513c20f8d891",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "返回上一层",
+              "widthDp": 621.7143,
+              "heightDp": 25.52381
+            }
+          ]
+        },
+        {
+          "name": "subsonic_playlists",
+          "file": "build/visual-audit/refresh-landscape/subsonic_playlists.png",
+          "sha256": "c89bff3129b380686ca0f66e711dc47f8a211376106d15115987d9f0c66a46e4",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "返回上一层",
+              "widthDp": 621.7143,
+              "heightDp": 25.52381
+            }
+          ]
+        },
+        {
+          "name": "subsonic_artist_detail",
+          "file": "build/visual-audit/refresh-landscape/subsonic_artist_detail.png",
+          "sha256": "9112bd60d466e4186f5ad8204d5bd7e525637d3f01bf888346a7513c20f8d891",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "返回上一层",
+              "widthDp": 621.7143,
+              "heightDp": 25.52381
+            }
+          ]
+        },
+        {
+          "name": "subsonic_album_detail",
+          "file": "build/visual-audit/refresh-landscape/subsonic_album_detail.png",
+          "sha256": "833d7510c0f3b6cf84ae539fd98315ead20710d4e7ead0cb96333b4770de99e8",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "返回上一层",
+              "widthDp": 621.7143,
+              "heightDp": 25.52381
+            }
+          ]
+        },
+        {
+          "name": "subsonic_playlist_detail",
+          "file": "build/visual-audit/refresh-landscape/subsonic_playlist_detail.png",
+          "sha256": "833d7510c0f3b6cf84ae539fd98315ead20710d4e7ead0cb96333b4770de99e8",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "返回上一层",
+              "widthDp": 621.7143,
+              "heightDp": 25.52381
+            }
+          ]
+        },
+        {
+          "name": "library_selection",
+          "file": "build/visual-audit/refresh-landscape/library_selection.png",
+          "sha256": "3ada366662f6c6b7a77940e3b4dc78de9cc57dd90643544f066d061d72458c1c",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_guest",
+          "file": "build/visual-audit/refresh-landscape/dizzylab_guest.png",
+          "sha256": "e42b3e8debb6ee32b2b07abdb657b0f418c6cae474102a32522cf16558ff7e98",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_error",
+          "file": "build/visual-audit/refresh-landscape/dizzylab_error.png",
+          "sha256": "af71a6fdb18d44225d4c0c97e64d46a853cc32e99a709b9342f9e9cfd765f7c6",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "empty_library",
+          "file": "build/visual-audit/refresh-landscape/empty_library.png",
+          "sha256": "9927ac17da849a05bc89c2764c137217642a711a7249de7ad61fcef6098f4d80",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        }
+      ]
+    },
+    {
+      "run": "refresh-tablet",
+      "scope": "pages",
+      "theme": "light",
+      "fontScale": 1,
+      "widthDp": 800,
+      "heightDp": 1280,
+      "androidApi": "37",
+      "instrumentationSha256": "9f67428ae2c46a349890a078e15a9b20931fd33a3eca4fc39b9b3eb5a0cd3404",
+      "captureRecords": 27,
+      "assertions": [],
+      "screenshots": [
+        {
+          "name": "playlists",
+          "file": "build/visual-audit/refresh-tablet/playlists.png",
+          "sha256": "960b8fa216fd8c0824f268fd1b600cf4d3386985eaa615f26052f5ea7e71eae1",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library",
+          "file": "build/visual-audit/refresh-tablet/library.png",
+          "sha256": "4a44e7b086c5a07ab33cd36bdf1dafe00b1f55120beef05c299f8047dc2f9e2f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "scan",
+          "file": "build/visual-audit/refresh-tablet/scan.png",
+          "sha256": "db54f7e435dbe3975d4a211bfbab33ba0e9af8bfbdcf35aeb0e9f8d492383d2e",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "now_playing",
+          "file": "build/visual-audit/refresh-tablet/now_playing.png",
+          "sha256": "806b28ed9fd7b48b66a9289c30de4f2cc43c54ecd8e75cdba62f0eefde9195d8",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "settings",
+          "file": "build/visual-audit/refresh-tablet/settings.png",
+          "sha256": "8362926d3cd14cc0ef548cddd3225feec4d16a0430c7c0a2c791a44e956d9c54",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "streaming",
+          "file": "build/visual-audit/refresh-tablet/streaming.png",
+          "sha256": "58b78ed21655908948cb2c5a0369564f281f44028fda0015b333aea67e8e0521",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_account",
+          "file": "build/visual-audit/refresh-tablet/dizzylab_account.png",
+          "sha256": "b70cccba334fc47843aef689e6143d20274fe4ec97d0f5e428d59df8a9247f75",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library_filters",
+          "file": "build/visual-audit/refresh-tablet/library_filters.png",
+          "sha256": "d9418d657e3ed48bbeb0dc929b085a8de246b6d91d1df9fb0afffbd50f1da2dd",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "",
+              "widthDp": 648,
+              "heightDp": 44
+            }
+          ]
+        },
+        {
+          "name": "playlist_detail",
+          "file": "build/visual-audit/refresh-tablet/playlist_detail.png",
+          "sha256": "eadd1e5d34835fc475e49808a59183e58457cd892eb1c91bdd4e00d8a6b9bd61",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_music",
+          "file": "build/visual-audit/refresh-tablet/dizzylab_music.png",
+          "sha256": "b427999c542e2c9d3185d5739e1c84725db848bb3db1e438d16e215fe9089116",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_album",
+          "file": "build/visual-audit/refresh-tablet/dizzylab_album.png",
+          "sha256": "0adac6a99bfe7b298587698cf567820560675c6d1a2ab1512b1096c9bbbb0517",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_feed",
+          "file": "build/visual-audit/refresh-tablet/dizzylab_feed.png",
+          "sha256": "d32d0f02507ad1877e3247948936626fd148b6abe7693fefdd50c8e5c8cffbe6",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_following",
+          "file": "build/visual-audit/refresh-tablet/dizzylab_following.png",
+          "sha256": "63478eca57818a76189b2d19d6dfd55412385c4a1725c9c74667a6ee6402b3da",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "webdav_browser",
+          "file": "build/visual-audit/refresh-tablet/webdav_browser.png",
+          "sha256": "e8389ed98a992accea1dd39de1d9e70e8616b48a529d77d76893e1615539bc8d",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_home",
+          "file": "build/visual-audit/refresh-tablet/subsonic_home.png",
+          "sha256": "38a0fdefeb8bbd2b000dc9572ccff9e0e26d8a2304c018292cd2d545437d1c16",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_search",
+          "file": "build/visual-audit/refresh-tablet/subsonic_search.png",
+          "sha256": "c28286b10df79f31ff9582e2a9826768f7153114704defbe4970fb20ec28dca3",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_artists",
+          "file": "build/visual-audit/refresh-tablet/subsonic_artists.png",
+          "sha256": "6601d389d53a3276ad118a754b0499e8e89cdd2e7a575909d97406c3fc65647c",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_songs",
+          "file": "build/visual-audit/refresh-tablet/subsonic_songs.png",
+          "sha256": "c003c087e27c2ec36e3cd5528fbe01880be2a3fa74e518c3c0d8585fb00c7a90",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_albums",
+          "file": "build/visual-audit/refresh-tablet/subsonic_albums.png",
+          "sha256": "a945ffb53f44bfe00f79776d30765d71fe74608310ce42b7f3fb078b237c8ee5",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_playlists",
+          "file": "build/visual-audit/refresh-tablet/subsonic_playlists.png",
+          "sha256": "bd1b6fe5c03bc968adb7229f1c93ff1fc3dd5a9ff025c1cf41ef50c481d6f13f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_artist_detail",
+          "file": "build/visual-audit/refresh-tablet/subsonic_artist_detail.png",
+          "sha256": "fb79cd1750178608b7ab06a771d8a4c1ee7b094b11363fa6186b5ff343beef8b",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_album_detail",
+          "file": "build/visual-audit/refresh-tablet/subsonic_album_detail.png",
+          "sha256": "4098b9175f98ebe5a031d33770a89c0ba01def06f2e3872cc81c46c096fe0fd1",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_playlist_detail",
+          "file": "build/visual-audit/refresh-tablet/subsonic_playlist_detail.png",
+          "sha256": "d7cbb1b61b093a55e6a8d2fdb856f47f9f3b2a107482a87a8e06e64d0f06c57e",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library_selection",
+          "file": "build/visual-audit/refresh-tablet/library_selection.png",
+          "sha256": "9102da27d21fbaa0d0b6c344770c1d5db526d38698acba92bed8ae9303557af3",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_guest",
+          "file": "build/visual-audit/refresh-tablet/dizzylab_guest.png",
+          "sha256": "ee24e1d3ad3ba593948c3ca9f7c0fd756386453fb392c600e04de475606ba636",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_error",
+          "file": "build/visual-audit/refresh-tablet/dizzylab_error.png",
+          "sha256": "20bf5c09048ac35ac163e16155493b9c0619f4b367981d09bc7c9a121cbff029",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "empty_library",
+          "file": "build/visual-audit/refresh-tablet/empty_library.png",
+          "sha256": "6d62fd399fabe99de78c1aa1192ea62c9bd9948a949a527a708bee5429b2491f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        }
+      ]
+    },
+    {
+      "run": "refresh-tablet-landscape",
+      "scope": "pages",
+      "theme": "dark",
+      "fontScale": 1,
+      "widthDp": 1280,
+      "heightDp": 800,
+      "androidApi": "37",
+      "instrumentationSha256": "9f67428ae2c46a349890a078e15a9b20931fd33a3eca4fc39b9b3eb5a0cd3404",
+      "captureRecords": 27,
+      "assertions": [],
+      "screenshots": [
+        {
+          "name": "playlists",
+          "file": "build/visual-audit/refresh-tablet-landscape/playlists.png",
+          "sha256": "257f4003e34bb6d770c165b91277bcc23813540ae0a8cd7c89d05214696780f7",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library",
+          "file": "build/visual-audit/refresh-tablet-landscape/library.png",
+          "sha256": "fbfc11f153a74cc640675a8faa4bb18cbd0b66dbcd3223a96792f176c04a3c52",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "scan",
+          "file": "build/visual-audit/refresh-tablet-landscape/scan.png",
+          "sha256": "b8ebae7db6e7fb8f6877831011fd12117573796a8bbb306df976e225ef350921",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "now_playing",
+          "file": "build/visual-audit/refresh-tablet-landscape/now_playing.png",
+          "sha256": "7e3301fe03e5233249d4136945ce146dc8a5b942fb1e60566e2b9919d89e4664",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "settings",
+          "file": "build/visual-audit/refresh-tablet-landscape/settings.png",
+          "sha256": "173b32cafb60eeb235132d000bce4bda487a08814c638e3971c10ea27aa15067",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "streaming",
+          "file": "build/visual-audit/refresh-tablet-landscape/streaming.png",
+          "sha256": "d494eeb67451c3d40bb4196038a920348ede59859d94943878cd92cfcd0217ab",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_account",
+          "file": "build/visual-audit/refresh-tablet-landscape/dizzylab_account.png",
+          "sha256": "e06e997605b6ad472f4812585cdd21a29e7364a23cca47ea0d2c5f80783dc642",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library_filters",
+          "file": "build/visual-audit/refresh-tablet-landscape/library_filters.png",
+          "sha256": "da2c4c3cf89d2e538ef06c96f0e1e18b54ac71ca2edb259c3c3340d39440ea70",
+          "smallTargets": [
+            {
+              "label": "远方来信 · A Letter from Afar：更多操作",
+              "widthDp": 48,
+              "heightDp": 2
+            }
+          ],
+          "edgeClippedTargets": [
+            {
+              "label": "",
+              "widthDp": 816,
+              "heightDp": 44
+            }
+          ]
+        },
+        {
+          "name": "playlist_detail",
+          "file": "build/visual-audit/refresh-tablet-landscape/playlist_detail.png",
+          "sha256": "ccd4b1038b1a52d8ec6837e2ab1958d42e0523e068a93e7e8312220473ea29a9",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_music",
+          "file": "build/visual-audit/refresh-tablet-landscape/dizzylab_music.png",
+          "sha256": "8c1262e21563b45493157b018eaeabfd93fc83e66f6d371d745ea2f44a09d30d",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_album",
+          "file": "build/visual-audit/refresh-tablet-landscape/dizzylab_album.png",
+          "sha256": "188b639cf41e71af4f587f867fe5178b01406081826971ce85f6dbdb737367e2",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_feed",
+          "file": "build/visual-audit/refresh-tablet-landscape/dizzylab_feed.png",
+          "sha256": "e152753c7ef0fa71c6873d4323bd827d0999df8d555951bc3aedf2005b701372",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_following",
+          "file": "build/visual-audit/refresh-tablet-landscape/dizzylab_following.png",
+          "sha256": "61dd67b958a2bdc5f0aa96fed86b6e643ab65b7ad58d432a9daa393127630f69",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "webdav_browser",
+          "file": "build/visual-audit/refresh-tablet-landscape/webdav_browser.png",
+          "sha256": "94e0d247b29dabf2b44e89ead0f29123e6ea870a37abb7def2b27ea62033e9c8",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_home",
+          "file": "build/visual-audit/refresh-tablet-landscape/subsonic_home.png",
+          "sha256": "44102505f9686a78aa59c8764e8f13f6566c429ed4985adc1eb9564faf9369a7",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_search",
+          "file": "build/visual-audit/refresh-tablet-landscape/subsonic_search.png",
+          "sha256": "38c6a19294cd3a112ac2450f7747c4a4cb3d4fe6ec2c047e8086ec2f3e9658a5",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_artists",
+          "file": "build/visual-audit/refresh-tablet-landscape/subsonic_artists.png",
+          "sha256": "1607e8e8f6b5150d8a90078831d8de54e20fe788c1a4e2a1b6e1f5c36a608cf9",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_songs",
+          "file": "build/visual-audit/refresh-tablet-landscape/subsonic_songs.png",
+          "sha256": "c9df9128cbe71b149d3bb1f7cd2ffa7abcf5d860a7d92d3432a88a02d7d3b221",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_albums",
+          "file": "build/visual-audit/refresh-tablet-landscape/subsonic_albums.png",
+          "sha256": "c3ace2f15250fd776db02de139991a92ece2490df6f750e547d1456d9ca11d8e",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_playlists",
+          "file": "build/visual-audit/refresh-tablet-landscape/subsonic_playlists.png",
+          "sha256": "e4466687bb0d0ddd6bd0d66cf8f3b244bebd39bad9b6bda921395621c66b89e7",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_artist_detail",
+          "file": "build/visual-audit/refresh-tablet-landscape/subsonic_artist_detail.png",
+          "sha256": "7e17d019658695c5052534c04085b1b03153b0490089859c70227a0c96832ce4",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_album_detail",
+          "file": "build/visual-audit/refresh-tablet-landscape/subsonic_album_detail.png",
+          "sha256": "5636b6b0f1261513bc430c9047e4a48cae4ee8c5a33a254450f9a66c0c6b9c8b",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_playlist_detail",
+          "file": "build/visual-audit/refresh-tablet-landscape/subsonic_playlist_detail.png",
+          "sha256": "49b3ae481537b8cf67ceafaecc4cbfb9bc0fd75765670d15e0ea86e09f3b0f25",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "library_selection",
+          "file": "build/visual-audit/refresh-tablet-landscape/library_selection.png",
+          "sha256": "9afb6a1e237d37a707f0c63209331c9e9e623d7bd0516d5d3662cb512c36d3ae",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_guest",
+          "file": "build/visual-audit/refresh-tablet-landscape/dizzylab_guest.png",
+          "sha256": "c742f5a0b2a28a91bf167cfdcf3a7d9a44450740f6d5e689bc2fe877a826986b",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_error",
+          "file": "build/visual-audit/refresh-tablet-landscape/dizzylab_error.png",
+          "sha256": "7f6c61903f487fae78948ae84f8f0e31d0ec8273670327a090ac393cf26b33c0",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "empty_library",
+          "file": "build/visual-audit/refresh-tablet-landscape/empty_library.png",
+          "sha256": "620903d6e4d8058a3b57d255f9417346e6f2424c9a33cff7ee9b38c6d353b194",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        }
+      ]
+    },
+    {
+      "run": "scroll-refresh-large",
+      "scope": "scroll",
+      "theme": "amber",
+      "fontScale": 2,
+      "widthDp": 375,
+      "heightDp": 750,
+      "androidApi": "37",
+      "instrumentationSha256": "9f67428ae2c46a349890a078e15a9b20931fd33a3eca4fc39b9b3eb5a0cd3404",
+      "captureRecords": 25,
+      "assertions": [
+        {
+          "name": "dizzylab_long_list",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_append_keeps_position",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_load_more_affordance",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_detail_back_keeps_position",
+          "ok": true
+        }
+      ],
+      "screenshots": [
+        {
+          "name": "playing_initial",
+          "file": "build/visual-audit/scroll-refresh-large/playing_initial.png",
+          "sha256": "2f0de74fec5f87a368f8d414b0a9378d6fe063611b4e81338b4200055adf2274",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "播放模式：顺序播放",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "上一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放",
+              "widthDp": 72,
+              "heightDp": 8.761905
+            },
+            {
+              "label": "下一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放选项",
+              "widthDp": 62.095238,
+              "heightDp": 2.2857144
+            }
+          ]
+        },
+        {
+          "name": "playing_scrolled",
+          "file": "build/visual-audit/scroll-refresh-large/playing_scrolled.png",
+          "sha256": "b57e62927dbe3a08421468ac2eb7735f75fd90faa1a5fb1deac5271f236d27b1",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "webdav_initial",
+          "file": "build/visual-audit/scroll-refresh-large/webdav_initial.png",
+          "sha256": "be1eb54d0a2092ad933f7677a347d9eaa600edb0fee15594ce4f97c1d960a862",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "webdav_scrolled",
+          "file": "build/visual-audit/scroll-refresh-large/webdav_scrolled.png",
+          "sha256": "c2fce482c252c7a58fcf47b6c98a6c00a52dd369b5873e74d0a954ba8d8a59a7",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "搜索当前目录",
+              "widthDp": 252.95238,
+              "heightDp": 28.571428
+            },
+            {
+              "label": "刷新",
+              "widthDp": 84.190475,
+              "heightDp": 16.761906
+            }
+          ]
+        },
+        {
+          "name": "subsonic_search_initial",
+          "file": "build/visual-audit/scroll-refresh-large/subsonic_search_initial.png",
+          "sha256": "0808cfe4b2cab039004b576011e6b4e17544c660be9b2fe82692bc81a26fb466",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_search_scrolled",
+          "file": "build/visual-audit/scroll-refresh-large/subsonic_search_scrolled.png",
+          "sha256": "af73cf05ad5cd2b607e104461c79fda21f40aa3fdbf5c73427001b20892acaef",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "selection_initial",
+          "file": "build/visual-audit/scroll-refresh-large/selection_initial.png",
+          "sha256": "3808a7506e42d8cb17b4893ca5b148d4ca953257a803cd3539d5881e88de2f68",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "歌词",
+              "widthDp": 40.38095,
+              "heightDp": 53.714287
+            }
+          ]
+        },
+        {
+          "name": "selection_scrolled",
+          "file": "build/visual-audit/scroll-refresh-large/selection_scrolled.png",
+          "sha256": "8db60c7294dfb3e0c693e9e20b17eba71bb1775550025b750c9cc2543f7f9c0c",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "歌词",
+              "widthDp": 37.333332,
+              "heightDp": 53.714287
+            }
+          ]
+        },
+        {
+          "name": "showPlaybackSettingsDialog_scrolled",
+          "file": "build/visual-audit/scroll-refresh-large/showPlaybackSettingsDialog_scrolled.png",
+          "sha256": "b88ba3c230d2f2c37d87093ce1953c9e4d9c6a8a45c2ef78257ebd320bf5cec5",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showPlaybackSettingsDialog_bottom",
+          "file": "build/visual-audit/scroll-refresh-large/showPlaybackSettingsDialog_bottom.png",
+          "sha256": "83f5cd21a26936d2d8aa5af5b758df9d137398819ac4c45c7d1cd77696456f80",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showEqualizerDialog_scrolled",
+          "file": "build/visual-audit/scroll-refresh-large/showEqualizerDialog_scrolled.png",
+          "sha256": "d3f16471482b64b39c06a214d86e5eca28caab8947f321f2faf806762cfb18eb",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "取消",
+              "widthDp": 76.57143,
+              "heightDp": 25.904762
+            }
+          ]
+        },
+        {
+          "name": "showEqualizerDialog_bottom",
+          "file": "build/visual-audit/scroll-refresh-large/showEqualizerDialog_bottom.png",
+          "sha256": "e01d55f8cfe8f2e4c392c10368edf6a12fbb69f4aed15412b47d6fb74db73e3d",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "",
+              "widthDp": 272.38095,
+              "heightDp": 45.333332
+            },
+            {
+              "label": "保存为预设",
+              "widthDp": 154.66667,
+              "heightDp": 40
+            }
+          ]
+        },
+        {
+          "name": "showAudioMetadataEditDialog_scrolled",
+          "file": "build/visual-audit/scroll-refresh-large/showAudioMetadataEditDialog_scrolled.png",
+          "sha256": "0d24dd58013b9051d05cf6017124733a4865879634d744b727907ed88a29f198",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "歌词",
+              "widthDp": 272.38095,
+              "heightDp": 22.857143
+            }
+          ]
+        },
+        {
+          "name": "showAudioMetadataEditDialog_bottom",
+          "file": "build/visual-audit/scroll-refresh-large/showAudioMetadataEditDialog_bottom.png",
+          "sha256": "d63f4919ef65eb90c0eb7555fcbe7d9ddde91b076f49815c7c996a438ff1bc61",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "2026",
+              "widthDp": 272.38095,
+              "heightDp": 13.714286
+            }
+          ]
+        },
+        {
+          "name": "showSubsonicEditDialog_scrolled",
+          "file": "build/visual-audit/scroll-refresh-large/showSubsonicEditDialog_scrolled.png",
+          "sha256": "57068cd0cfe4bfe0087ad45ad11a5c5b924e218a2ae625128a1be9d7d7a31165",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "用户名",
+              "widthDp": 272.38095,
+              "heightDp": 17.52381
+            }
+          ]
+        },
+        {
+          "name": "showSubsonicEditDialog_bottom",
+          "file": "build/visual-audit/scroll-refresh-large/showSubsonicEditDialog_bottom.png",
+          "sha256": "ec23e232ba702d295407fe368f1cb741889b4511f31330b41d322d7a725e60ff",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "用户名",
+              "widthDp": 272.38095,
+              "heightDp": 10.285714
+            }
+          ]
+        },
+        {
+          "name": "showWebDavEditDialog_scrolled",
+          "file": "build/visual-audit/scroll-refresh-large/showWebDavEditDialog_scrolled.png",
+          "sha256": "19fc849d7d30c1733df88361cc9ccb4080ed320a98c207355f468402c3efaf96",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "密码（选填）",
+              "widthDp": 272.38095,
+              "heightDp": 17.52381
+            }
+          ]
+        },
+        {
+          "name": "showWebDavEditDialog_bottom",
+          "file": "build/visual-audit/scroll-refresh-large/showWebDavEditDialog_bottom.png",
+          "sha256": "17e1be8a5fa9dbdf5aedb2e4ac434c333bf8eac2cc7298e46539a2227ed33017",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "服务器备注",
+              "widthDp": 272.38095,
+              "heightDp": 10.285714
+            }
+          ]
+        },
+        {
+          "name": "rating_five",
+          "file": "build/visual-audit/scroll-refresh-large/rating_five.png",
+          "sha256": "69a3c45ae48a75202c3ba3915806c4cb7f892aa531953b7cf9338c038af65777",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "rating_five_selected",
+          "file": "build/visual-audit/scroll-refresh-large/rating_five_selected.png",
+          "sha256": "2c8db09121b7b0b0b95261d82ab8786dc56e16542c57e2e255d64947d225d99e",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "别名",
+              "widthDp": 272.38095,
+              "heightDp": 17.142857
+            }
+          ]
+        },
+        {
+          "name": "custom_avatar",
+          "file": "build/visual-audit/scroll-refresh-large/custom_avatar.png",
+          "sha256": "eee09f21f85a0eb26f2325d08fb47ebfe1968c069c4a249be14900bb047588c0",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_long_list",
+          "file": "build/visual-audit/scroll-refresh-large/dizzylab_long_list.png",
+          "sha256": "b868d9ac68b7c1d30d2373254e26d5f5450e18cf15a1a6adae68057fa06ea042",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_append_keeps_position",
+          "file": "build/visual-audit/scroll-refresh-large/dizzylab_append_keeps_position.png",
+          "sha256": "634a3d79542a6e13685fa8bbcf40ecedbe64352b5eb6ceeeb50c83bd49003f6b",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_load_more_affordance",
+          "file": "build/visual-audit/scroll-refresh-large/dizzylab_load_more_affordance.png",
+          "sha256": "99da622a23ef96d0b60eb4b42aa06665c33c72c2ae44086fa6fdcafddee18b0e",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_detail_back_keeps_position",
+          "file": "build/visual-audit/scroll-refresh-large/dizzylab_detail_back_keeps_position.png",
+          "sha256": "8bc810c24b3cbe17d095ff1b7d874b50469aa098c38c27db31ed04b9b2315714",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        }
+      ]
+    },
+    {
+      "run": "scroll-refresh-landscape",
+      "scope": "scroll",
+      "theme": "dark",
+      "fontScale": 1,
+      "widthDp": 750,
+      "heightDp": 375,
+      "androidApi": "37",
+      "instrumentationSha256": "9f67428ae2c46a349890a078e15a9b20931fd33a3eca4fc39b9b3eb5a0cd3404",
+      "captureRecords": 25,
+      "assertions": [
+        {
+          "name": "dizzylab_long_list",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_append_keeps_position",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_load_more_affordance",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_detail_back_keeps_position",
+          "ok": true
+        }
+      ],
+      "screenshots": [
+        {
+          "name": "playing_initial",
+          "file": "build/visual-audit/scroll-refresh-landscape/playing_initial.png",
+          "sha256": "08dfff87262cc6216d0d2ba75c7a45a6b71b38d94d7eb0f8a9c07097d85cc229",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "播放模式：顺序播放",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            },
+            {
+              "label": "上一首",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            },
+            {
+              "label": "播放",
+              "widthDp": 72,
+              "heightDp": 27.809525
+            },
+            {
+              "label": "下一首",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            },
+            {
+              "label": "播放选项",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            }
+          ]
+        },
+        {
+          "name": "playing_scrolled",
+          "file": "build/visual-audit/scroll-refresh-landscape/playing_scrolled.png",
+          "sha256": "6aaa667b309f93523d5f066fb9f038b688a915ad56d79b6ec3085552a02c442f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "webdav_initial",
+          "file": "build/visual-audit/scroll-refresh-landscape/webdav_initial.png",
+          "sha256": "e7b267834914d1a6a5aad3e7c5ad50cf1618f8d87aef0c949f27d58a8de7ab6c",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "webdav_scrolled",
+          "file": "build/visual-audit/scroll-refresh-landscape/webdav_scrolled.png",
+          "sha256": "c6c781afc95c79702ffb2cc4ba72b919e39339d6e242ed670bb7c239b36fabd8",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "subsonic_search_initial",
+          "file": "build/visual-audit/scroll-refresh-landscape/subsonic_search_initial.png",
+          "sha256": "2f746b84973dac2b0c10f124ba404efa2bb4ae55f3c35f7f499451f1ce28901b",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "返回上一层",
+              "widthDp": 621.7143,
+              "heightDp": 25.52381
+            }
+          ]
+        },
+        {
+          "name": "subsonic_search_scrolled",
+          "file": "build/visual-audit/scroll-refresh-landscape/subsonic_search_scrolled.png",
+          "sha256": "ec03eb5adca75bdcfe009cb82a97e2479d0cc8f457b068150c7a292e7c6e0193",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "selection_initial",
+          "file": "build/visual-audit/scroll-refresh-landscape/selection_initial.png",
+          "sha256": "8e2e008d137e87dba969ff7935c25e6fdb794e64c8b9784b065c72351adc1707",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "selection_scrolled",
+          "file": "build/visual-audit/scroll-refresh-landscape/selection_scrolled.png",
+          "sha256": "8e2e008d137e87dba969ff7935c25e6fdb794e64c8b9784b065c72351adc1707",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showPlaybackSettingsDialog_scrolled",
+          "file": "build/visual-audit/scroll-refresh-landscape/showPlaybackSettingsDialog_scrolled.png",
+          "sha256": "58cc8467747436d303c3b9b7b5ffa4dbd84030de591e02cb134596a994754d67",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "启动恢复",
+              "widthDp": 520.381,
+              "heightDp": 32.38095
+            }
+          ]
+        },
+        {
+          "name": "showPlaybackSettingsDialog_bottom",
+          "file": "build/visual-audit/scroll-refresh-landscape/showPlaybackSettingsDialog_bottom.png",
+          "sha256": "c02f8c48335d9046e4b3913adb60ecf802e3c8d06c999a2c016e8884fafd27ef",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showEqualizerDialog_scrolled",
+          "file": "build/visual-audit/scroll-refresh-landscape/showEqualizerDialog_scrolled.png",
+          "sha256": "10e92423f36257fce68779554712abcf4e019072bf2f0d242456b9af2724310f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showEqualizerDialog_bottom",
+          "file": "build/visual-audit/scroll-refresh-landscape/showEqualizerDialog_bottom.png",
+          "sha256": "7094bbc45a2c6642bde706ad809723adc3e3a86ad38a9f0cde40a789a489d400",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showAudioMetadataEditDialog_scrolled",
+          "file": "build/visual-audit/scroll-refresh-landscape/showAudioMetadataEditDialog_scrolled.png",
+          "sha256": "25571925de821ecd48e3db2ab24c9a82d8de7490d97aa609758668efaa10d99a",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showAudioMetadataEditDialog_bottom",
+          "file": "build/visual-audit/scroll-refresh-landscape/showAudioMetadataEditDialog_bottom.png",
+          "sha256": "e498afc28549c2b5736a85fef0a0974c16d9e0408df8587c4ea9b11cf76f5547",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "流动的声音",
+              "widthDp": 552.381,
+              "heightDp": 35.42857
+            }
+          ]
+        },
+        {
+          "name": "showSubsonicEditDialog_scrolled",
+          "file": "build/visual-audit/scroll-refresh-landscape/showSubsonicEditDialog_scrolled.png",
+          "sha256": "33e422683ba75bc83dd02d098f1629b0dedbac14e3e72ed5705011d3acd47b8f",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "端口（选填）",
+              "widthDp": 552.381,
+              "heightDp": 15.238095
+            }
+          ]
+        },
+        {
+          "name": "showSubsonicEditDialog_bottom",
+          "file": "build/visual-audit/scroll-refresh-landscape/showSubsonicEditDialog_bottom.png",
+          "sha256": "7d1f3cd4d17818049ff121088927f627011692447df1b4fdc621d5baa816b2c0",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showWebDavEditDialog_scrolled",
+          "file": "build/visual-audit/scroll-refresh-landscape/showWebDavEditDialog_scrolled.png",
+          "sha256": "1b96771c04452389d7bd87759ba621b8acda7c7e56384f337f07cd4fdc0fa1c2",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "用户名（选填）",
+              "widthDp": 552.381,
+              "heightDp": 15.238095
+            }
+          ]
+        },
+        {
+          "name": "showWebDavEditDialog_bottom",
+          "file": "build/visual-audit/scroll-refresh-landscape/showWebDavEditDialog_bottom.png",
+          "sha256": "627ea260a8403f98055652b9f28eae16a00b48632af7c44950b103793a308455",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "rating_five",
+          "file": "build/visual-audit/scroll-refresh-landscape/rating_five.png",
+          "sha256": "fca10387222114c9c2e79967ba57604a1394b7fda6986dea7daf07d95c817197",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "rating_five_selected",
+          "file": "build/visual-audit/scroll-refresh-landscape/rating_five_selected.png",
+          "sha256": "50f9d24475fbb45320c2bab77ac7f39790bbfbb63b84bfbe4aaebb66826889ea",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "点评",
+              "widthDp": 552.381,
+              "heightDp": 13.333333
+            }
+          ]
+        },
+        {
+          "name": "custom_avatar",
+          "file": "build/visual-audit/scroll-refresh-landscape/custom_avatar.png",
+          "sha256": "b403dbe3a6fe3aabfb73c69f9cf821b5e015db63bda52b34879039f69118fca4",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_long_list",
+          "file": "build/visual-audit/scroll-refresh-landscape/dizzylab_long_list.png",
+          "sha256": "b65549c43174a22ee5d36e09691b2ac031a0f775f3e8a40fbf684d4dc4c260a6",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_append_keeps_position",
+          "file": "build/visual-audit/scroll-refresh-landscape/dizzylab_append_keeps_position.png",
+          "sha256": "68e0e75d9868cbbbcd66292844e022f3c25368090bcb0212b47d763fa332e694",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_load_more_affordance",
+          "file": "build/visual-audit/scroll-refresh-landscape/dizzylab_load_more_affordance.png",
+          "sha256": "cce550582cd33721a854c21be4da3447206e8a6770235c6d1d5526757a189030",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_detail_back_keeps_position",
+          "file": "build/visual-audit/scroll-refresh-landscape/dizzylab_detail_back_keeps_position.png",
+          "sha256": "62a10543f20f4df77c49379d33d431a9192fb99fbb2a9a0a1b5fc7b9725124ea",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        }
+      ]
+    },
+    {
+      "run": "refresh-compact-controls",
+      "scope": "refresh",
+      "theme": "dark",
+      "fontScale": 1,
+      "widthDp": 750,
+      "heightDp": 375,
+      "androidApi": "37",
+      "instrumentationSha256": "9f67428ae2c46a349890a078e15a9b20931fd33a3eca4fc39b9b3eb5a0cd3404",
+      "captureRecords": 24,
+      "assertions": [
+        {
+          "name": "mini_unframed",
+          "ok": true
+        },
+        {
+          "name": "mini_compact_density",
+          "ok": true
+        },
+        {
+          "name": "mini_swipe_changes_track",
+          "ok": true
+        },
+        {
+          "name": "long_title_single_line",
+          "ok": true
+        },
+        {
+          "name": "long_title_original_tap_gesture",
+          "ok": true
+        },
+        {
+          "name": "long_title_original_up_gesture",
+          "ok": true
+        },
+        {
+          "name": "source_dropdown_affordance",
+          "ok": true
+        },
+        {
+          "name": "player_theme_dark",
+          "ok": true
+        },
+        {
+          "name": "player_theme_light",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_long_list",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_append_keeps_position",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_load_more_affordance",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_detail_back_keeps_position",
+          "ok": true
+        },
+        {
+          "name": "cache_logs_switch_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_logs_actions_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_temporary_switch_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_temporary_actions_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_settings_bottom",
+          "ok": true
+        }
+      ],
+      "screenshots": [
+        {
+          "name": "mini_unframed",
+          "file": "build/visual-audit/refresh-compact-controls/mini_unframed.png",
+          "sha256": "a50dae353e651d6d61c11f66fe2254cc35adbbfeb1f8ccc175ad3ed470d34430",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "mini_compact_density",
+          "file": "build/visual-audit/refresh-compact-controls/mini_compact_density.png",
+          "sha256": "a50dae353e651d6d61c11f66fe2254cc35adbbfeb1f8ccc175ad3ed470d34430",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "mini_swipe_changes_track",
+          "file": "build/visual-audit/refresh-compact-controls/mini_swipe_changes_track.png",
+          "sha256": "d25c726b673b9402d6c3186d30b5231c417a2f9d7bbf22345583f7b3ecb7f01c",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "long_title_single_line",
+          "file": "build/visual-audit/refresh-compact-controls/long_title_single_line.png",
+          "sha256": "ebfe699c087b99f6abc4c11df3badc97bbcf18d0b9a982732a10f5670776d5f0",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "播放模式：顺序播放",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            },
+            {
+              "label": "上一首",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            },
+            {
+              "label": "播放",
+              "widthDp": 72,
+              "heightDp": 27.809525
+            },
+            {
+              "label": "下一首",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            },
+            {
+              "label": "播放选项",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            }
+          ]
+        },
+        {
+          "name": "long_title_original_tap_gesture",
+          "file": "build/visual-audit/refresh-compact-controls/long_title_original_tap_gesture.png",
+          "sha256": "43096a49e72e8b04c10d9016df9fdca0ffc880cdbed306fc1d32cb31118a2ac9",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "播放模式：顺序播放",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            },
+            {
+              "label": "上一首",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            },
+            {
+              "label": "播放",
+              "widthDp": 72,
+              "heightDp": 27.809525
+            },
+            {
+              "label": "下一首",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            },
+            {
+              "label": "播放选项",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            }
+          ]
+        },
+        {
+          "name": "long_title_original_up_gesture",
+          "file": "build/visual-audit/refresh-compact-controls/long_title_original_up_gesture.png",
+          "sha256": "2c0aeda19186c2304f308b7af172491c1ac725b49b3850e98678646f5b149db5",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "source_dropdown_affordance",
+          "file": "build/visual-audit/refresh-compact-controls/source_dropdown_affordance.png",
+          "sha256": "136781439cf16514c6186656cf336ddae0b473d5404f27cec6aae7bf4429b584",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "player_theme_dark",
+          "file": "build/visual-audit/refresh-compact-controls/player_theme_dark.png",
+          "sha256": "43096a49e72e8b04c10d9016df9fdca0ffc880cdbed306fc1d32cb31118a2ac9",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "播放模式：顺序播放",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            },
+            {
+              "label": "上一首",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            },
+            {
+              "label": "播放",
+              "widthDp": 72,
+              "heightDp": 27.809525
+            },
+            {
+              "label": "下一首",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            },
+            {
+              "label": "播放选项",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            }
+          ]
+        },
+        {
+          "name": "player_theme_light",
+          "file": "build/visual-audit/refresh-compact-controls/player_theme_light.png",
+          "sha256": "6d1243ef79ab0a4e4dddfd31f5a16fb7a05de09546cc25a33e645314ff3d1d9b",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "播放模式：顺序播放",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            },
+            {
+              "label": "上一首",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            },
+            {
+              "label": "播放",
+              "widthDp": 72,
+              "heightDp": 27.809525
+            },
+            {
+              "label": "下一首",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            },
+            {
+              "label": "播放选项",
+              "widthDp": 60.95238,
+              "heightDp": 19.809525
+            }
+          ]
+        },
+        {
+          "name": "dizzylab_long_list",
+          "file": "build/visual-audit/refresh-compact-controls/dizzylab_long_list.png",
+          "sha256": "d14ae293c2ad5ca76e1d047bc53228897318d0702f5dea8beb593709ec9637bd",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_append_keeps_position",
+          "file": "build/visual-audit/refresh-compact-controls/dizzylab_append_keeps_position.png",
+          "sha256": "d5170c3e83d4d1366461308f7b2fa50f00628d2cd6ec8e320ab19014e41d9510",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_load_more_affordance",
+          "file": "build/visual-audit/refresh-compact-controls/dizzylab_load_more_affordance.png",
+          "sha256": "3bc90cfce594e04af48da8e2852c0b1baf08e830d2e13e95c0f44860f38cb936",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_detail_back_keeps_position",
+          "file": "build/visual-audit/refresh-compact-controls/dizzylab_detail_back_keeps_position.png",
+          "sha256": "ed1c8596d364e1b55c37b18b22ee25bed5d0943588f7e2f18e74cbecbeac484a",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showCacheSettingsDialog",
+          "file": "build/visual-audit/refresh-compact-controls/showCacheSettingsDialog.png",
+          "sha256": "914d014c631eaf5340ec5e39fdcaa47d9a54d83af3437d1704e267cff5e996c7",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_logs_switch_reachable",
+          "file": "build/visual-audit/refresh-compact-controls/cache_logs_switch_reachable.png",
+          "sha256": "a8260e9394bbcfba76e0ad9e9318a77a5e1a524ed0ba64177d53d4f812848bcc",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_logs_actions_reachable",
+          "file": "build/visual-audit/refresh-compact-controls/cache_logs_actions_reachable.png",
+          "sha256": "c287c8eda3bbc31dd0188403d0448d7935f4d5c31c1fd5be4b1b60a520064944",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_temporary_switch_reachable",
+          "file": "build/visual-audit/refresh-compact-controls/cache_temporary_switch_reachable.png",
+          "sha256": "0a25bc4cb8a98939c85cbc7c9355a6500437ac7f4e83720224f3f17d0975c8aa",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_temporary_actions_reachable",
+          "file": "build/visual-audit/refresh-compact-controls/cache_temporary_actions_reachable.png",
+          "sha256": "6ef8b9bcbd349c6757f3d8d6c6ceff182d10c663ed29164b38e5cf0cd2ed561e",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_settings_bottom",
+          "file": "build/visual-audit/refresh-compact-controls/cache_settings_bottom.png",
+          "sha256": "3fc473f997b159ec1ebcee7379c96da9d966772a58d4d24badf8c031b5d34e53",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showDiagnosticsDialog",
+          "file": "build/visual-audit/refresh-compact-controls/showDiagnosticsDialog.png",
+          "sha256": "ed4288e6ebbdf4b0466e9dbcab4c8dab5941fc973bf86347e1eb3979083e9931",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showLogRetentionDialog",
+          "file": "build/visual-audit/refresh-compact-controls/showLogRetentionDialog.png",
+          "sha256": "43835d82ddf8f5b9a602eeb138ea9ea982b7e4cc3a2140b2a2925a5e9dc4d07a",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showLogSelectionDialog",
+          "file": "build/visual-audit/refresh-compact-controls/showLogSelectionDialog.png",
+          "sha256": "c7f756d24d3bbc5519c8e4ea98bbf87eac3ccabc3587e871cc904421f720ba3e",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "runtime-20261030-023726-c19400c0.log，10-30 02:37 · 25.5 KB",
+              "widthDp": 52.190475,
+              "heightDp": 36.57143
+            }
+          ]
+        },
+        {
+          "name": "showLogPreviewDialog",
+          "file": "build/visual-audit/refresh-compact-controls/showLogPreviewDialog.png",
+          "sha256": "e8c68acc8d69801d93d19f8fe70531fa237151271dbe86ee5d87a3f3441e549c",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "refresh_settings",
+          "file": "build/visual-audit/refresh-compact-controls/refresh_settings.png",
+          "sha256": "8f86f20a475590b10f56ecdd877387155acbc25c865a374ace88d303922515df",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        }
+      ]
+    },
+    {
+      "run": "refresh-large-actions",
+      "scope": "refresh",
+      "theme": "amber",
+      "fontScale": 2,
+      "widthDp": 375,
+      "heightDp": 750,
+      "androidApi": "37",
+      "instrumentationSha256": "c209f2a513a119c1e4d528356504cb52c0ecc7c1d278b8e67acd0964d272ff23",
+      "captureRecords": 27,
+      "assertions": [
+        {
+          "name": "mini_unframed",
+          "ok": true
+        },
+        {
+          "name": "mini_seek_does_not_skip",
+          "ok": true
+        },
+        {
+          "name": "mini_swipe_changes_track",
+          "ok": true
+        },
+        {
+          "name": "long_title_single_line",
+          "ok": true
+        },
+        {
+          "name": "long_title_original_tap_gesture",
+          "ok": true
+        },
+        {
+          "name": "long_title_original_up_gesture",
+          "ok": true
+        },
+        {
+          "name": "source_dropdown_affordance",
+          "ok": true
+        },
+        {
+          "name": "player_theme_dark",
+          "ok": true
+        },
+        {
+          "name": "player_theme_light",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_long_list",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_append_keeps_position",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_load_more_affordance",
+          "ok": true
+        },
+        {
+          "name": "dizzylab_detail_back_keeps_position",
+          "ok": true
+        },
+        {
+          "name": "cache_logs_switch_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_logs_actions_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_temporary_switch_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_temporary_actions_reachable",
+          "ok": true
+        },
+        {
+          "name": "cache_settings_bottom",
+          "ok": true
+        },
+        {
+          "name": "log_selection_export_reachable",
+          "ok": true
+        },
+        {
+          "name": "log_selection_cancel_reachable",
+          "ok": true
+        },
+        {
+          "name": "log_selection_preview_reachable",
+          "ok": true
+        }
+      ],
+      "screenshots": [
+        {
+          "name": "mini_unframed",
+          "file": "build/visual-audit/refresh-large-actions/mini_unframed.png",
+          "sha256": "b9746fcb7103f49ea7e69fe7ec1fa2b51682c66a60bd31cc557952997e9a3b8e",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "雨后的城市与一段特别长的歌曲标题，用于验证大字体排版：更多操作",
+              "widthDp": 48,
+              "heightDp": 28.571428
+            }
+          ]
+        },
+        {
+          "name": "mini_seek_does_not_skip",
+          "file": "build/visual-audit/refresh-large-actions/mini_seek_does_not_skip.png",
+          "sha256": "4a52715f36b545d0e39eb9cfd629bd79be4733340545a1f4be9084c137a6746a",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "雨后的城市与一段特别长的歌曲标题，用于验证大字体排版：更多操作",
+              "widthDp": 48,
+              "heightDp": 28.571428
+            }
+          ]
+        },
+        {
+          "name": "mini_swipe_changes_track",
+          "file": "build/visual-audit/refresh-large-actions/mini_swipe_changes_track.png",
+          "sha256": "17575385f3d140c0fbd925f3057266a1d21239c20547ec49dce9662677397e96",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "雨后的城市与一段特别长的歌曲标题，用于验证大字体排版：更多操作",
+              "widthDp": 48,
+              "heightDp": 28.571428
+            }
+          ]
+        },
+        {
+          "name": "long_title_single_line",
+          "file": "build/visual-audit/refresh-large-actions/long_title_single_line.png",
+          "sha256": "00dfac0d0d5d7e2914c73b0c354bed9c04fc7914592bda2d740f9cef3946bc53",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "播放模式：顺序播放",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "上一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放",
+              "widthDp": 72,
+              "heightDp": 8.761905
+            },
+            {
+              "label": "下一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放选项",
+              "widthDp": 62.095238,
+              "heightDp": 2.2857144
+            }
+          ]
+        },
+        {
+          "name": "long_title_original_tap_gesture",
+          "file": "build/visual-audit/refresh-large-actions/long_title_original_tap_gesture.png",
+          "sha256": "d546e7c8e0219d25472d6eeebe1630efa1ccd3a8a841f0e32561f360ff258521",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "播放模式：顺序播放",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "上一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放",
+              "widthDp": 72,
+              "heightDp": 8.761905
+            },
+            {
+              "label": "下一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放选项",
+              "widthDp": 62.095238,
+              "heightDp": 2.2857144
+            }
+          ]
+        },
+        {
+          "name": "long_title_original_up_gesture",
+          "file": "build/visual-audit/refresh-large-actions/long_title_original_up_gesture.png",
+          "sha256": "2acf29c9f7c6beca55c1e898be308f55a279be315183ba56710b14cf26e8f180",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "source_dropdown_affordance",
+          "file": "build/visual-audit/refresh-large-actions/source_dropdown_affordance.png",
+          "sha256": "90435fa38796b59d524dc8d63b5b162b11dfc53e062753a6e46f15d1aeda1913",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "player_theme_dark",
+          "file": "build/visual-audit/refresh-large-actions/player_theme_dark.png",
+          "sha256": "6f4c7df900af9ffac5efa13c8604690a35991171085a2e3dc71afccc4e62191a",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "播放模式：顺序播放",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "上一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放",
+              "widthDp": 72,
+              "heightDp": 8.761905
+            },
+            {
+              "label": "下一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放选项",
+              "widthDp": 62.095238,
+              "heightDp": 2.2857144
+            }
+          ]
+        },
+        {
+          "name": "player_theme_light",
+          "file": "build/visual-audit/refresh-large-actions/player_theme_light.png",
+          "sha256": "d546e7c8e0219d25472d6eeebe1630efa1ccd3a8a841f0e32561f360ff258521",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "播放模式：顺序播放",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "上一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放",
+              "widthDp": 72,
+              "heightDp": 8.761905
+            },
+            {
+              "label": "下一首",
+              "widthDp": 61.714287,
+              "heightDp": 2.2857144
+            },
+            {
+              "label": "播放选项",
+              "widthDp": 62.095238,
+              "heightDp": 2.2857144
+            }
+          ]
+        },
+        {
+          "name": "dizzylab_long_list",
+          "file": "build/visual-audit/refresh-large-actions/dizzylab_long_list.png",
+          "sha256": "6c7839f5d5a3f47c644476b5e3e87d88c2e164b760f90a4ecff7248a631819c9",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_append_keeps_position",
+          "file": "build/visual-audit/refresh-large-actions/dizzylab_append_keeps_position.png",
+          "sha256": "3cfa52784af43c2dbe613c5a464ce48d3a299aa91a16dd9c5ba34751f9422d18",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_load_more_affordance",
+          "file": "build/visual-audit/refresh-large-actions/dizzylab_load_more_affordance.png",
+          "sha256": "8f4ac26a253b490eef3cc9d22f971aa185f269505fbafc303c01fc9a954fc833",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "dizzylab_detail_back_keeps_position",
+          "file": "build/visual-audit/refresh-large-actions/dizzylab_detail_back_keeps_position.png",
+          "sha256": "068e50b3ea0041f08993be63dee1c48011fa66f05790a5fecf70a9f0a01b7d97",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showCacheSettingsDialog",
+          "file": "build/visual-audit/refresh-large-actions/showCacheSettingsDialog.png",
+          "sha256": "bc9ac5f08b15874fc5e3c1dd1f005b1f62b3d7b97c70dcd6c92c80d53a201379",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_logs_switch_reachable",
+          "file": "build/visual-audit/refresh-large-actions/cache_logs_switch_reachable.png",
+          "sha256": "6326f6cae158e10c5480eb7eb03235cf5d3e2fcc21c13c38ad6643b3cbcaed16",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_logs_actions_reachable",
+          "file": "build/visual-audit/refresh-large-actions/cache_logs_actions_reachable.png",
+          "sha256": "9b18ad65ec60b35ebba956384b3a514142c0d03dcc1e9f051cf4f315f0ee967b",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_temporary_switch_reachable",
+          "file": "build/visual-audit/refresh-large-actions/cache_temporary_switch_reachable.png",
+          "sha256": "41fbafb19c0da91bb8142f81227c99794a08a5f480a2f404294454944616543b",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_temporary_actions_reachable",
+          "file": "build/visual-audit/refresh-large-actions/cache_temporary_actions_reachable.png",
+          "sha256": "ef2e05532922d9b81dfb16f858efae26ff5b1e2a781e98dd6d75f65042641d05",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "cache_settings_bottom",
+          "file": "build/visual-audit/refresh-large-actions/cache_settings_bottom.png",
+          "sha256": "f08c4ae21b725893613669ee4550e77165cb30c1403f400dc80ce321184fc8d3",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showDiagnosticsDialog",
+          "file": "build/visual-audit/refresh-large-actions/showDiagnosticsDialog.png",
+          "sha256": "5e601c85809a7c03f7788dd404d97283f7667637f38d8ae277cf6ff5e72e7061",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showLogRetentionDialog",
+          "file": "build/visual-audit/refresh-large-actions/showLogRetentionDialog.png",
+          "sha256": "8c7a02101af926e2d7c5173a86683f7be9f7bd10c0053962cbbb77725fded892",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "showLogSelectionDialog",
+          "file": "build/visual-audit/refresh-large-actions/showLogSelectionDialog.png",
+          "sha256": "0e69ecf8a5183ef810f01166d2eb4ce0e4136f9a45d87c33fad4216db612786b",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "runtime-20261030-023759-594b61a0.log，10-30 02:38 · 27.8 KB",
+              "widthDp": 52.190475,
+              "heightDp": 3.8095238
+            },
+            {
+              "label": "取消",
+              "widthDp": 76.57143,
+              "heightDp": 25.904762
+            }
+          ]
+        },
+        {
+          "name": "log_selection_export_reachable",
+          "file": "build/visual-audit/refresh-large-actions/log_selection_export_reachable.png",
+          "sha256": "0e69ecf8a5183ef810f01166d2eb4ce0e4136f9a45d87c33fad4216db612786b",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "runtime-20261030-023759-594b61a0.log，10-30 02:38 · 27.8 KB",
+              "widthDp": 52.190475,
+              "heightDp": 3.8095238
+            },
+            {
+              "label": "取消",
+              "widthDp": 76.57143,
+              "heightDp": 25.904762
+            }
+          ]
+        },
+        {
+          "name": "log_selection_cancel_reachable",
+          "file": "build/visual-audit/refresh-large-actions/log_selection_cancel_reachable.png",
+          "sha256": "59d5af8a5aad4f40523a43c986d3d907fb4bfd2130b86945a10e59bdaa628e41",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "runtime-20261030-023759-594b61a0.log，10-30 02:38 · 27.8 KB",
+              "widthDp": 52.190475,
+              "heightDp": 3.8095238
+            },
+            {
+              "label": "导出 ZIP",
+              "widthDp": 123.04762,
+              "heightDp": 40
+            }
+          ]
+        },
+        {
+          "name": "log_selection_preview_reachable",
+          "file": "build/visual-audit/refresh-large-actions/log_selection_preview_reachable.png",
+          "sha256": "d898710fa7de6d39b4b767edfc773378753b4c4e0be8d3e3ee131e61a4413e63",
+          "smallTargets": [],
+          "edgeClippedTargets": [
+            {
+              "label": "runtime-20261030-023759-594b61a0.log，10-30 02:38 · 27.8 KB",
+              "widthDp": 52.190475,
+              "heightDp": 3.8095238
+            },
+            {
+              "label": "取消",
+              "widthDp": 76.57143,
+              "heightDp": 40
+            }
+          ]
+        },
+        {
+          "name": "showLogPreviewDialog",
+          "file": "build/visual-audit/refresh-large-actions/showLogPreviewDialog.png",
+          "sha256": "208ad21d48169a0e05ffd234118f59347472e4475b9a411769da0798ff70c66f",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        },
+        {
+          "name": "refresh_settings",
+          "file": "build/visual-audit/refresh-large-actions/refresh_settings.png",
+          "sha256": "d020fc4f2b6a9f29cedbf6f4f059534c2476a6ade82e120f0a0a8d9df18cf17e",
+          "smallTargets": [],
+          "edgeClippedTargets": []
+        }
+      ]
+    }
+  ]
+}

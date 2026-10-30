@@ -2,6 +2,7 @@ package com.supermite.smp.stream
 
 import android.net.Uri
 import com.supermite.smp.data.Track
+import com.supermite.smp.logging.AppLogger
 import java.net.HttpURLConnection
 import java.net.URLEncoder
 import java.net.URL
@@ -334,7 +335,9 @@ class DizzylabClient(private val cookie: String) {
             setRequestProperty("Accept", accept)
             setRequestProperty("Referer", referer)
             }
-            if (connection.responseCode in setOf(301, 302, 303, 307, 308)) {
+            val responseCode = connection.responseCode
+            AppLogger.debug("DIZZYLAB", "GET ${target.host}${target.path}: HTTP $responseCode")
+            if (responseCode in setOf(301, 302, 303, 307, 308)) {
                 val location = connection.getHeaderField("Location") ?: error("Dizzylab 跳转无效")
                 connection.disconnect()
                 target = URL(target, location)
@@ -528,7 +531,7 @@ class DizzylabClient(private val cookie: String) {
 
     companion object {
         private const val BASE = "https://www.dizzylab.net"
-        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android) SMP/2.1.0-beta.1"
+        private val USER_AGENT get() = "Mozilla/5.0 (Linux; Android) SMP/${com.supermite.smp.BuildConfig.VERSION_NAME}"
     }
 }
 

@@ -1,8 +1,23 @@
 package com.supermite.smp
 
 import android.Manifest
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.google.android.material.textfield.TextInputEditText
+import androidx.core.view.WindowCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.doOnLayout
+import androidx.core.view.WindowInsetsCompat
+import com.supermite.smp.ui.materialButton
+import com.supermite.smp.ui.materialCheckBox
+import com.supermite.smp.ui.materialSeekBar
+import com.supermite.smp.ui.styleMaterialTree
+import com.supermite.smp.ui.setEmphasis
+import com.supermite.smp.ui.rippleDrawable
+import com.supermite.smp.ui.stateColors
 import android.app.Activity
-import android.app.AlertDialog
+import androidx.appcompat.app.AlertDialog
 import android.app.Dialog
 import android.app.Notification
 import android.app.NotificationChannel
@@ -49,9 +64,15 @@ import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.WebResourceRequest
-import android.widget.PopupMenu
+import androidx.appcompat.widget.PopupMenu
 import com.supermite.smp.stream.OnlineMusicSource
 import com.supermite.smp.stream.DizzylabApiClient
+import com.supermite.smp.updates.PublishedRelease
+import com.supermite.smp.updates.ReleasePolicy
+import com.supermite.smp.cache.CacheManager
+import com.supermite.smp.cache.CacheCategory
+import com.supermite.smp.logging.AppLogger
+import com.supermite.smp.logging.LogLevel
 import com.supermite.smp.stream.DizzylabTrackRef
 import com.supermite.smp.stream.DizzylabSessionStore
 import com.supermite.smp.stream.DizzylabSection
@@ -77,6 +98,7 @@ import android.widget.Toast
 import com.supermite.smp.conversion.AudioMetadataUpdate
 import com.supermite.smp.conversion.AudioMetadataWriter
 import com.supermite.smp.conversion.NcmConverter
+import com.supermite.smp.conversion.ConvertedMediaPublisher
 import com.supermite.smp.data.LibraryStore
 import com.supermite.smp.data.MusicScanner
 import com.supermite.smp.data.Playlist
@@ -123,7 +145,10 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
 
-class MainActivity : Activity(), MusicPlayer.Listener {
+class MainActivity : androidx.appcompat.app.AppCompatActivity(), MusicPlayer.Listener {
+    private val navigationBackCallback = object : androidx.activity.OnBackPressedCallback(true) {
+        override fun handleOnBackPressed() { this@MainActivity.onBackPressed() }
+    }
     private lateinit var store: LibraryStore
     private lateinit var scanner: MusicScanner
     private lateinit var player: MusicPlayer
@@ -149,7 +174,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var nowPageSeek: SeekBar? = null
     private var nowPageTime: TextView? = null
     private val navButtons = mutableMapOf<Page, TextView>()
-    private var bottomNavigationPanel: LinearLayout? = null
+    private var bottomNavigationPanel: com.google.android.material.navigation.NavigationBarView? = null
+    private var updatingNavigation = false
+    private var keyboardVisible = false
 
     private var allTracks: List<Track> = emptyList()
     private var visibleTracks: List<Track> = emptyList()
@@ -176,7 +203,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var playbackMode = PlaybackMode.SEQUENTIAL
     private val pseudoShuffleOrder = mutableListOf<Int>()
     private var pseudoShufflePosition = -1
-    private var themeColor: Int = Palette.ACCENT
+    private var themeColor: Int = Palette.DEFAULT_SEED
     private var darkMode: DarkMode = DarkMode.SYSTEM
     private var language: String = "system"
     private var includeBetaUpdates: Boolean = false
@@ -192,7 +219,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var backgroundImageUri: String = ""
     private var backgroundAlpha: Float = 0.35f
     private var skipNoMediaFolders: Boolean = false
-    private var debugMode: Boolean = false
+    private var debugMode: Boolean = true
+    private val cacheManager by lazy { CacheManager(this) }
+    private var activePlaybackCacheLease: com.supermite.smp.cache.CacheLease? = null
+    private val audioCacheFlights = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val audioCacheLocks = Array(32) { Any() }
+    private var selectedLogExportIds: Set<String> = emptySet()
+    private var pendingNcmConversionUris: List<Uri> = emptyList()
     private var autoWriteMetadata: Boolean = false
     private var allowMobileDataDownload: Boolean = true
     private val extraScanFolderUris = mutableListOf<String>()
@@ -245,6 +278,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private var streamContentBox: LinearLayout? = null
     private var streamSearchEdit: EditText? = null
     private var dizzylabAlbums: List<StreamAlbum> = emptyList()
+    private val dizzyListPositions = mutableMapOf<String, Int>()
+    private var dizzyListScrollView: ScrollView? = null
+    private var dizzyListScrollKey = ""
     private var openedDizzylabAlbum: StreamAlbumDetails? = null
     private var pendingStreamDownloadAfterFolder: (() -> Unit)? = null
     private var webDavCurrentPath: String = ""
@@ -345,6 +381,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(startupThemeStyle())
         super.onCreate(savedInstanceState)
+        onBackPressedDispatcher.addCallback(this, navigationBackCallback)
         val prefs = getSharedPreferences("settings", MODE_PRIVATE)
         if (!prefs.contains("language")) {
             language = if (Locale.getDefault().language == "zh") "zh" else "en"
@@ -357,12 +394,16 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         player = MusicPlayer(this).apply { listener = this@MainActivity }
         player.headersForTrack = ::streamHeadersForTrack
         trackAdapter = TrackAdapter(this, store.edits)
+        trackAdapter.artworkLoader = ::loadArtwork
         trackAdapter.onMoreClick = { track -> showTrackActions(track) }
         trackAdapter.onTrackClick = { track ->
             if (selectionMode) toggleSelection(track) else playTrack(track, queueForCurrentView())
         }
         trackAdapter.onTrackLongClick = { track, position -> enterSelectionMode(track, (position - 3).coerceAtLeast(0), 0) }
-        playlistAdapter = PlaylistAdapter(this) { trackId -> allTracks.firstOrNull { it.id == trackId }?.let { resolvedArtworkPath(it) } }
+        playlistAdapter = PlaylistAdapter(this) { trackId -> store.trackForRecord(trackId)?.let { resolvedArtworkPath(it) } }
+        playlistAdapter.artworkLoader = { id, target ->
+            store.trackForRecord(id)?.let { loadArtwork(it, target) } ?: target.setImageResource(R.drawable.ic_cover_placeholder)
+        }
         audioManager = getSystemService(AudioManager::class.java)
         notificationManager = getSystemService(NotificationManager::class.java)
         mediaSession = MediaSession(this, "SMP").apply {
@@ -372,6 +413,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         loadSettings()
         initDebugLogger()
+        selectedLogExportIds = savedInstanceState?.getStringArrayList("logExportIds")?.toSet().orEmpty()
         scanner.skipNoMediaFolders = skipNoMediaFolders
         scanner.excludedPaths = listOf(
             cacheDir.absolutePath,
@@ -388,7 +430,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         handlePlaybackIntent(intent)
         render(Page.PLAYLISTS)
         restorePlaybackState()
-        showFirstLaunchDialogIfNeeded()
+        if (!handleExternalNcmIntent(intent)) showFirstLaunchDialogIfNeeded()
         updateFloatingLyrics()
         if (autoCheckUpdates) checkForUpdates(silent = true)
         Thread { backgroundSilentRescan() }.start()
@@ -396,7 +438,30 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
-        if (intent != null) handlePlaybackIntent(intent)
+        if (intent != null) { setIntent(intent); handlePlaybackIntent(intent); handleExternalNcmIntent(intent) }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putStringArrayList("logExportIds", ArrayList(selectedLogExportIds))
+        super.onSaveInstanceState(outState)
+    }
+
+    private fun handleExternalNcmIntent(incoming: Intent): Boolean {
+        if (incoming.action != NcmOpenActivity.ACTION_CONVERT_NCM) return false
+        val uri = incoming.data ?: return false
+        incoming.action = Intent.ACTION_MAIN
+        Thread {
+            val result = runCatching { NcmInput.validate(this, uri) }
+            runOnUiThread {
+                if (isDestroyed || isFinishing) return@runOnUiThread
+                result.onSuccess { name ->
+                    dialogBuilder().setTitle("转换 NCM 文件")
+                        .setMessage("$name\n\n转换为 MP3/FLAC，完成后提交系统媒体更新。输出按当前目录设置处理，临时文件受缓存上限约束。")
+                        .setPositiveButton("开始转换") { _, _ -> convertNcmFiles(listOf(uri)) }.setNegativeButton("取消", null).show()
+                }.onFailure { Toast.makeText(this, it.message ?: "无法读取 NCM 文件", Toast.LENGTH_LONG).show() }
+            }
+        }.start()
+        return true
     }
 
     override fun onResume() {
@@ -430,6 +495,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         mediaSession.isActive = false
         mediaSession.release()
         player.release()
+        releasePlaybackCacheLease()
         super.onDestroy()
     }
 
@@ -482,13 +548,22 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 render(Page.PLAYLISTS)
             }
             page == Page.SETTINGS || page == Page.NOW_PLAYING -> render(Page.PLAYLISTS)
-            else -> super.onBackPressed()
+            else -> {
+                navigationBackCallback.isEnabled = false
+                try { super.onBackPressed() } finally { navigationBackCallback.isEnabled = true }
+            }
         }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         when (requestCode) {
+            REQUEST_NCM_STORAGE -> {
+                val pending = pendingNcmConversionUris
+                pendingNcmConversionUris = emptyList()
+                if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) convertNcmFiles(pending)
+                else Toast.makeText(this, "未获得写入系统音乐目录的权限，转换已取消", Toast.LENGTH_LONG).show()
+            }
             REQUEST_AUDIO -> {
                 if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
                     scanMediaStore()
@@ -588,6 +663,16 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 data.data?.let { uris += it }
                 uris.distinct().forEach { persistUriPermission(it, data.flags) }
                 convertNcmFiles(uris.distinct())
+            }
+            REQUEST_LOG_EXPORT -> data.data?.let { uri ->
+                val selected = selectedLogExportIds.toSet()
+                selectedLogExportIds = emptySet()
+                Thread {
+                    val result = runCatching { contentResolver.openOutputStream(uri, "w")?.use { AppLogger.export(it, selected) } ?: error("无法写入日志文件") }
+                    runOnUiThread {
+                        if (!isDestroyed) Toast.makeText(this, if (result.isSuccess) "日志已导出（ZIP）" else result.exceptionOrNull()?.message ?: "日志导出失败", Toast.LENGTH_LONG).show()
+                    }
+                }.start()
             }
             REQUEST_CONFIG_EXPORT -> data.data?.let { uri ->
                 exportConfigTo(uri)
@@ -713,18 +798,26 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
     }
 
+    private fun useNavigationRail() = resources.configuration.screenWidthDp >= 600
+
+    private fun contentGutter(): Int {
+        val width = resources.configuration.screenWidthDp - if (useNavigationRail()) 80 else 0
+        return dp(if (width >= 888) (width - 840) / 2 else if (width >= 600) 24 else 16)
+    }
+
     private fun buildShell() {
         val frame = FrameLayout(this)
         addBackgroundImage(frame)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(12), dp(14), dp(10))
+            setPadding(0, 0, 0, 0)
             setBackgroundColor(contentOverlayColor())
         }
         rootLayout = root
         root.addView(buildHeader())
         content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            setPadding(contentGutter(), 0, contentGutter(), 0)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply {
                 topMargin = dp(10)
             }
@@ -732,14 +825,33 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         root.addView(content)
         miniPlayerPanel = buildMiniPlayer()
         root.addView(miniPlayerPanel)
-        root.addView(buildBottomNavigation())
-        frame.addView(root, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        val navigation = buildBottomNavigation()
+        if (useNavigationRail()) {
+            val columns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            columns.addView(navigation, LinearLayout.LayoutParams(dp(80), ViewGroup.LayoutParams.MATCH_PARENT))
+            columns.addView(root, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+            frame.addView(columns, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        } else {
+            root.addView(navigation)
+            frame.addView(root, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        }
         loadingOverlay = ProgressBar(this).apply {
             visibility = View.GONE
             isIndeterminate = true
+            indeterminateTintList = android.content.res.ColorStateList.valueOf(Palette.ACCENT)
         }
         frame.addView(loadingOverlay, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        ViewCompat.setOnApplyWindowInsetsListener(frame) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout() or WindowInsetsCompat.Type.ime())
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            keyboardVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+            bottomNavigationPanel?.visibility = if (keyboardVisible) View.GONE else View.VISIBLE
+            if (::miniPlayerPanel.isInitialized) miniPlayerPanel.visibility = if (keyboardVisible || page == Page.NOW_PLAYING || page == Page.SETTINGS || page == Page.DIZZYLAB_ACCOUNT) View.GONE else View.VISIBLE
+            WindowInsetsCompat.CONSUMED
+        }
         setContentView(frame)
+        ViewCompat.requestApplyInsets(frame)
     }
 
     private fun showLoading() {
@@ -753,13 +865,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun applyCardPressEffect(view: View) {
-        view.setOnTouchListener { v, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> v.animate().scaleX(0.97f).scaleY(0.97f).setDuration(80).setInterpolator(DecelerateInterpolator()).start()
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> v.animate().scaleX(1f).scaleY(1f).setDuration(100).setInterpolator(DecelerateInterpolator()).start()
-            }
-            false
-        }
+        view.foreground = rippleDrawable(this, Color.TRANSPARENT)
+        view.isFocusable = true
     }
 
     private fun addBackgroundImage(frame: FrameLayout) {
@@ -780,11 +887,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun buildHeader(): View {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(14), dp(16), dp(14))
-            background = GradientDrawable(
-                GradientDrawable.Orientation.LEFT_RIGHT,
-                headerGradientColors()
-            ).apply { cornerRadius = dp(8).toFloat() }
+            setPadding(contentGutter(), dp(12), contentGutter(), dp(12))
+            background = ColorDrawable(Palette.BG)
         }
         headerPanel = header
         val titleRow = LinearLayout(this).apply {
@@ -793,17 +897,25 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         headerTitle = TextView(this).apply {
             text = "SMP"
-            titleStyle(24f)
+            titleStyle(22f)
         }
         titleRow.addView(headerTitle, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         header.addView(titleRow)
         statusText = TextView(this).apply {
             text = "准备扫描或导入本地音乐"
-            bodyStyle(13f)
-            setPadding(0, dp(8), 0, dp(8))
+            minimumHeight = dp(48)
+            gravity = Gravity.CENTER_VERTICAL
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            titleStyle(16f)
+            background = rippleDrawable(this@MainActivity, Palette.CONTAINER, 16)
+            setPadding(dp(16), dp(12), dp(12), dp(12))
+            setCompoundDrawablesRelative(null, null, tintedDrawable(R.drawable.ic_expand_more, Palette.ACCENT, 28), null)
+            compoundDrawablePadding = dp(12)
+            contentDescription = "选择音乐来源"
             setOnClickListener { if (page == Page.ONLINE) showOnlineSourceMenu(this) }
         }
-        header.addView(statusText)
+        header.addView(statusText, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
         return header
     }
 
@@ -811,15 +923,17 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val panel = object : LinearLayout(this@MainActivity) {
             private var swipeStartX = 0f
             private var swiping = false
+            private var swipeAllowed = false
 
             override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
                 when (ev.action) {
                     MotionEvent.ACTION_DOWN -> {
                         swipeStartX = ev.x
                         swiping = false
+                        swipeAllowed = childCount > 0 && ev.y <= getChildAt(0).bottom
                     }
                     MotionEvent.ACTION_MOVE -> {
-                        if (!swiping && kotlin.math.abs(ev.x - swipeStartX) > dp(30).toFloat()) {
+                        if (swipeAllowed && !swiping && kotlin.math.abs(ev.x - swipeStartX) > dp(30).toFloat()) {
                             swiping = true
                             return true
                         }
@@ -846,10 +960,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             }
         }.apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(10), dp(12), dp(10))
-            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            setPadding(0, dp(8), 0, 0)
+            background = ColorDrawable(Color.TRANSPARENT)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dp(10)
+                topMargin = dp(4)
+                leftMargin = contentGutter()
+                rightMargin = contentGutter()
             }
         }
         val row = LinearLayout(this).apply {
@@ -859,7 +975,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         miniThumb = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL_ALT, 16, this@MainActivity)
+            clipToOutline = true
         }
         row.addView(miniThumb, LinearLayout.LayoutParams(dp(54), dp(54)))
         val textBox = LinearLayout(this).apply {
@@ -869,68 +986,73 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         miniTitle = TextView(this).apply {
             text = "未播放"
             titleStyle(16f)
+            ellipsize = android.text.TextUtils.TruncateAt.END
             maxLines = 1
         }
         miniMeta = TextView(this).apply {
             text = "点击歌曲开始播放"
-            bodyStyle(12.5f)
+            bodyStyle(14f)
+            ellipsize = android.text.TextUtils.TruncateAt.END
             maxLines = 1
         }
         textBox.addView(miniTitle)
         textBox.addView(miniMeta)
         row.addView(textBox, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        miniPlayButton = iconActionButton("", R.drawable.ic_play_block) {
+        miniPlayButton = playerControlButton(R.drawable.ic_play_block, compact = true) {
             toggleOrPlayFirst()
         }
-        row.addView(iconActionButton("", R.drawable.ic_previous_track) { playPreviousOrFirst() }, LinearLayout.LayoutParams(dp(46), dp(42)).apply {
-            rightMargin = dp(4)
-        })
-        row.addView(miniPlayButton, LinearLayout.LayoutParams(dp(46), dp(42)))
-        row.addView(iconActionButton("", R.drawable.ic_next_track) { playNextOrFirst() }, LinearLayout.LayoutParams(dp(46), dp(42)).apply {
-            leftMargin = dp(4)
-        })
+        row.addView(playerControlButton(R.drawable.ic_previous_track, compact = true) { playPreviousOrFirst() }, LinearLayout.LayoutParams(dp(48), dp(48)))
+        row.addView(miniPlayButton, LinearLayout.LayoutParams(dp(48), dp(48)))
+        row.addView(playerControlButton(R.drawable.ic_next_track, compact = true) { playNextOrFirst() }, LinearLayout.LayoutParams(dp(48), dp(48)))
         panel.addView(row)
-        miniSeek = buildSeekBar()
-        miniTime = TextView(this).apply {
+        miniSeek = buildSeekBar().also { com.supermite.smp.ui.stylePlayerSeekBar(this, it, compact = true) }
+        miniTime = com.supermite.smp.ui.PlaybackTimeView(this).apply {
             text = "0:00 / 0:00"
             bodyStyle(12f)
+            setPadding(dp(8), 0, dp(8), dp(4))
         }
-        panel.addView(miniSeek)
-        panel.addView(miniTime)
+        panel.addView(miniSeek, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)))
+        panel.addView(miniTime, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         return panel
     }
 
     private fun buildBottomNavigation(): View {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(dp(8), dp(6), dp(8), dp(6))
-            background = roundedStrokeDrawable(Palette.PANEL, Palette.PANEL_ALT, 10)
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dp(8)
+        val navigation: com.google.android.material.navigation.NavigationBarView = if (useNavigationRail()) {
+            com.google.android.material.navigationrail.NavigationRailView(this).apply { menuGravity = Gravity.CENTER }
+        } else BottomNavigationView(this)
+        return navigation.apply {
+            backgroundTintList = android.content.res.ColorStateList.valueOf(Palette.CONTAINER)
+            elevation = 0f
+            labelVisibilityMode = com.google.android.material.navigation.NavigationBarView.LABEL_VISIBILITY_LABELED
+            itemIconSize = dp(24)
+            itemActiveIndicatorColor = android.content.res.ColorStateList.valueOf(Palette.SELECTED)
+            val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+            itemIconTintList = android.content.res.ColorStateList(states, intArrayOf(Palette.ON_SELECTED, Palette.MUTED))
+            itemTextColor = android.content.res.ColorStateList(states, intArrayOf(Palette.TEXT, Palette.MUTED))
+            itemRippleColor = android.content.res.ColorStateList.valueOf(androidx.core.graphics.ColorUtils.setAlphaComponent(Palette.TEXT, 31))
+            listOf(Triple(Page.ONLINE, Lang.get("nav_online"), R.drawable.ic_online_music),
+                Triple(Page.PLAYLISTS, Lang.get("nav_library"), R.drawable.ic_musiclist),
+                Triple(Page.SETTINGS, Lang.get("nav_settings"), R.drawable.ic_settings)).forEachIndexed { index, (target, label, icon) ->
+                menu.add(0, index + 1, index, label).setIcon(icon).setCheckable(true)
             }
+            setOnItemSelectedListener { item ->
+                if (!updatingNavigation) render(when (item.itemId) { 1 -> Page.ONLINE; 2 -> Page.PLAYLISTS; else -> Page.SETTINGS })
+                true
+            }
+            minimumHeight = dp(80)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            bottomNavigationPanel = this
         }
-        bottomNavigationPanel = row
-        listOf(
-            Triple(Page.ONLINE, Lang.get("nav_online"), R.drawable.ic_music_disc),
-            Triple(Page.PLAYLISTS, Lang.get("nav_library"), R.drawable.ic_musiclist),
-            Triple(Page.SETTINGS, Lang.get("nav_settings"), R.drawable.ic_menu)
-        ).forEach { (target, label, iconRes) ->
-            val button = navButton(label, iconRes) { render(target) }
-            navButtons[target] = button
-            row.addView(button, LinearLayout.LayoutParams(0, dp(58), 1f).apply {
-                leftMargin = dp(3)
-                rightMargin = dp(3)
-            })
-        }
-        return row
     }
 
     private fun render(target: Page) {
+        rememberDizzylabListPosition()
+        dizzyListScrollView = null
+        AppLogger.debug("NAVIGATION", "Open ${target.name}")
         val renderId = ++pageRenderGeneration
         if (target != Page.LIBRARY && target != Page.PLAYLISTS) clearSelection()
         page = target
-        if (content.childCount > 0) {
+        if (content.childCount > 0 && android.animation.ValueAnimator.areAnimatorsEnabled()) {
             val old = content.getChildAt(0)
             old.animate().cancel()
             old.animate().alpha(0f).setDuration(120).withEndAction {
@@ -938,36 +1060,40 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 content.removeAllViews()
                 nowPagePlayButton = null; nowPageSeek = null; nowPageTime = null
                 nowPageLyrics = null; nowPageLyricsScroll = null; nowPageLyricsBox = null
-                miniPlayerPanel.visibility = if (target == Page.NOW_PLAYING || target == Page.SETTINGS || target == Page.DIZZYLAB_ACCOUNT) View.GONE else View.VISIBLE
-                headerTitle.text = if (target == Page.SETTINGS) Lang.get("nav_settings") else ""
+                miniPlayerPanel.visibility = if (keyboardVisible || target == Page.NOW_PLAYING || target == Page.SETTINGS || target == Page.DIZZYLAB_ACCOUNT) View.GONE else View.VISIBLE
+                headerTitle.text = if (target == Page.ONLINE) Lang.get("nav_online") else "SMP"
+                statusText.visibility = if (target == Page.ONLINE) View.VISIBLE else View.GONE
                 updateNavButtons(target)
                 buildPageContent(target)
                 if (content.childCount > 0) {
                     content.getChildAt(0).alpha = 0f
-                    content.getChildAt(0).animate().alpha(1f).setDuration(120).start()
+                    content.getChildAt(0).animate().alpha(1f).setDuration(if (android.animation.ValueAnimator.areAnimatorsEnabled()) 120 else 0).start()
                 }
             }.start()
         } else {
             content.removeAllViews()
             nowPagePlayButton = null; nowPageSeek = null; nowPageTime = null
             nowPageLyrics = null; nowPageLyricsScroll = null; nowPageLyricsBox = null
-            miniPlayerPanel.visibility = if (target == Page.NOW_PLAYING || target == Page.SETTINGS || target == Page.DIZZYLAB_ACCOUNT) View.GONE else View.VISIBLE
-            headerTitle.text = if (target == Page.SETTINGS) "SMP" else ""
+            miniPlayerPanel.visibility = if (keyboardVisible || target == Page.NOW_PLAYING || target == Page.SETTINGS || target == Page.DIZZYLAB_ACCOUNT) View.GONE else View.VISIBLE
+            headerTitle.text = if (target == Page.ONLINE) Lang.get("nav_online") else "SMP"
+            statusText.visibility = if (target == Page.ONLINE) View.VISIBLE else View.GONE
             updateNavButtons(target)
             buildPageContent(target)
             if (content.childCount > 0) {
                 content.getChildAt(0).alpha = 0f
-                content.getChildAt(0).animate().alpha(1f).setDuration(120).start()
+                content.getChildAt(0).animate().alpha(1f).setDuration(if (android.animation.ValueAnimator.areAnimatorsEnabled()) 120 else 0).start()
             }
         }
     }
 
     private fun updateNavButtons(target: Page) {
-        navButtons.forEach { (navPage, button) ->
-            button.background = ColorDrawable(Color.TRANSPARENT)
-            button.setTextColor(if (navPage == target || (target == Page.DIZZYLAB_ACCOUNT && navPage == Page.SETTINGS)) Palette.TEXT else Palette.MUTED)
-            tintTextViewDrawables(button, if (navPage == target || (target == Page.DIZZYLAB_ACCOUNT && navPage == Page.SETTINGS)) Palette.TEXT else Palette.MUTED)
+        updatingNavigation = true
+        bottomNavigationPanel?.selectedItemId = when (target) {
+            Page.ONLINE -> 1
+            Page.SETTINGS, Page.DIZZYLAB_ACCOUNT -> 3
+            else -> 2
         }
+        updatingNavigation = false
     }
 
     private fun buildPageContent(target: Page) {
@@ -981,6 +1107,21 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             Page.DIZZYLAB_ACCOUNT -> renderDizzylabAccountPage()
             Page.STREAMING -> renderStreamingPage()
         }
+        if (target == Page.SCAN) {
+            val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            while (content.childCount > 0) { val child = content.getChildAt(0); content.removeViewAt(0); box.addView(child) }
+            content.addView(ScrollView(this).apply { addView(box) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        }
+        updateMiniPlayerDensity(target)
+        styleMaterialTree(content)
+    }
+
+    private fun updateMiniPlayerDensity(target: Page = page) {
+        if (!::miniSeek.isInitialized) return
+        val compact = resources.configuration.screenHeightDp < 500 ||
+            (target == Page.LIBRARY && libraryFiltersExpanded && resources.configuration.fontScale > 1.3f)
+        miniSeek.visibility = if (compact) View.GONE else View.VISIBLE
+        miniTime.visibility = if (compact) View.GONE else View.VISIBLE
     }
 
     private fun renderScanPage() {
@@ -1026,7 +1167,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val filterBox = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(12), dp(12), dp(12))
-            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL, 12, this@MainActivity)
         }
         val searchRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1036,13 +1177,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             libraryQuery = value
             updateLibraryList()
         }
-        val tagSpinner = Spinner(this).apply {
+        val tagSpinner = androidx.appcompat.widget.AppCompatSpinner(this).apply {
             val tags = listOf("全部标签") + store.edits.values.flatMap { it.tags }.distinct().sorted()
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_item, tags).also {
                 it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             }
             setSelection(tags.indexOf(selectedTag).takeIf { it >= 0 } ?: 0)
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL_ALT, 12, this@MainActivity)
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                     selectedTag = if (position == 0) "" else tags[position]
@@ -1051,13 +1192,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             }
         }
-        val ratingSpinner = Spinner(this).apply {
+        val ratingSpinner = androidx.appcompat.widget.AppCompatSpinner(this).apply {
             val ratings = listOf("全部评分", "1 星以上", "2 星以上", "3 星以上", "4 星以上", "5 星")
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_item, ratings).also {
                 it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             }
             setSelection(minRating.coerceIn(0, 5))
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL_ALT, 12, this@MainActivity)
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                     minRating = position
@@ -1066,13 +1207,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             }
         }
-        val sortSpinner = Spinner(this).apply {
+        val sortSpinner = androidx.appcompat.widget.AppCompatSpinner(this).apply {
             val labels = LibrarySortMode.entries.map { it.label }
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_item, labels).also {
                 it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             }
             setSelection(librarySortMode.ordinal.coerceIn(labels.indices))
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL_ALT, 12, this@MainActivity)
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                     librarySortMode = LibrarySortMode.entries[position]
@@ -1089,7 +1230,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         filterBox.addView(tagSpinner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply { topMargin = dp(8) })
         filterBox.addView(ratingSpinner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply { topMargin = dp(8) })
         filterBox.addView(sortSpinner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply { topMargin = dp(8) })
-        if (libraryFiltersExpanded) content.addView(filterBox)
+        if (libraryFiltersExpanded && !selectionMode) {
+            val filters = ScrollView(this).apply { addView(filterBox); isFillViewport = false }
+            val heightDp = resources.displayMetrics.heightPixels / resources.displayMetrics.density
+            val maximum = if (resources.configuration.fontScale > 1.3f || heightDp < 500) (heightDp * 0.23f).toInt().coerceAtLeast(96) else 240
+            content.addView(filters, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(maximum)))
+        }
 
         if (selectionMode && selectionFromLibrary) content.addView(selectionBar())
         val list = trackListView()
@@ -1101,7 +1247,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         if (openedPlaylist != null) {
             content.addView(sectionTitle(openedPlaylist!!.name))
             content.addView(playlistDetails(openedPlaylist!!))
-            val tracks = openedPlaylist!!.trackIds.distinct().mapNotNull { id -> allTracks.firstOrNull { it.id == id } }
+            val tracks = openedPlaylist!!.trackIds.distinct().mapNotNull(store::trackForRecord)
             visibleTracks = tracks
             trackAdapter.tracks = tracks
             if (selectionMode && selectionPlaylist?.id == openedPlaylist!!.id) content.addView(selectionBar())
@@ -1141,6 +1287,14 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         attachPlaylistCategorySwipe(categoryRow)
         content.addView(categoryRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+        if (resources.configuration.screenHeightDp < 500) {
+            content.removeView(modeRow)
+            content.removeView(categoryRow)
+            val quickRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            quickRow.addView(modeRow, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            quickRow.addView(categoryRow, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(8) })
+            content.addView(quickRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+        }
         val list = ListView(this).apply {
             divider = ColorDrawable(Color.TRANSPARENT)
             dividerHeight = dp(8)
@@ -1207,7 +1361,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), dp(12), dp(12), dp(12))
-            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL, 12, this@MainActivity)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = dp(8)
                 bottomMargin = dp(8)
@@ -1215,10 +1369,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         val cover = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL_ALT, 12, this@MainActivity)
         }
         playlist.trackIds.firstOrNull()
-            ?.let { id -> allTracks.firstOrNull { it.id == id } }
+            ?.let(store::trackForRecord)
             ?.let { loadArtwork(it, cover) }
             ?: cover.setImageResource(R.drawable.ic_cover_placeholder)
         row.addView(cover, LinearLayout.LayoutParams(dp(92), dp(92)))
@@ -1231,7 +1385,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val playCount = playlist.trackIds.distinct().sumOf { store.playCount(it) }
         textBox.addView(TextView(this).apply {
             text = playlist.description.ifBlank { "暂无介绍" }
-            bodyStyle(13f)
+            bodyStyle(14f)
             maxLines = 2
         })
         textBox.addView(TextView(this).apply {
@@ -1351,6 +1505,15 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         loadDizzylabMusic(reset = true)
     }
 
+    private fun dizzylabListKey() = "$dizzySessionRevision|${dizzySection.name}|${dizzylabQuery.trim()}|${dizzyCircle?.id.orEmpty()}"
+
+    private fun rememberDizzylabListPosition() {
+        val scroll = dizzyListScrollView ?: return
+        if (scroll.isAttachedToWindow && dizzyListScrollKey.isNotBlank()) {
+            dizzyListPositions[dizzyListScrollKey] = scroll.scrollY
+        }
+    }
+
     private fun renderDizzylabMusicPage() {
         content.addView(sectionTitle("Dizzylab"))
         val scroll = ScrollView(this)
@@ -1367,7 +1530,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             box.addView(searchRow)
             val row = LinearLayout(this)
             listOf(DizzylabSection.DISCOVER, DizzylabSection.PURCHASED, DizzylabSection.LIKED, DizzylabSection.CIRCLES).forEach { section ->
-                val icon = if (section == DizzylabSection.CIRCLES) R.drawable.ic_artist else R.drawable.ic_collection
+                val icon = when (section) { DizzylabSection.CIRCLES -> R.drawable.ic_groups; DizzylabSection.DISCOVER -> R.drawable.ic_compass_outline; DizzylabSection.PURCHASED -> R.drawable.ic_check_circle; else -> R.drawable.ic_heart_outline }
                 row.addView(subsonicFeatureButton(when (section) {
                     DizzylabSection.DISCOVER -> "发现"; DizzylabSection.PURCHASED -> "已购"; DizzylabSection.LIKED -> "喜欢"; else -> "社团"
                 }, icon) { selectDizzylabSection(section) }, LinearLayout.LayoutParams(0, dp(76), 1f).apply { setMargins(dp(3), dp(10), dp(3), dp(8)) })
@@ -1396,6 +1559,20 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         scroll.addView(box)
         content.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        if (details == null) {
+            val key = dizzylabListKey()
+            val restoredY = dizzyListPositions[key] ?: 0
+            dizzyListScrollView = scroll
+            dizzyListScrollKey = key
+            scroll.doOnLayout {
+                if (dizzyListScrollView === scroll) {
+                    scroll.scrollTo(0, restoredY)
+                    scroll.setOnScrollChangeListener { _, _, y, _, _ ->
+                        if (dizzyListScrollView === scroll && scroll.isAttachedToWindow) dizzyListPositions[key] = y
+                    }
+                }
+            }
+        }
     }
 
     private data class DizzyMusicResult(val albums: List<StreamAlbum>, val circles: List<DizzylabCircle>, val offset: Int, val more: Boolean)
@@ -1407,7 +1584,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val section = dizzySection
         val query = dizzylabQuery.trim()
         val circle = dizzyCircle
-        if (reset) { dizzyOffset = 0; dizzylabAlbums = emptyList(); dizzyCircles = emptyList(); dizzyHasMore = false }
+        rememberDizzylabListPosition()
+        if (reset) {
+            dizzyListPositions[dizzylabListKey()] = 0
+            dizzyListScrollView = null
+            dizzyOffset = 0; dizzylabAlbums = emptyList(); dizzyCircles = emptyList(); dizzyHasMore = false
+        }
         val offset = dizzyOffset
         dizzyMusicLoading = true; dizzyMusicLoaded = true; dizzyMusicError = ""
         if (renderNow) render(Page.ONLINE)
@@ -1487,6 +1669,18 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         scroll.addView(box)
         content.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setStatus("Dizzylab 账户")
+        val key = "account|$dizzySessionRevision|$dizzyAccountSection"
+        val restoredY = dizzyListPositions[key] ?: 0
+        dizzyListScrollView = scroll
+        dizzyListScrollKey = key
+        scroll.doOnLayout {
+            if (dizzyListScrollView === scroll) {
+                scroll.scrollTo(0, restoredY)
+                scroll.setOnScrollChangeListener { _, _, y, _, _ ->
+                    if (dizzyListScrollView === scroll && scroll.isAttachedToWindow) dizzyListPositions[key] = y
+                }
+            }
+        }
     }
 
     private fun loadDizzylabAccount(onSuccess: (() -> Unit)? = null) {
@@ -1608,6 +1802,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun renderSubsonicPage() {
         val server = selectedSubsonicServer()
+        if (server != null) store.rememberTracks((subsonicSongs + subsonicRandomSongs).distinctBy { it.id }.map { subsonicSongToTrack(it, server) })
         content.addView(sectionTitle(Lang.get("subsonic_status")))
         val scroll = ScrollView(this)
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -1684,7 +1879,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             gravity = Gravity.CENTER
             setCompoundDrawables(null, tintedDrawable(iconRes, Palette.TEXT, 26), null, null)
             compoundDrawablePadding = dp(6)
-            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL, 12, this@MainActivity)
             setPadding(dp(4), dp(8), dp(4), dp(8))
             setOnClickListener { onClick() }
             applyCardPressEffect(this)
@@ -1827,7 +2022,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val addRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), dp(8), dp(12), dp(8))
-            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL, 12, this@MainActivity)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
         }
         addRow.addView(TextView(this).apply { text = "+"; titleStyle(22f); setTextColor(Palette.ACCENT) }, LinearLayout.LayoutParams(dp(40), dp(40)))
@@ -2097,7 +2292,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), dp(12), dp(12), dp(12))
-            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL, 12, this@MainActivity)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
             setOnClickListener { openSubsonicAlbum(album) }
             applyCardPressEffect(this)
@@ -2128,7 +2323,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), dp(12), dp(12), dp(12))
-            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL, 12, this@MainActivity)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
             setOnClickListener { onClick() }
             if (onLongClick != null) {
@@ -2174,7 +2369,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), dp(12), dp(12), dp(12))
-            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL, 12, this@MainActivity)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
             setOnClickListener { playSubsonicSong(song, queue) }
             setOnLongClickListener {
@@ -2183,7 +2378,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             }
         }
         val cover = ImageView(this).apply {
-            setImageResource(R.drawable.ic_music_disc)
+            setImageResource(R.drawable.ic_cover_placeholder)
             scaleType = ImageView.ScaleType.CENTER_CROP
         }
         selectedSubsonicServer()?.let { server ->
@@ -2419,10 +2614,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val track = queue.firstOrNull { it.id == subsonicSongToTrack(song, server).id } ?: subsonicSongToTrack(song, server)
         currentQueue = queue
         client.scrobble(song.id, submission = false)
-        val cacheFile = subsonicCacheFile(song)
-        if (cacheFile.exists()) {
-            val cached = track.copy(uri = Uri.fromFile(cacheFile).toString(), sourcePath = cacheFile.absolutePath)
-            playTrack(cached, queue)
+        val lease = cacheManager.leaseAudio(subsonicCacheRelative(song,server.id))
+        if (lease != null) {
+            playCachedTrack(lease,track,queue)
         } else {
             playTrack(track, queue)
             cacheSubsonicSongAsync(song, client)
@@ -2444,7 +2638,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             year = song.year,
             mimeType = effectiveSubsonicMimeType(song),
             sourcePath = "subsonic|${server.id}|${song.id}|${song.artistId}|${song.albumId}",
-            artworkPath = cachedRemoteArtworkPath(coverUrl).ifBlank { coverUrl }
+            artworkPath = cachedRemoteArtworkPath(coverUrl).ifBlank { coverUrl },
+            artworkReference = "subsonic|${server.id}|${song.coverArt}"
         )
     }
 
@@ -2454,19 +2649,45 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun subsonicCacheFile(song: SubsonicSong): File {
-        val ext = effectiveSubsonicSuffix(song)
-        return File(streamCacheDir(), "subsonic_stream/${song.id.hashCode()}_${safeFileName(song.title)}.$ext")
+        return cacheManager.file(CacheCategory.AUDIO,subsonicCacheRelative(song,selectedSubsonicServer()?.id.orEmpty()))
+    }
+
+    private fun subsonicCacheRelative(song: SubsonicSong, serverId: String): String {
+        val identity = "$serverId|${song.id}|${effectiveSubsonicTranscodeMode().name}"
+        return "subsonic/${com.supermite.smp.cache.CacheStorage.sha256(identity.toByteArray())}.${effectiveSubsonicSuffix(song)}"
+    }
+
+    private fun audioCacheLock(key: String) = audioCacheLocks[(key.hashCode() and Int.MAX_VALUE)%audioCacheLocks.size]
+
+    private fun releasePlaybackCacheLease(nextUri: String? = null) {
+        val lease=activePlaybackCacheLease ?: return
+        if(nextUri!=null && Uri.fromFile(lease.file).toString()==nextUri)return
+        activePlaybackCacheLease=null
+        lease.close()
+    }
+
+    private fun playCachedTrack(lease: com.supermite.smp.cache.CacheLease, track: Track, queue: List<Track>, countPlay: Boolean = true) {
+        val uri=Uri.fromFile(lease.file).toString()
+        val cached=rescanMetadata(uri,track).copy(uri=uri,sourcePath=track.sourcePath)
+        playTrack(cached,queue,countPlay=countPlay,resolveRemote=false)
+        if(player.currentTrack?.uri==uri) {
+            releasePlaybackCacheLease()
+            activePlaybackCacheLease=lease
+        } else lease.close()
     }
 
     private fun cacheSubsonicSongAsync(song: SubsonicSong, client: SubsonicClient) {
+        if(!cacheManager.isEnabled(CacheCategory.AUDIO))return
+        val relative=subsonicCacheRelative(song,client.cacheIdentity)
+        val mode=effectiveSubsonicTranscodeMode()
+        if(!audioCacheFlights.add(relative))return
         Thread {
-            runCatching {
-                val file = subsonicCacheFile(song)
-                if (file.exists()) return@Thread
-                file.parentFile?.mkdirs()
-                file.writeBytes(client.downloadBytes(song.id, effectiveSubsonicTranscodeMode()))
-                enforceStreamCacheLimit()
-            }
+            try {synchronized(audioCacheLock(relative)) {
+                if(cacheManager.storage.find(CacheCategory.AUDIO,relative)!=null)return@synchronized
+                if(!cacheManager.isEnabled(CacheCategory.AUDIO))return@synchronized
+                cacheManager.storage.write(CacheCategory.AUDIO,relative,client.downloadBytes(song.id,mode))
+            }} catch(failure:Exception) {AppLogger.warn("CACHE","Subsonic audio cache failed",failure)}
+            finally {audioCacheFlights.remove(relative)}
         }.start()
     }
 
@@ -2580,26 +2801,14 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         albumOverride: SubsonicAlbum?,
         coverPath: String
     ): ByteArray {
-        val dir = File(cacheDir, "stream_metadata").apply { mkdirs() }
-        val file = File(dir, safeFileName("${System.currentTimeMillis()}-$fileName"))
-        return runCatching {
-            file.writeBytes(bytes)
-            val coverBytes = coverPath.takeIf { it.isNotBlank() }?.let { File(it) }?.takeIf { it.isFile }?.readBytes()
-            AudioMetadataWriter().write(
-                file,
-                AudioMetadataUpdate(
+        return tagCachedDownloadBytes(fileName,bytes,AudioMetadataUpdate(
                     title = song.title,
                     artist = song.artist,
                     composer = song.artist,
                     year = song.year.takeIf { it > 0 }?.toString().orEmpty(),
                     album = albumOverride?.title ?: song.album,
-                    coverBytes = coverBytes
-                )
-            )
-            file.readBytes()
-        }.getOrElse { bytes }.also {
-            runCatching { file.delete() }
-        }
+                    coverBytes = coverBytesAtPath(coverPath)
+                ))
     }
 
     private fun addDownloadedSubsonicTracksToLibrary(downloaded: List<Track>) {
@@ -2692,7 +2901,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), dp(12), dp(12), dp(12))
-            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL, 12, this@MainActivity)
             setOnClickListener { onClick() }
             applyCardPressEffect(this)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
@@ -2702,7 +2911,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         val cover = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL_ALT, 12, this@MainActivity)
             setImageResource(R.drawable.ic_cover_placeholder)
         }
         loadRemoteImage(album.coverUrl, cover)
@@ -2718,7 +2927,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         })
         textBox.addView(TextView(this).apply {
             text = body
-            bodyStyle(13f)
+            bodyStyle(14f)
         })
         row.addView(textBox, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         return row
@@ -2729,7 +2938,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), dp(12), dp(12), dp(12))
-            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL, 12, this@MainActivity)
             setOnClickListener { onClick() }
             applyCardPressEffect(this)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
@@ -2739,7 +2948,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         val cover = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL_ALT, 12, this@MainActivity)
             setImageResource(R.drawable.ic_cover_placeholder)
         }
         loadRemoteImage(details.album.coverUrl, cover)
@@ -2761,7 +2970,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 "标签：${details.tags.joinToString(" / ").ifBlank { "无" }}",
                 details.description.ifBlank { "暂无简介" }
             ).joinToString("\n")
-            bodyStyle(12.5f)
+            bodyStyle(14f)
             maxLines = 6
         })
         row.addView(textBox, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -2773,7 +2982,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), dp(12), dp(12), dp(12))
-            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL, 12, this@MainActivity)
             setOnClickListener { onClick() }
             applyCardPressEffect(this)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
@@ -2784,7 +2993,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             setImageResource(iconRes)
             scaleType = ImageView.ScaleType.FIT_CENTER
             adjustViewBounds = true
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL_ALT, 12, this@MainActivity)
             setPadding(dp(6), dp(6), dp(6), dp(6))
         }, LinearLayout.LayoutParams(dp(54), dp(54)))
         val textBox = LinearLayout(this).apply {
@@ -2797,7 +3006,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         })
         textBox.addView(TextView(this).apply {
             text = body
-            bodyStyle(13f)
+            bodyStyle(14f)
         })
         row.addView(textBox, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         return row
@@ -2822,9 +3031,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(4), dp(4), dp(4), dp(16))
         }
         val artFrame = FrameLayout(this).apply {
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL_ALT, 24, this@MainActivity)
         }
         val art = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
@@ -2879,47 +3089,65 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         nowPageLyricsScroll?.addView(nowPageLyricsBox, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         artFrame.addView(nowPageLyricsScroll, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        box.addView(artFrame, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(320)))
+        val heightDp = resources.displayMetrics.heightPixels / resources.displayMetrics.density
+        val widePlayer = resources.configuration.screenWidthDp >= 600 && (heightDp < 500 || resources.configuration.screenWidthDp >= 1000)
+        val artHeight = ((heightDp - 260f) * 0.40f).toInt().coerceIn(120, 280)
+        artFrame.clipToOutline = true
+        box.addView(artFrame, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(artHeight)))
         val titleView = TextView(this).apply {
             text = displayTitle(track)
             titleStyle(22f)
-            gravity = Gravity.CENTER
-            setPadding(0, dp(14), 0, dp(4))
+            gravity = Gravity.CENTER_VERTICAL
+            setSingleLine(true)
+            setHorizontallyScrolling(true)
+            ellipsize = android.text.TextUtils.TruncateAt.MARQUEE
+            marqueeRepeatLimit = -1
+            isSelected = android.animation.ValueAnimator.areAnimatorsEnabled() &&
+                !(getSystemService(ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager).isTouchExplorationEnabled
+            setPadding(dp(8), dp(18), dp(8), dp(6))
         }
         attachNowPlayingBlankGestures(titleView, track)
-        box.addView(titleView)
+        box.addView(titleView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         val metaRow = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+            orientation = if (widePlayer) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
             gravity = Gravity.CENTER
         }
-        metaRow.addView(nowPlayingMetaText(track.displayArtist) { openTrackArtist(track) })
-        metaRow.addView(nowPlayingMetaText(track.displayAlbum) { openTrackAlbum(track) })
+        val artistLink = nowPlayingMetaText(track.displayArtist) { openTrackArtist(track) }
+        val albumLink = nowPlayingMetaText(track.displayAlbum) { openTrackAlbum(track) }
+        if (widePlayer) {
+            metaRow.addView(artistLink, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            metaRow.addView(albumLink, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        } else { metaRow.addView(artistLink); metaRow.addView(albumLink) }
         box.addView(metaRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         val blankGestureArea = View(this).apply {
             background = ColorDrawable(Color.TRANSPARENT)
         }
         attachNowPlayingBlankGestures(blankGestureArea, track)
-        box.addView(blankGestureArea, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(28)))
+        box.addView(blankGestureArea, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(8)))
 
-        nowPageSeek = buildSeekBar()
-        nowPageTime = TextView(this).apply {
+        nowPageSeek = buildSeekBar().also { com.supermite.smp.ui.stylePlayerSeekBar(this, it) }
+        nowPageTime = com.supermite.smp.ui.PlaybackTimeView(this).apply {
             bodyStyle(12f)
-            gravity = Gravity.CENTER
+            setPadding(dp(8), 0, dp(8), dp(8))
         }
-        box.addView(nowPageSeek)
-        box.addView(nowPageTime)
+        box.addView(nowPageSeek, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)))
+        box.addView(nowPageTime, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         val controls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, dp(12))
         }
-        controls.addView(iconActionButton(Lang.get("prev_track"), R.drawable.ic_previous_track) { playPrevious() }, weightedParams())
-        nowPagePlayButton = iconActionButton(if (player.isPlaying()) Lang.get("pause") else Lang.get("play"), if (player.isPlaying()) R.drawable.ic_pause_circle else R.drawable.ic_play_block) {
+        controls.addView(playerControlButton(playbackModeIcon(playbackMode)) { showPlaybackModeDialog() }.apply {
+            contentDescription = "播放模式：${playbackMode.label}"
+        }, LinearLayout.LayoutParams(0, dp(56), 1f))
+        controls.addView(playerControlButton(R.drawable.ic_previous_track) { playPrevious() }, LinearLayout.LayoutParams(0, dp(56), 1f))
+        nowPagePlayButton = playerControlButton(if (player.isPlaying()) R.drawable.ic_pause_circle else R.drawable.ic_play_block, primary = true) {
             toggleOrPlayFirst()
         }
-        controls.addView(nowPagePlayButton, weightedParams())
-        controls.addView(iconActionButton(Lang.get("next_track"), R.drawable.ic_next_track) { playNext() }, weightedParams())
-        controls.addView(iconActionButton(Lang.get("menu"), R.drawable.ic_menu) { showNowPlayingMenu(track) }, weightedParams())
-        box.addView(controls)
+        controls.addView(nowPagePlayButton, LinearLayout.LayoutParams(dp(72), dp(72)).apply { setMargins(dp(8), 0, dp(8), 0) })
+        controls.addView(playerControlButton(R.drawable.ic_next_track) { playNext() }, LinearLayout.LayoutParams(0, dp(56), 1f))
+        controls.addView(playerControlButton(R.drawable.ic_menu) { showNowPlayingMenu(track) }, LinearLayout.LayoutParams(0, dp(56), 1f))
+        box.addView(controls, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         val bottomBlankGestureArea = View(this).apply {
         background = ColorDrawable(Color.TRANSPARENT)
@@ -2927,9 +3155,19 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         attachNowPlayingBlankGestures(bottomBlankGestureArea, track)
         box.addView(bottomBlankGestureArea, LinearLayout.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT,
-        dp(120)
+        dp(16)
         ))
 
+        if (widePlayer) {
+            val rest = (1 until box.childCount).map { box.getChildAt(it) }
+            box.removeAllViews()
+            box.orientation = LinearLayout.HORIZONTAL
+            box.gravity = Gravity.CENTER_VERTICAL
+            box.addView(artFrame, LinearLayout.LayoutParams(0, dp(if (heightDp < 500) 208 else 280), 0.42f))
+            val detailsColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(24), 0, 0, 0) }
+            rest.forEach { detailsColumn.addView(it) }
+            box.addView(detailsColumn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.58f))
+        }
         scroll.addView(box)
         content.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         updateLyricView(track)
@@ -2944,25 +3182,19 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.VERTICAL
         }
         box.addView(profileHeaderCard())
-        box.addView(settingCard(Lang.get("account"), Lang.get("account_desc")) { showAccountDialog() })
-        box.addView(settingCard(Lang.get("appearance"), Lang.get("color_dark_bg")) {
-            showAppearanceSettingsDialog()
-        })
-        box.addView(settingCard(Lang.get("permission_card"), permissionSummary()) {
-            showPermissionSettingsDialog()
-        })
-        box.addView(settingCard(Lang.get("playback_settings"), "启动恢复：${if (restorePlaybackOnLaunch) "继续播放" else "保持暂停"}；其他音乐：${audioFocusBehavior.label}") {
-            showPlaybackSettingsDialog()
-        })
-        box.addView(settingCard(Lang.get("storage"), Lang.get("storage_desc")) {
-            showStorageSettingsDialog()
-        })
-        box.addView(settingCard(Lang.get("download_list"), if (downloadQueue.isEmpty()) Lang.get("no_download") else "${downloadQueue.size} 个任务" + if (downloadNotifyTotal > 0) " ($downloadNotifyDone/$downloadNotifyTotal)" else "") {
-            showDownloadListDialog()
-        })
-        box.addView(settingCard(Lang.get("about"), Lang.get("about_desc")) {
-            showSoftwareDetailsDialog()
-        })
+        box.addView(settingsGroup(if (language == "zh") "账户与外观" else "Account & appearance",
+            settingsRow(Lang.get("account"), Lang.get("account_desc"), R.drawable.ic_account_person) { showAccountDialog() },
+            settingsRow(Lang.get("appearance"), Lang.get("color_dark_bg"), R.drawable.ic_palette) { showAppearanceSettingsDialog() }))
+        box.addView(settingsGroup(if (language == "zh") "播放与体验" else "Playback & experience",
+            settingsRow(Lang.get("playback_settings"), "${if (restorePlaybackOnLaunch) "启动时继续播放" else "启动时保持暂停"} · ${audioFocusBehavior.label}", R.drawable.ic_headphones) { showPlaybackSettingsDialog() },
+            settingsRow(Lang.get("permission_card"), permissionSummary(), R.drawable.ic_shield_check) { showPermissionSettingsDialog() }))
+        box.addView(settingsGroup(if (language == "zh") "文件与下载" else "Files & downloads",
+            settingsRow(Lang.get("storage"), Lang.get("storage_desc"), R.drawable.ic_storage) { showStorageSettingsDialog() },
+            settingsRow("缓存管理", "统一空间上限 · 分类别管理与清理", R.drawable.ic_storage) { showCacheSettingsDialog() },
+            settingsRow(Lang.get("download_list"), if (downloadQueue.isEmpty()) Lang.get("no_download") else "${downloadQueue.size} 个任务" + if (downloadNotifyTotal > 0) " ($downloadNotifyDone/$downloadNotifyTotal)" else "", R.drawable.ic_download_queue) { showDownloadListDialog() }))
+        box.addView(settingsGroup(if (language == "zh") "关于与支持" else "About & support",
+            settingsRow("运行日志与诊断", "${if (AppLogger.isRecording) "记录中" else "已暂停"} · ${AppLogger.level.label} · 保留 ${AppLogger.retentionDays} 天", R.drawable.ic_info_outline) { showDiagnosticsDialog() },
+            settingsRow(Lang.get("about"), Lang.get("about_desc"), R.drawable.ic_info_outline) { showSoftwareDetailsDialog() }))
         scroll.addView(box)
         content.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setStatus("设置")
@@ -3009,34 +3241,20 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(8), dp(18), dp(2))
         }
-        val autoBox = CheckBox(this).apply {
-            text = "启动时自动检查更新"
-            isChecked = autoCheckUpdates
-            setTextColor(Palette.TEXT)
-        }
-        val betaBox = CheckBox(this).apply {
-            text = "下载测试版（只检查包含 beta 字段的 release）"
-            isChecked = includeBetaUpdates
-            setTextColor(Palette.TEXT)
-        }
-        box.addView(autoBox)
-        box.addView(betaBox)
-        box.addView(actionButton("手动检查更新") {
-            autoCheckUpdates = autoBox.isChecked
-            includeBetaUpdates = betaBox.isChecked
-            saveSettings()
-            checkForUpdates(silent = false)
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
-            topMargin = dp(10)
+        var automatic = autoCheckUpdates
+        var preview = includeBetaUpdates
+        box.addView(settingsSwitchRow("启动时自动检查更新", "仅提示当前频道中较新的安装包", automatic) { automatic = it })
+        box.addView(settingsDropdownRow("更新频道", arrayOf("正式版", "预发行"), if (preview) 1 else 0) { preview = it == 1 })
+        box.addView(TextView(this).apply {
+            text = "按 GitHub 发布日期选择本频道最新的 APK，忽略草稿、没有安装包的记录与未签名包。两个频道使用同一包名与发布签名。"
+            bodyStyle(14f); setPadding(dp(8), dp(12), dp(8), dp(8))
         })
+        fun saveChoice() { autoCheckUpdates = automatic; includeBetaUpdates = preview; saveSettings() }
         dialogBuilder()
             .setTitle("更新设置")
             .setView(box)
-            .setPositiveButton("保存") { _, _ ->
-                autoCheckUpdates = autoBox.isChecked
-                includeBetaUpdates = betaBox.isChecked
-                saveSettings()
-            }
+            .setPositiveButton("保存") { _, _ -> saveChoice() }
+            .setNeutralButton("检查更新") { _, _ -> saveChoice(); checkForUpdates(silent = false) }
             .setNegativeButton("取消", null)
             .show()
     }
@@ -3060,7 +3278,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL, 12, this@MainActivity)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(8)
             }
@@ -3068,15 +3286,22 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         row.addView(ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
-            if (profileAvatarUri.isBlank()) {
+            background = panelDrawable(Palette.PANEL_ALT, 12, this@MainActivity)
+            clipToOutline = true
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            fun defaultAvatar() {
                 setImageResource(R.drawable.ic_music_disc)
+                imageTintList = android.content.res.ColorStateList.valueOf(Palette.ON_SELECTED)
+                background = panelDrawable(Palette.SELECTED, 16, this@MainActivity)
+            }
+            if (profileAvatarUri.isBlank()) {
+                defaultAvatar()
             } else {
                 runCatching {
                     contentResolver.openInputStream(Uri.parse(profileAvatarUri))?.use { input ->
                         setImageBitmap(BitmapFactory.decodeStream(input))
                     }
-                }.onFailure { setImageResource(R.drawable.ic_music_disc) }
+                }.onFailure { defaultAvatar() }
             }
         }, LinearLayout.LayoutParams(dp(58), dp(58)))
         val textBox = LinearLayout(this).apply {
@@ -3089,7 +3314,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         })
         textBox.addView(TextView(this).apply {
             text = "本地账号"
-            bodyStyle(13f)
+            bodyStyle(14f)
         })
         row.addView(textBox, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         return row
@@ -3180,7 +3405,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             gravity = Gravity.CENTER
             setPadding(0, dp(6), 0, dp(6))
         }
-        val slider = SeekBar(this).apply {
+        val slider = materialSeekBar(this).apply {
             max = 5
             progress = streamPreloadCount.coerceIn(0, 5)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -3196,14 +3421,14 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(label)
         box.addView(valueLabel)
         box.addView(slider)
-        val mobileCheck = CheckBox(this).apply {
+        val mobileCheck = materialCheckBox(this).apply {
             text = "允许使用流量下载（关闭后下载前会询问）"
             isChecked = allowMobileDataDownload
             setTextColor(Palette.TEXT)
             setPadding(0, dp(12), 0, 0)
         }
         box.addView(mobileCheck)
-        val weakNetworkCheck = CheckBox(this).apply {
+        val weakNetworkCheck = materialCheckBox(this).apply {
             text = "弱网模式（更宽松超时与重试，并强制使用 96 kbps 串流）"
             isChecked = weakNetworkMode
             setTextColor(Palette.TEXT)
@@ -3224,12 +3449,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             titleStyle(15f)
             setPadding(0, dp(12), 0, dp(6))
         })
-        val transcodeSpinner = Spinner(this).apply {
+        val transcodeSpinner = androidx.appcompat.widget.AppCompatSpinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_item, SubsonicTranscodeMode.entries.map { it.label }).also {
                 it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             }
             setSelection(subsonicTranscodeMode.ordinal)
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL_ALT, 12, this@MainActivity)
         }
         box.addView(transcodeSpinner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)))
         dialogBuilder()
@@ -3246,6 +3471,115 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .show()
     }
 
+    private fun showCacheSettingsDialog() {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), dp(4), dp(8), dp(8)) }
+        val usage = cacheManager.usage()
+        box.addView(settingsGroup("统一缓存空间",
+            settingsRow("总空间上限", "${formatFileSize(usage.sumOf { it.bytes })} / ${cacheManager.totalLimitMb} MiB", R.drawable.ic_storage) { showCacheBudgetDialog(null) },
+            settingsRow("存储位置", "应用私有目录 / managed-cache\n缓存、下载目录与播放记录分别管理", R.drawable.ic_folder)))
+        usage.forEach { item ->
+            box.addView(settingsGroup(item.category.label,
+                settingsSwitchRow("保留${item.category.label}", "${formatFileSize(item.bytes)} · 上限 ${cacheManager.limitMb(item.category)} MiB", item.enabled) { enabled ->
+                    cacheManager.setEnabled(item.category, enabled)
+                    if (item.category == CacheCategory.INDEX) webDavCache.clear()
+                    if (item.category == CacheCategory.METADATA && !enabled) store.pruneUnreferencedMetadata()
+                    AppLogger.refreshCapture()
+                },
+                settingsRow("分类上限", "${cacheManager.limitMb(item.category)} MiB · 同时受总上限约束", R.drawable.ic_storage) { showCacheBudgetDialog(item.category) },
+                settingsRow("清理${item.category.label}", "正在使用的文件会保留至播放或任务结束", R.drawable.ic_refresh) {
+                    val removed = cacheManager.clear(item.category)
+                    if (item.category == CacheCategory.INDEX) webDavCache.clear()
+                    if (item.category == CacheCategory.METADATA) store.pruneUnreferencedMetadata()
+                    AppLogger.refreshCapture()
+                    Toast.makeText(this, "已清理 ${formatFileSize(removed)}", Toast.LENGTH_SHORT).show()
+                }))
+        }
+        box.addView(TextView(this).apply {
+            text = "关闭音频缓存后，可用的临时空间仍可支持本次播放，并在换曲后删除。关闭临时文件会暂停需要暂存的转换。下载音乐、账号和长期播放记录不属于缓存。日志保留天数还受分类与总空间上限限制。"
+            bodyStyle(14f); setPadding(dp(16), dp(12), dp(16), dp(8))
+        })
+        dialogBuilder().setTitle("缓存管理").setView(box).setPositiveButton("关闭", null).show()
+    }
+
+    private fun showCacheBudgetDialog(category: CacheCategory?) {
+        val value = category?.let(cacheManager::limitMb) ?: cacheManager.totalLimitMb
+        val input = dialogInput("空间上限（MiB）", value.toString()).apply { inputType = android.text.InputType.TYPE_CLASS_NUMBER }
+        val dialog = dialogBuilder().setTitle(category?.label ?: "缓存总空间上限").setView(input)
+            .setPositiveButton("保存", null).setNegativeButton("取消", null).show()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val limit = input.text.toString().toLongOrNull()
+            val minimum = if (category == null) 16L else 1L
+            if (limit == null || limit !in minimum..32768L) { input.error = "请输入 $minimum–32768 MiB"; return@setOnClickListener }
+            if (category == null) cacheManager.totalLimitMb = limit else cacheManager.setLimitMb(category, limit)
+            streamCacheLimitGb = cacheManager.totalLimitMb / 1024f
+            AppLogger.refreshCapture(); saveSettings(); dialog.dismiss()
+            Toast.makeText(this, "缓存上限已更新，正在使用的文件将在任务结束后回收", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showDiagnosticsDialog() {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), dp(4), dp(8), dp(8)) }
+        box.addView(settingsGroup("运行记录",
+            settingsSwitchRow("记录运行日志", "默认开启；应用事件、同 UID 运行日志及崩溃，敏感字段自动脱敏", AppLogger.enabled) {
+                AppLogger.enabled = it; debugMode = it; saveSettings()
+            },
+            settingsDropdownRow("最低日志等级", LogLevel.entries.map { "${it.name} · ${it.label}" }.toTypedArray(), AppLogger.level.ordinal) { AppLogger.level = LogLevel.entries[it] },
+            settingsRow("保存时长", "${AppLogger.retentionDays} 天 · 默认 7 天", R.drawable.ic_info_outline) { showLogRetentionDialog() }))
+        box.addView(settingsGroup("查看与导出",
+            settingsRow("日志预览", "查看脱敏后的近期记录，最多 80,000 字符", R.drawable.ic_message) { showLogPreviewDialog(emptySet()) },
+            settingsRow("选择日志导出", "按文件多选，导出为 ZIP", R.drawable.ic_download_queue) { showLogSelectionDialog() },
+            settingsRow("日志缓存限制", "${if (cacheManager.isEnabled(CacheCategory.LOGS)) "允许记录" else "缓存已关闭，停止记录"} · ${cacheManager.limitMb(CacheCategory.LOGS)} MiB", R.drawable.ic_storage) { showCacheBudgetDialog(CacheCategory.LOGS) }))
+        box.addView(TextView(this).apply {
+            text = "保存天数是时间上限；缓存不足时会先回收旧文件。应用不读取其他应用的日志。预览与导出也会再次脱敏，请确认后再分享。"
+            bodyStyle(14f); setPadding(dp(16), dp(12), dp(16), dp(8))
+        })
+        dialogBuilder().setTitle("运行日志与诊断").setView(box).setPositiveButton("关闭", null).show()
+    }
+
+    private fun showLogRetentionDialog() {
+        val input = dialogInput("保留天数（1–365）", AppLogger.retentionDays.toString()).apply { inputType = android.text.InputType.TYPE_CLASS_NUMBER }
+        val dialog = dialogBuilder().setTitle("日志保存时长").setView(input).setPositiveButton("保存", null).setNegativeButton("取消", null).show()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val days = input.text.toString().toIntOrNull()
+            if (days == null || days !in 1..365) { input.error = "请输入 1–365 天"; return@setOnClickListener }
+            AppLogger.retentionDays = days; dialog.dismiss()
+        }
+    }
+
+    private fun showLogPreviewDialog(selectedIds: Set<String> = emptySet()) {
+        val preview = TextView(this).apply {
+            text = AppLogger.preview(selectedIds).ifBlank { "暂无日志。请检查日志开关、最低等级与日志缓存设置。" }
+            bodyStyle(12f, Palette.TEXT); typeface = android.graphics.Typeface.MONOSPACE
+            setTextIsSelectable(true); setPadding(dp(16), dp(12), dp(16), dp(12))
+        }
+        dialogBuilder().setTitle("日志预览 · 已脱敏").setView(preview).setPositiveButton("关闭", null).show()
+    }
+
+    private fun showLogSelectionDialog() {
+        val files = AppLogger.files()
+        if (files.isEmpty()) { Toast.makeText(this, "暂无可导出的日志", Toast.LENGTH_SHORT).show(); return }
+        val selected = files.map { it.id }.toMutableSet()
+        val date = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), dp(4), dp(8), dp(8)) }
+        files.forEach { file ->
+            box.addView(settingsSwitchRow(file.id.substringAfterLast('/'), "${date.format(Date(file.modifiedAt))} · ${formatFileSize(file.bytes)}", true) {
+                if (it) selected.add(file.id) else selected.remove(file.id)
+            })
+        }
+        dialogBuilder().setTitle("选择日志文件").setView(box)
+            .setNeutralButton("预览") { _, _ -> if (selected.isNotEmpty()) showLogPreviewDialog(selected.toSet()) }
+            .setPositiveButton("导出 ZIP") { _, _ ->
+                if (selected.isEmpty()) Toast.makeText(this, "请至少选择一个日志文件", Toast.LENGTH_SHORT).show()
+                else {
+                    selectedLogExportIds = selected.toSet()
+                    startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                        type = "application/zip"; addCategory(Intent.CATEGORY_OPENABLE)
+                        putExtra(Intent.EXTRA_TITLE, "SMP-logs-${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT).format(Date())}.zip")
+                    }, REQUEST_LOG_EXPORT)
+                }
+            }.setNegativeButton("取消", null).show()
+    }
+
     private fun showStorageSettingsDialog() {
         val scroll = ScrollView(this)
         val box = LinearLayout(this).apply {
@@ -3258,24 +3592,6 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(settingCard("下载目录", streamFolderLabel(streamDownloadFolderUri, "应用默认目录")) {
             openStreamDownloadFolderPicker()
         })
-        box.addView(settingCard("缓存位置", streamFolderLabel(streamCacheFolderUri, "Android 数据目录")) {
-            dialogBuilder()
-                .setTitle("缓存位置")
-                .setItems(arrayOf("选择文件夹", "恢复默认目录")) { _, which ->
-                    if (which == 0) {
-                        openStreamCacheFolderPicker()
-                    } else {
-                        streamCacheFolderUri = ""
-                        saveSettings()
-                        render(Page.SETTINGS)
-                        Toast.makeText(this, "已恢复为默认目录", Toast.LENGTH_SHORT).show()
-                    }
-                }
-                .show()
-        })
-        box.addView(settingCard("缓存空间上限", "${"%.1f".format(streamCacheLimitGb)} GB") {
-            showStreamCacheLimitDialog()
-        })
         box.addView(settingCard("输出文件目录", outputDirectoryMode.label) {
             showOutputDirectoryDialog()
         })
@@ -3284,12 +3600,6 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         })
         box.addView(settingCard("音乐格式转换", "选择 NCM 文件并转换为 MP3/FLAC。转换核心移植自 NCMConverter4a。") {
             openNcmConvertPicker()
-        })
-        box.addView(settingCard("调试模式", if (debugMode) "已开启，报错将产生日志文件" else "已关闭") {
-            debugMode = !debugMode
-            saveSettings()
-            render(Page.SETTINGS)
-            Toast.makeText(this, "调试模式已${if (debugMode) "开启" else "关闭"}", Toast.LENGTH_SHORT).show()
         })
         box.addView(settingCard("元数据自动写入", if (autoWriteMetadata) "开启后 Last.fm 匹配到的元数据直接写入音频文件" else "关闭（Last.fm 匹配结果仅更新音乐库）") {
             autoWriteMetadata = !autoWriteMetadata
@@ -3306,18 +3616,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun showStreamCacheLimitDialog() {
-        val input = dialogInput("缓存空间上限（GB）", "%.1f".format(streamCacheLimitGb))
-        dialogBuilder()
-            .setTitle("缓存空间上限")
-            .setView(input)
-            .setPositiveButton("保存") { _, _ ->
-                streamCacheLimitGb = input.text.toString().toFloatOrNull()?.coerceAtLeast(0.1f) ?: streamCacheLimitGb
-                saveSettings()
-                enforceStreamCacheLimit()
-                render(Page.SETTINGS)
-            }
-            .setNegativeButton("取消", null)
-            .show()
+        showCacheBudgetDialog(null)
     }
 
     private fun showOutputDirectoryDialog() {
@@ -3343,22 +3642,20 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(8), dp(12), dp(8))
         }
-        box.addView(settingCard("软件配色", "预设主题色或调色盘自定义颜色，按钮和重点控件会同步使用主题色。") {
+        box.addView(settingsGroup("主题与显示", settingsRow("软件配色", "预设主题色或调色盘自定义颜色", R.drawable.ic_palette) {
             showThemeSettingsDialog()
-        })
-        box.addView(settingCard("深色模式", darkMode.label) {
+        }, settingsRow("深色模式", darkMode.label, R.drawable.ic_moon) {
             showDarkModeDialog()
-        })
-        box.addView(settingCard("语言", if (language == "zh") "中文" else "English") {
+        }, settingsRow("背景图片", "透明度 ${(backgroundAlpha * 100).toInt()}% · ${if (backgroundImageUri.isBlank()) "未设置" else "已设置"}", R.drawable.ic_image_outline) {
+            showBackgroundSettingsDialog()
+        }))
+        box.addView(settingsGroup("语言", settingsRow("语言", if (language == "zh") "中文" else "English", R.drawable.ic_language) {
             language = if (language == "zh") "en" else "zh"
             Lang.language = language
             saveSettings()
             rebuildShell(page)
             Toast.makeText(this, if (language == "zh") "已切换为中文" else "Switched to English", Toast.LENGTH_SHORT).show()
-        })
-        box.addView(settingCard("背景图片", "透明度：${(backgroundAlpha * 100).toInt()}%；当前：${if (backgroundImageUri.isBlank()) "未设置" else "已设置"}") {
-            showBackgroundSettingsDialog()
-        })
+        }))
         dialogBuilder()
             .setTitle("外观设置")
             .setView(box)
@@ -3393,32 +3690,31 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             background = panelDrawable(themeColor, 8, this@MainActivity)
             setPadding(dp(12), dp(12), dp(12), dp(12))
         }
+        val originalSeed = themeColor
+        var previewSeed = themeColor
+        preview.setTextColor(contrastTextColor(previewSeed))
         var red = Color.red(themeColor)
         var green = Color.green(themeColor)
         var blue = Color.blue(themeColor)
         fun applyPreview() {
-            themeColor = Color.rgb(red, green, blue)
-            preview.background = panelDrawable(themeColor, 8, this@MainActivity)
+            previewSeed = Color.rgb(red, green, blue)
+            preview.background = panelDrawable(previewSeed, 12, this@MainActivity)
+            preview.setTextColor(contrastTextColor(previewSeed))
         }
-        val presets = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-        listOf(
-            "青绿" to 0xFF35C2A1.toInt(),
-            "琥珀" to 0xFFF2B84B.toInt(),
-            "蓝色" to 0xFF4A90E2.toInt(),
-            "紫色" to 0xFF9B6CFF.toInt()
-        ).forEach { (label, color) ->
-            presets.addView(actionButton(label) {
-                red = Color.red(color)
-                green = Color.green(color)
-                blue = Color.blue(color)
-                applyPreview()
-            }, LinearLayout.LayoutParams(0, dp(40), 1f).apply {
-                leftMargin = dp(3)
-                rightMargin = dp(3)
-            })
+        val presets = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val colors = listOf(
+            "青绿" to 0xFF35C2A1.toInt(), "琥珀" to 0xFFF2B84B.toInt(),
+            "蓝色" to 0xFF4A90E2.toInt(), "紫色" to 0xFF9B6CFF.toInt()
+        )
+        colors.chunked(if (resources.configuration.fontScale > 1.3f) 2 else 4).forEach { group ->
+            val row = LinearLayout(this)
+            group.forEach { (label, color) ->
+                row.addView(actionButton(label) {
+                    red = Color.red(color); green = Color.green(color); blue = Color.blue(color)
+                    applyPreview()
+                }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(dp(4), dp(4), dp(4), dp(4)) })
+            }
+            presets.addView(row)
         }
         fun colorSlider(label: String, initial: Int, onChanged: (Int) -> Unit): View {
             val boxRow = LinearLayout(this).apply {
@@ -3427,9 +3723,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             }
             val text = TextView(this).apply {
                 this.text = "$label: $initial"
-                bodyStyle(13f)
+                bodyStyle(14f)
             }
-            val slider = SeekBar(this).apply {
+            val slider = materialSeekBar(this).apply {
                 max = 255
                 progress = initial
                 setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -3447,7 +3743,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             return boxRow
         }
         box.addView(preview)
-        box.addView(presets, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply { topMargin = dp(10) })
+        box.addView(presets, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
         box.addView(colorSlider("R", red) { red = it })
         box.addView(colorSlider("G", green) { green = it })
         box.addView(colorSlider("B", blue) { blue = it })
@@ -3455,28 +3751,30 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             .setTitle("软件配色")
             .setView(box)
             .setPositiveButton("保存") { _, _ ->
+                themeColor = previewSeed
                 applyAppPalette()
                 saveSettings()
                 render(Page.SETTINGS)
                 updateFloatingLyrics()
             }
-            .setNegativeButton("取消", null)
+            .setNegativeButton("取消") { _, _ -> themeColor = originalSeed }
             .show()
     }
 
     private fun showNotificationSettingsDialog() {
-        val labels = arrayOf("状态栏播放开关", "锁屏显示播放控件")
-        val checked = booleanArrayOf(notificationEnabled, lockscreenNotificationEnabled)
+        fun updateNotifications() {
+            saveSettings()
+            if ((notificationEnabled || lockscreenNotificationEnabled) && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
+            }
+            updatePlaybackNotification()
+        }
+        val box = settingsGroup("播放控制",
+            settingsSwitchRow("状态栏播放开关", "在通知栏控制当前音乐", notificationEnabled) { notificationEnabled = it; updateNotifications() },
+            settingsSwitchRow("锁屏显示播放控件", "在锁屏查看封面与播放进度", lockscreenNotificationEnabled) { lockscreenNotificationEnabled = it; updateNotifications() })
         dialogBuilder()
             .setTitle("通知")
-            .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
-                if (which == 0) notificationEnabled = isChecked else lockscreenNotificationEnabled = isChecked
-                saveSettings()
-                if ((notificationEnabled || lockscreenNotificationEnabled) && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
-                }
-                updatePlaybackNotification()
-            }
+            .setView(box)
             .setPositiveButton("完成") { _, _ -> render(Page.SETTINGS) }
             .show()
     }
@@ -3486,34 +3784,34 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(8), dp(18), dp(2))
         }
-        val enabledBox = CheckBox(this).apply {
+        val enabledBox = materialCheckBox(this).apply {
             text = "开启悬浮歌词"
             setTextColor(Palette.TEXT)
             isChecked = floatingLyricsEnabled
         }
-        val hideBox = CheckBox(this).apply {
+        val hideBox = materialCheckBox(this).apply {
             text = "在软件中隐藏悬浮歌词"
             setTextColor(Palette.TEXT)
             isChecked = floatingLyricsHideInApp
         }
-        val strokeBox = CheckBox(this).apply {
+        val strokeBox = materialCheckBox(this).apply {
             text = "开启文字描边"
             setTextColor(Palette.TEXT)
             isChecked = floatingLyricsStrokeEnabled
         }
         val alphaLabel = TextView(this).apply {
             text = "文本透明度：${(floatingLyricsAlpha * 100).toInt()}%"
-            bodyStyle(13f)
+            bodyStyle(14f)
         }
-        val alphaSlider = SeekBar(this).apply {
+        val alphaSlider = materialSeekBar(this).apply {
             max = 100
             progress = (floatingLyricsAlpha * 100).toInt().coerceIn(20, 100)
         }
         val sizeLabel = TextView(this).apply {
             text = "字号大小：${floatingLyricsTextSizeSp.toInt()}sp"
-            bodyStyle(13f)
+            bodyStyle(14f)
         }
-        val sizeSlider = SeekBar(this).apply {
+        val sizeSlider = materialSeekBar(this).apply {
             max = 20
             progress = (floatingLyricsTextSizeSp.toInt() - 12).coerceIn(0, 20)
         }
@@ -3524,7 +3822,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             strokeEnabled = floatingLyricsStrokeEnabled
             setTextColor(applyAlpha(themeColor, floatingLyricsAlpha))
             setPadding(dp(12), dp(10), dp(12), dp(10))
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL_ALT, 12, this@MainActivity)
         }
         fun updatePreview() {
             val alpha = alphaSlider.progress.coerceIn(20, 100) / 100f
@@ -3547,12 +3845,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         })
         strokeBox.setOnCheckedChangeListener { _, _ -> updatePreview() }
         val positionLabels = FloatingLyricsPosition.entries.map { it.label }.toTypedArray()
-        val positionSpinner = Spinner(this).apply {
+        val positionSpinner = androidx.appcompat.widget.AppCompatSpinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_item, positionLabels).also {
                 it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             }
             setSelection(floatingLyricsPosition.ordinal)
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL_ALT, 12, this@MainActivity)
         }
         box.addView(enabledBox)
         box.addView(hideBox)
@@ -3566,7 +3864,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(sizeSlider)
         box.addView(TextView(this).apply {
             text = "歌词位置"
-            bodyStyle(13f)
+            bodyStyle(14f)
             setPadding(0, dp(10), 0, dp(6))
         })
         box.addView(positionSpinner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)))
@@ -3678,57 +3976,14 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val focusLabels = AudioFocusBehavior.entries.map { it.label }.toTypedArray()
         var selectedRestore = if (restorePlaybackOnLaunch) 1 else 0
         var selectedFocus = audioFocusBehavior.ordinal
-        box.addView(TextView(this).apply {
-            text = Lang.get("restore_playback")
-            titleStyle(15f)
-            setPadding(0, 0, 0, dp(6))
-        })
-        val restoreSpinner = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_item, restoreLabels).also {
-                it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-            }
-            setSelection(selectedRestore)
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
-            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                    selectedRestore = position
-                }
-                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
-            }
-        }
-        box.addView(restoreSpinner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)))
-        box.addView(TextView(this).apply {
-            text = Lang.get("audio_focus")
-            titleStyle(15f)
-            setPadding(0, dp(12), 0, dp(6))
-        })
-        val focusSpinner = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_item, focusLabels).also {
-                it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-            }
-            setSelection(selectedFocus)
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
-            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                    selectedFocus = position
-                }
-                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
-            }
-        }
-        box.addView(focusSpinner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)))
-        box.addView(actionButton("${Lang.get("stream_preload")}：$streamPreloadCount 首") {
-            showStreamingSettingsDialog()
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
-            topMargin = dp(12)
-        })
-        box.addView(actionButton(
-            "悬浮歌词：${if (floatingLyricsEnabled) "开启" else "关闭"} / ${floatingLyricsPosition.label} / ${(floatingLyricsAlpha * 100).toInt()}% / ${floatingLyricsTextSizeSp.toInt()}sp"
-        ) { showFloatingLyricsSettingsDialog() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
-            topMargin = dp(12)
-        })
-        box.addView(actionButton("${Lang.get("eq_preset")}：$equalizerPreset") { showEqualizerDialog() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)).apply {
-            topMargin = dp(12)
-        })
+        box.addView(settingsGroup("启动与音频",
+            settingsDropdownRow(Lang.get("restore_playback"), restoreLabels, selectedRestore) { selectedRestore = it },
+            settingsDropdownRow(Lang.get("audio_focus"), focusLabels, selectedFocus) { selectedFocus = it }))
+        box.addView(settingsGroup("播放体验",
+            settingsRow(Lang.get("stream_preload"), "$streamPreloadCount 首", R.drawable.ic_download_queue) { showStreamingSettingsDialog() },
+            settingsRow("悬浮歌词", "${if (floatingLyricsEnabled) "开启" else "关闭"} · ${floatingLyricsPosition.label} · ${(floatingLyricsAlpha * 100).toInt()}%", R.drawable.ic_song) { showFloatingLyricsSettingsDialog() },
+            settingsRow(Lang.get("eq_preset"), equalizerPreset, R.drawable.ic_volume) { showEqualizerDialog() },
+            settingsRow("通知与锁屏", "播放控制与通知显示", R.drawable.ic_notifications) { showNotificationSettingsDialog() }))
         dialogBuilder()
             .setTitle(Lang.get("playback_settings"))
             .setView(box)
@@ -3752,23 +4007,23 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val names = equalizerPresets.keys.toList()
         var selectedPreset = names.indexOf(equalizerPreset).takeIf { it >= 0 } ?: 0
         val working = (equalizerPresets[names[selectedPreset]] ?: List(5) { 0 }).toMutableList()
-        val presetSpinner = Spinner(this).apply {
+        val presetSpinner = androidx.appcompat.widget.AppCompatSpinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_item, names).also {
                 it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             }
             setSelection(selectedPreset)
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL_ALT, 12, this@MainActivity)
         }
         box.addView(presetSpinner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)))
         val labels = mutableListOf<TextView>()
         frequencies.forEachIndexed { index, frequency ->
             val label = TextView(this).apply {
                 text = "$frequency：${working[index]} mB"
-                bodyStyle(13f)
+                bodyStyle(14f)
             }
             labels += label
             box.addView(label)
-            box.addView(SeekBar(this).apply {
+            box.addView(materialSeekBar(this).apply {
                 max = 3000
                 progress = working[index] + 1500
                 setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -3839,7 +4094,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(8), dp(12), dp(4))
         }
-        val noMedia = CheckBox(this).apply {
+        val noMedia = materialCheckBox(this).apply {
             text = "扫描时跳过含 .nomedia 的文件夹"
             isChecked = skipNoMediaFolders
             bodyStyle(15f)
@@ -3909,28 +4164,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(8), dp(18), dp(4))
         }
-        val label = TextView(this).apply {
-            text = "背景透明度：${(backgroundAlpha * 100).toInt()}%"
-            bodyStyle(15f, Palette.MUTED)
-        }
-        val slider = SeekBar(this).apply {
-            max = 100
-            progress = (backgroundAlpha * 100).toInt().coerceIn(0, 100)
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                    backgroundAlpha = progress / 100f
-                    label.text = "背景透明度：$progress%"
-                }
-                override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
-                override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
-            })
-        }
-        box.addView(TextView(this).apply {
-            text = if (backgroundImageUri.isBlank()) "当前未设置背景图片" else "已设置背景图片"
-            bodyStyle(14f, Palette.MUTED)
-        })
-        box.addView(label)
-        box.addView(slider)
+        box.addView(settingsGroup("背景显示",
+            settingsRow("背景图片", if (backgroundImageUri.isBlank()) "当前未设置背景图片" else "已设置背景图片", R.drawable.ic_image_outline),
+            settingsSliderRow("背景透明度", (backgroundAlpha * 100).toInt().coerceIn(0, 100)) { backgroundAlpha = it / 100f }))
         dialogBuilder()
             .setTitle("背景图片")
             .setView(box)
@@ -4204,7 +4440,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(10), dp(8), dp(10), dp(8))
-            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL, 12, this@MainActivity)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = dp(8)
             }
@@ -4226,7 +4462,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             clearSelection()
             renderCurrentListPage()
         }, LinearLayout.LayoutParams(dp(62), dp(38)).apply { leftMargin = dp(6) })
-        return bar
+        return android.widget.HorizontalScrollView(this).apply {
+            isFillViewport = false
+            layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) }
+            addView(bar, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
     }
 
     private fun updateSelectionViews() {
@@ -4356,11 +4596,18 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 DizzylabClient("").streamHeaders() else emptyMap()
         }
         if (track.id.startsWith("webdav:")) {
-            val server = store.webDavServers.filter { server ->
-                val base = Uri.parse(server.url)
+            val identifier = track.id.removePrefix("webdav:")
+            val marker = identifier.takeIf { ':' in it }?.substringBefore(':')
+            val candidates = store.webDavServers.filter { server ->
+                if (marker != null && server.id != marker) return@filter false
+                val base = Uri.parse(WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert).resourceUrl(""))
                 target.scheme == base.scheme && target.host == base.host && target.port == base.port &&
                     (target.path.orEmpty() == base.path.orEmpty().trimEnd('/') || target.path.orEmpty().startsWith(base.path.orEmpty().trimEnd('/') + "/"))
-            }.maxByOrNull { Uri.parse(it.url).path.orEmpty().length }
+            }
+            val server = if (marker != null) candidates.singleOrNull() else {
+                val longest = candidates.maxOfOrNull { Uri.parse(it.url).path.orEmpty().length }
+                candidates.filter { Uri.parse(it.url).path.orEmpty().length == longest }.singleOrNull()
+            }
             return server?.let { WebDavClient(it.url, it.username, it.password, it.port, it.ignoreCert).streamHeaders() }.orEmpty()
         }
         return emptyMap() // Subsonic has per-request URL authentication; local files need no headers.
@@ -4369,6 +4616,23 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun playTrack(track: Track, queue: List<Track>, countPlay: Boolean = true, resolveRemote: Boolean = true) {
         if (resolveRemote) {
             val requestId = ++playbackRequestGeneration
+            if (track.id.startsWith("webdav:") && Uri.parse(track.uri).scheme in setOf("http", "https")) {
+                if (prepareWebDavRecordedTrack(track, queue, countPlay)) return
+            }
+            if (track.id.startsWith("stream:subsonic:") && Uri.parse(track.uri).scheme !in setOf("file", "content")) {
+                val info = subsonicInfo(track)
+                val serverId = info.getOrNull(1) ?: track.id.removePrefix("stream:subsonic:").substringBefore(':')
+                val songId = info.getOrNull(2) ?: track.id.removePrefix("stream:subsonic:$serverId:")
+                val server = store.subsonicServers.firstOrNull { it.id == serverId }
+                if (server == null) { Toast.makeText(this, "该歌曲的 Subsonic 服务器已移除，请重新配置", Toast.LENGTH_LONG).show(); return }
+                val client = subsonicClient(server)
+                val coverId = track.artworkReference.takeIf { it.startsWith("subsonic|$serverId|") }?.substringAfter("subsonic|$serverId|").orEmpty()
+                val coverUrl = if (coverId.isNotBlank()) client.coverArtUrl(coverId) else ""
+                val fresh = track.copy(uri = client.streamUrl(songId, effectiveSubsonicTranscodeMode()),
+                    artworkPath = if (coverUrl.isNotBlank()) cachedRemoteArtworkPath(coverUrl).ifBlank { coverUrl } else track.artworkPath)
+                playTrack(fresh, queue.map { if (it.id == track.id) fresh else it }, countPlay, resolveRemote = false)
+                return
+            }
             val ref = DizzylabTrackRef.from(track)
             if (ref != null && track.uri.startsWith("https://")) {
                 val revision = dizzySessionRevision
@@ -4378,7 +4642,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                     runOnUiThread {
                         if (isDestroyed || requestId != playbackRequestGeneration || revision != dizzySessionRevision) return@runOnUiThread
                         result.onSuccess { fresh ->
-                            val updated = track.copy(uri = fresh.uri)
+                            val updated = track.copy(uri = fresh.uri, artworkPath = fresh.artworkPath)
                             playTrack(updated, queue.map { if (it.id == track.id) updated else it }, countPlay, resolveRemote = false)
                         }.onFailure { Toast.makeText(this, it.message ?: "Dizzylab 播放准备失败", Toast.LENGTH_LONG).show() }
                     }
@@ -4388,6 +4652,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         if (!restorePreparingPaused && !requestPlaybackFocus()) return
         val baseQueue = queue.ifEmpty { listOf(track) }
+        store.rememberTracks(baseQueue + track)
         val nextQueue = if (playbackMode == PlaybackMode.PSEUDO_RANDOM) {
             if (shouldCreatePseudoQueue(baseQueue)) createPseudoQueue(baseQueue, track.id) else currentQueue
         } else {
@@ -4400,6 +4665,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         if (countPlay) store.addHistory(track.id)
         pausedByAudioFocus = false
         player.headersForTrack = ::streamHeadersForTrack
+        releasePlaybackCacheLease(track.uri)
         player.play(track, startWhenReady = !restorePreparingPaused)
         restorePreparingPaused = false
         if (page == Page.PLAYLISTS && openedPlaylist?.id == LibraryStore.HISTORY_ID) render(Page.PLAYLISTS)
@@ -4696,37 +4962,44 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         return Uri.fromFile(file).toString()
     }
 
-    private fun writeDownloadOutputBytes(folder: String, fileName: String, mimeType: String, bytes: ByteArray): String {
+    private fun writeDownloadOutputBytes(folder: String, fileName: String, mimeType: String, bytes: ByteArray): String =
+        writeDownloadOutputData(folder, fileName, mimeType) { it.write(bytes) }
+
+    private fun writeDownloadOutputData(folder: String, fileName: String, mimeType: String, write: (java.io.OutputStream) -> Unit): String {
         if (streamDownloadFolderUri.isNotBlank() && hasPersistedWritePermission(streamDownloadFolderUri)) {
-            return runCatching {
+            var created: Uri? = null
+            runCatching {
                 val root = Uri.parse(streamDownloadFolderUri)
                 val folderDir = findOrCreateDocumentDir(root, folder)
                 val fileUri = DocumentsContract.createDocument(contentResolver, folderDir, mimeType, fileName)
                     ?: error("无法创建输出文件")
-                contentResolver.openOutputStream(fileUri)?.use { it.write(bytes) } ?: error("无法写入输出文件")
-                fileUri.toString()
-            }.getOrElse { error ->
-                Log.w(TAG, "Configured output folder write failed: $streamDownloadFolderUri", error)
-                writePublicDownloadOrInternal(folder, fileName, bytes)
+                created = fileUri
+                contentResolver.openOutputStream(fileUri)?.use(write) ?: error("无法写入输出文件")
+                return fileUri.toString()
+            }.onFailure { error ->
+                created?.let { runCatching { DocumentsContract.deleteDocument(contentResolver, it) } }
+                AppLogger.warn("OUTPUT", "Configured output folder unavailable; using default destination", error)
             }
         }
-        return writePublicDownloadOrInternal(folder, fileName, bytes)
-    }
-
-    private fun writePublicDownloadOrInternal(folder: String, fileName: String, bytes: ByteArray): String {
         if (Build.VERSION.SDK_INT >= 29) {
+            var created: Uri? = null
             runCatching {
                 val values = ContentValues().apply {
                     put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                    put(MediaStore.Downloads.MIME_TYPE, mimeType)
                     put(MediaStore.Downloads.RELATIVE_PATH, "Download/SMP/$folder")
                     put(MediaStore.Downloads.IS_PENDING, 1)
                 }
                 val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                     ?: error("无法创建下载目录输出文件")
-                contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: error("无法写入下载目录输出文件")
-                contentResolver.update(uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null)
+                created = uri
+                contentResolver.openOutputStream(uri)?.use(write) ?: error("无法写入下载目录输出文件")
+                check(contentResolver.update(uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null) > 0)
                 return uri.toString()
-            }.onFailure { Log.w(TAG, "MediaStore download output failed: $folder/$fileName", it) }
+            }.onFailure { error ->
+                created?.let { runCatching { contentResolver.delete(it, null, null) } }
+                AppLogger.warn("OUTPUT", "MediaStore output failed; using app output directory", error)
+            }
         }
         val baseDir = if (hasAllFilesAccess()) {
             File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "SMP")
@@ -4735,12 +5008,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         val dir = File(baseDir, folder).apply { mkdirs() }
         val file = File(dir, fileName)
-        return runCatching {
-            file.writeBytes(bytes)
-            Uri.fromFile(file).toString()
-        }.getOrElse {
-            writeInternalOutputBytes(folder, fileName, bytes)
-        }
+        val temporary = File(dir, ".${UUID.randomUUID()}.part")
+        try {
+            temporary.outputStream().use(write)
+            java.nio.file.Files.move(temporary.toPath(), file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            return Uri.fromFile(file).toString()
+        } finally { temporary.delete() }
     }
 
     private fun queueForCurrentView(): List<Track> {
@@ -4876,11 +5149,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         val valueLabel = TextView(this).apply {
             text = "${"%.2f".format(player.speed())}x"
-            titleStyle(24f)
+            titleStyle(22f)
             gravity = Gravity.CENTER
             setPadding(0, dp(8), 0, dp(8))
         }
-        val slider = SeekBar(this).apply {
+        val slider = materialSeekBar(this).apply {
             max = 150
             progress = ((player.speed() - 0.5f) * 100).toInt().coerceIn(0, 150)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -4939,7 +5212,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             gravity = Gravity.CENTER
             setPadding(0, dp(8), 0, dp(8))
         }
-        val slider = SeekBar(this).apply {
+        val slider = materialSeekBar(this).apply {
             max = maxVolume
             progress = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -5013,7 +5286,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 compoundDrawablePadding = dp(10)
             }
             setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL_ALT, 12, this@MainActivity)
             setOnClickListener { onClick() }
             applyCardPressEffect(this)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
@@ -5023,25 +5296,138 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun settingCard(title: String, body: String = "", onClick: (() -> Unit)? = null): View {
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+        return settingsRow(title, body, settingsIcon(title), onClick).apply {
+            background = panelDrawable(Palette.PANEL, 20, this@MainActivity)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(8)
             }
         }
-        box.addView(TextView(this).apply {
-            text = title
-            titleStyle(16f)
-        })
-        if (body.isNotBlank()) {
-            box.addView(TextView(this).apply {
-                text = body
-                bodyStyle(13f)
-            })
+    }
+
+    private fun settingsIcon(title: String): Int = when {
+        title.contains("收件") || title.contains("消息") -> R.drawable.ic_message
+        title.contains("动态") -> R.drawable.ic_feed
+        title.contains("社团") || title.contains("关注") -> R.drawable.ic_groups
+        title.contains("兑换") || title.contains("CDK") -> R.drawable.ic_redeem
+        title.contains("订单") -> R.drawable.ic_receipt
+        title.contains("退出") -> R.drawable.ic_sign_out
+        title.contains("登录") -> R.drawable.ic_sign_in
+        title.contains("账户") || title.contains("作者") -> R.drawable.ic_account_person
+        title.contains("音质") || title.contains("播放") -> R.drawable.ic_headphones
+        title.contains("下载") -> R.drawable.ic_download_queue
+        title.contains("缓存") || title.contains("存储") -> R.drawable.ic_storage
+        title.contains("配色") || title.contains("外观") -> R.drawable.ic_palette
+        title.contains("深色") -> R.drawable.ic_moon
+        title.contains("背景") -> R.drawable.ic_image_outline
+        title.contains("语言") -> R.drawable.ic_language
+        title.contains("权限") -> R.drawable.ic_shield_check
+        title.contains("通知") -> R.drawable.ic_notifications
+        title.contains("版本") || title.contains("更新") -> R.drawable.ic_refresh
+        else -> R.drawable.ic_info_outline
+    }
+
+    private fun settingsGroup(title: String, vararg rows: View): View {
+        val group = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(8), 0, dp(12))
         }
-        onClick?.let { box.setOnClickListener { it() } }
+        group.addView(TextView(this).apply {
+            text = title; bodyStyle(14f, Palette.ACCENT)
+            setPadding(dp(16), dp(8), dp(16), dp(10))
+        })
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = panelDrawable(Palette.PANEL, 24, this@MainActivity)
+            clipToOutline = true
+        }
+        rows.forEachIndexed { index, row ->
+            if (index > 0) container.addView(View(this).apply { background = ColorDrawable(Palette.OUTLINE_VARIANT) },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)).apply { leftMargin = dp(64); rightMargin = dp(16) })
+            container.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        group.addView(container)
+        return group
+    }
+
+    private fun settingsRow(title: String, body: String = "", iconRes: Int = R.drawable.ic_settings, onClick: (() -> Unit)? = null): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = dp(72)
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+        }
+        row.addView(ImageView(this).apply {
+            setImageDrawable(tintedDrawable(iconRes, Palette.ACCENT, 24))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(24), dp(24)).apply { rightMargin = dp(16) })
+        val textColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        textColumn.addView(TextView(this).apply { text = title; titleStyle(16f) })
+        if (body.isNotBlank()) textColumn.addView(TextView(this).apply {
+            text = body; bodyStyle(14f); setPadding(0, dp(4), 0, 0)
+        })
+        row.addView(textColumn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        if (onClick != null) {
+            row.addView(ImageView(this).apply {
+                setImageDrawable(tintedDrawable(R.drawable.ic_chevron_right, Palette.MUTED, 20))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(dp(20), dp(24)).apply { leftMargin = dp(12) })
+            row.setOnClickListener { onClick() }
+            applyCardPressEffect(row)
+            row.contentDescription = listOf(title, body).filter { it.isNotBlank() }.joinToString("，")
+            textColumn.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        }
+        return row
+    }
+
+    private fun settingsSwitchRow(title: String, body: String, checked: Boolean, onChanged: (Boolean) -> Unit): View {
+        val row = settingsRow(title, body, settingsIcon(title)) as LinearLayout
+        val toggle = com.google.android.material.materialswitch.MaterialSwitch(this).apply {
+            isChecked = checked
+            contentDescription = listOf(title, body).filter { it.isNotBlank() }.joinToString("，")
+            minimumWidth = dp(52); minimumHeight = dp(48)
+            thumbTintList = android.content.res.ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(Palette.ON_ACCENT, Palette.OUTLINE))
+            trackTintList = android.content.res.ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(Palette.ACCENT, Palette.PANEL_ALT))
+            setOnCheckedChangeListener { _, value -> onChanged(value) }
+        }
+        row.addView(toggle, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(12) })
+        row.setOnClickListener { toggle.isChecked = !toggle.isChecked }
+        applyCardPressEffect(row)
+        row.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        row.getChildAt(1).importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        return row
+    }
+
+    private fun settingsDropdownRow(title: String, labels: Array<String>, selected: Int, onSelected: (Int) -> Unit): View {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(12), dp(16), dp(12)) }
+        box.addView(TextView(this).apply { text = title; titleStyle(16f); setPadding(0, 0, 0, dp(8)) })
+        box.addView(androidx.appcompat.widget.AppCompatSpinner(this).apply {
+            contentDescription = title
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_item, labels).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+            setSelection(selected.coerceIn(0, (labels.size - 1).coerceAtLeast(0)))
+            minimumHeight = dp(56)
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) { onSelected(position) }
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+            }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56)))
+        return box
+    }
+
+    private fun settingsSliderRow(title: String, value: Int, maxValue: Int = 100, suffix: String = "%", onChanged: (Int) -> Unit): View {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(12), dp(16), dp(8)) }
+        val label = TextView(this).apply { text = "$title · $value$suffix"; titleStyle(16f) }
+        box.addView(label)
+        box.addView(materialSeekBar(this).apply {
+            max = maxValue; progress = value.coerceIn(0, maxValue); contentDescription = title
+            com.supermite.smp.ui.stylePlayerSeekBar(this@MainActivity, this)
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    label.text = "$title · $progress$suffix"
+                    if (fromUser) onChanged(progress)
+                }
+                override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+            })
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)))
         return box
     }
 
@@ -5116,7 +5502,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         box.addView(comment)
         box.addView(tags)
         box.addView(ratingLabel)
-        box.addView(rating)
+        box.addView(rating, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         dialogBuilder()
             .setTitle(track.displayTitle)
@@ -5322,7 +5708,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val icon = if (player.isPlaying()) R.drawable.ic_pause_circle else R.drawable.ic_play_block
         miniPlayButton.text = ""
         setButtonIcon(miniPlayButton, icon)
-        nowPagePlayButton?.text = text
+        nowPagePlayButton?.text = ""
         nowPagePlayButton?.let { setButtonIcon(it, icon) }
         updatePlaybackNotification()
         updateMediaSessionState()
@@ -5330,7 +5716,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun buildSeekBar(): SeekBar {
-        return SeekBar(this).apply {
+        return materialSeekBar(this).apply {
             max = 1
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) = Unit
@@ -5353,8 +5739,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun loadArtwork(track: Track, target: ImageView) {
-        if (track.artworkPath.startsWith("http://") || track.artworkPath.startsWith("https://")) {
-            val cached = cachedRemoteArtworkPath(track.artworkPath)
+        target.tag=track.id
+        val remote=freshArtworkUrl(track)
+        if (remote.isNotBlank()) {
+            val cached = cachedRemoteArtworkPath(remote)
             if (cached.isNotBlank()) {
                 decodeArtworkPath(cached)?.let {
                     target.setImageBitmap(it)
@@ -5362,7 +5750,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 }
             }
             target.setImageResource(R.drawable.ic_cover_placeholder)
-            loadRemoteImage(track.artworkPath, target)
+            val local=decodeArtworkPath(track.artworkPath)
+            if(local!=null) {target.setImageBitmap(local);return}
+            loadRemoteImage(remote, target)
             return
         }
         val bitmap = decodeArtworkPath(track.artworkPath) ?: siblingArtworkFile(track)?.let { BitmapFactory.decodeFile(it.absolutePath) }
@@ -5374,13 +5764,25 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
     }
 
+    private fun freshArtworkUrl(track:Track):String {
+        if(track.artworkReference.startsWith("subsonic|")) {
+            val ref=track.artworkReference.split('|',limit=3)
+            val server=store.subsonicServers.firstOrNull {it.id==ref.getOrNull(1)}
+            if(server!=null)return subsonicClient(server).coverArtUrl(ref.getOrNull(2).orEmpty())
+        }
+        if(track.artworkReference.startsWith("https://") || track.artworkReference.startsWith("http://"))return track.artworkReference
+        return track.artworkPath.takeIf {it.startsWith("https://") || it.startsWith("http://")}.orEmpty()
+    }
+
     private fun resolvedArtworkPath(track: Track): String {
         val explicit = track.artworkPath.takeIf { it.isNotBlank() }
         if (explicit != null && explicit.startsWith("http")) {
             val cached = cachedRemoteArtworkPath(explicit)
             if (cached.isNotBlank()) return cached
         }
-        if (explicit != null && (explicit.startsWith("content://") || File(explicit).exists())) return explicit
+        if (explicit != null && explicit.startsWith("content://")) return explicit
+        if (explicit != null) cacheManager.resolveLegacyPath(explicit.removePrefix("file://")).takeIf { it.isFile }?.let { return it.absolutePath }
+        freshArtworkUrl(track).takeIf { it.isNotBlank() }?.let { return cachedRemoteArtworkPath(it).ifBlank { it } }
         return siblingArtworkFile(track)?.absolutePath.orEmpty()
     }
 
@@ -5390,7 +5792,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             if (path.startsWith("content://")) {
                 contentResolver.openInputStream(Uri.parse(path))?.use { BitmapFactory.decodeStream(it) }
             } else {
-                File(path).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.absolutePath) }
+                val file=cacheManager.resolveLegacyPath(path.removePrefix("file://"))
+                val managedArtwork=file.canonicalPath.startsWith(cacheManager.directory(CacheCategory.ARTWORK).canonicalPath+File.separator)
+                if(managedArtwork && !cacheManager.isEnabled(CacheCategory.ARTWORK))null
+                else file.takeIf {it.isFile}?.let {cacheManager.storage.touch(it);BitmapFactory.decodeFile(it.absolutePath)}
             }
         }.getOrNull()
     }
@@ -5441,10 +5846,17 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         if (url.isBlank()) return
         val expected = url
         target.tag = expected
+        val local=cachedRemoteArtworkPath(expected)
+        if(local.isNotBlank()) {
+            val bitmap=decodeArtworkPath(local)
+            if(bitmap!=null) {target.setImageBitmap(bitmap);return}
+            cacheManager.artwork.invalidate(expected)
+        }
         imageExecutor.execute {
             val bitmap = runCatching {
-                val path = cacheRemoteArtwork(expected, true)
-                val bytes = if (path.isNotBlank()) File(path).readBytes() else remoteImageBytes(expected)
+                var fetched:ByteArray?=null
+                val path=if(cacheManager.isEnabled(CacheCategory.ARTWORK))cacheManager.artwork.getOrFetch(expected) {remoteImageBytes(expected).also {fetched=it}} else ""
+                val bytes=path.takeIf {it.isNotBlank()}?.let {runCatching {File(it).readBytes()}.getOrNull()} ?: fetched ?: remoteImageBytes(expected)
                 BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
             }.onFailure {
                 Log.w(TAG, "Remote image failed: $expected", it)
@@ -5453,36 +5865,31 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 runOnUiThread {
                     if (target.tag == expected) target.setImageBitmap(bitmap)
                 }
-            }
+            } else cacheManager.artwork.invalidate(expected)
         }
     }
 
     private fun cachedRemoteArtworkPath(url: String): String {
-        if (url.isBlank()) return ""
-        val file = remoteArtworkCacheFile(url)
-        return file.takeIf { it.isFile && it.length() > 0 }?.absolutePath.orEmpty()
+        if(url.isBlank() || !cacheManager.isEnabled(CacheCategory.ARTWORK))return ""
+        cacheManager.artwork.cachedPath(url).takeIf {it.isNotBlank()}?.let {return it}
+        val ext=url.substringBefore('?').substringAfterLast('.',"img").lowercase(Locale.ROOT).takeIf {it.length in 2..5} ?: "img"
+        val relative="remote_artwork/${url.hashCode()}.$ext"
+        val legacy=cacheManager.legacyStreamFile(relative).takeIf {it.isFile}
+            ?: File(getExternalFilesDir(null) ?: filesDir,"StreamCache/$relative").takeIf {it.isFile}
+        return legacy?.let {runCatching {cacheManager.artwork.put(url,it.readBytes())}.getOrDefault("")}.orEmpty()
     }
 
     private fun cacheRemoteArtwork(url: String, allowNetwork: Boolean): String {
-        if (url.isBlank()) return ""
+        if (url.isBlank() || !cacheManager.isEnabled(CacheCategory.ARTWORK)) return ""
         val cached = cachedRemoteArtworkPath(url)
         if (cached.isNotBlank()) return cached
         if (!allowNetwork) return ""
-        return runCatching {
-            val bytes = remoteImageBytes(url)
-            val file = remoteArtworkCacheFile(url)
-            file.parentFile?.mkdirs()
-            file.writeBytes(bytes)
-            enforceStreamCacheLimit()
-            file.absolutePath
-        }.getOrDefault("")
+        return runCatching {cacheManager.artwork.getOrFetch(url) {remoteImageBytes(url)}}.getOrDefault("")
     }
 
     private fun remoteArtworkCacheFile(url: String): File {
-        val ext = url.substringBefore('?').substringAfterLast('.', "img")
-            .lowercase(Locale.ROOT)
-            .takeIf { it.length in 2..5 } ?: "img"
-        return File(streamCacheDir(), "remote_artwork/${url.hashCode()}.$ext")
+        val cached=cacheManager.artwork.cachedPath(url)
+        return if(cached.isNotBlank())File(cached) else cacheManager.keyedFile(CacheCategory.ARTWORK,com.supermite.smp.cache.ArtworkCache.canonicalKey(url),"img")
     }
 
     private fun remoteImageBytes(url: String): ByteArray {
@@ -5555,7 +5962,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         for (index in 0 until box.childCount) {
             val child = box.getChildAt(index) as? TextView ?: continue
             if (index == current) {
-                child.setTextColor(themeColor)
+                child.setTextColor(Palette.ACCENT)
                 child.textSize = 18f
                 child.paint.isFakeBoldText = true
             } else {
@@ -5741,7 +6148,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun loadSettings() {
         val prefs = getSharedPreferences("settings", MODE_PRIVATE)
-        themeColor = prefs.getInt("themeColor", Palette.ACCENT)
+        themeColor = prefs.getInt("themeColor", Palette.DEFAULT_SEED)
         darkMode = DarkMode.entries.getOrElse(prefs.getInt("darkMode", DarkMode.SYSTEM.ordinal)) { DarkMode.SYSTEM }
         language = prefs.getString("language", "system") ?: "system"
         Lang.language = language
@@ -5762,7 +6169,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         backgroundImageUri = prefs.getString("backgroundImageUri", "") ?: ""
         backgroundAlpha = prefs.getFloat("backgroundAlpha", 0.35f).coerceIn(0f, 1f)
         skipNoMediaFolders = prefs.getBoolean("skipNoMediaFolders", false)
-        debugMode = prefs.getBoolean("debugMode", false)
+        debugMode = AppLogger.enabled
         autoWriteMetadata = prefs.getBoolean("autoWriteMetadata", false)
         allowMobileDataDownload = prefs.getBoolean("allowMobileDataDownload", true)
         extraScanFolderUris.replaceAllFromJson(prefs.getString("extraScanFolderUris", "") ?: "")
@@ -5807,6 +6214,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun saveSettings() {
+        debugMode = AppLogger.enabled
         val sessionSaved = runCatching {
             synchronized(dizzySessionLock) { dizzylabSessionStore.save(dizzylabCookie, dizzylabToken, dizzylabUserId) }
         }.isSuccess
@@ -5906,9 +6314,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         if (trackId.isBlank() || allTracks.isEmpty()) return
         val queueIds = runCatching { JSONArray(prefs.getString("queueIds", "[]")) }.getOrDefault(JSONArray())
         val queue = (0 until queueIds.length())
-            .mapNotNull { index -> allTracks.firstOrNull { it.id == queueIds.optString(index) } }
+            .mapNotNull { index -> store.trackForRecord(queueIds.optString(index)) }
             .ifEmpty { allTracks.sortedWith(MusicScanner.trackComparator) }
-        val track = queue.firstOrNull { it.id == trackId } ?: allTracks.firstOrNull { it.id == trackId } ?: return
+        val track = queue.firstOrNull { it.id == trackId } ?: store.trackForRecord(trackId) ?: return
         playbackMode = PlaybackMode.entries.getOrElse(prefs.getInt("playbackMode", playbackMode.ordinal)) { PlaybackMode.SEQUENTIAL }
         player.setSpeed(prefs.getFloat("speed", 1.0f))
         pendingRestoreTrackId = track.id
@@ -5920,6 +6328,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun currentSettingsJson(): JSONObject {
         return JSONObject()
+            .put("cachePolicy", JSONObject().put("totalLimitMb", cacheManager.totalLimitMb).apply {
+                CacheCategory.entries.forEach { category -> put(category.name, JSONObject().put("enabled", cacheManager.isEnabled(category)).put("limitMb", cacheManager.limitMb(category))) }
+            })
+            .put("loggingPolicy", JSONObject().put("enabled", AppLogger.enabled).put("level", AppLogger.level.name).put("retentionDays", AppLogger.retentionDays))
             .put("themeColor", themeColor)
             .put("darkMode", darkMode.ordinal)
             .put("includeBetaUpdates", includeBetaUpdates)
@@ -6017,6 +6429,20 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         streamDownloadFolderUri = settings.optString("streamDownloadFolderUri", streamDownloadFolderUri)
         streamCacheLimitGb = settings.optDouble("streamCacheLimitGb", streamCacheLimitGb.toDouble()).toFloat().coerceAtLeast(0.1f)
         streamCacheFolderUri = settings.optString("streamCacheFolderUri", streamCacheFolderUri)
+        settings.optJSONObject("cachePolicy")?.let { policy ->
+            cacheManager.totalLimitMb = policy.optLong("totalLimitMb", cacheManager.totalLimitMb)
+            CacheCategory.entries.forEach { category -> policy.optJSONObject(category.name)?.let {
+                cacheManager.setLimitMb(category, it.optLong("limitMb", cacheManager.limitMb(category)))
+                cacheManager.setEnabled(category, it.optBoolean("enabled", cacheManager.isEnabled(category)))
+            } }
+            store.pruneUnreferencedMetadata()
+        }
+        settings.optJSONObject("loggingPolicy")?.let { policy ->
+            AppLogger.enabled = policy.optBoolean("enabled", AppLogger.enabled)
+            AppLogger.level = LogLevel.entries.firstOrNull { it.name == policy.optString("level") } ?: AppLogger.level
+            AppLogger.retentionDays = policy.optInt("retentionDays", AppLogger.retentionDays)
+        }
+        AppLogger.refreshCapture()
         weakNetworkMode = settings.optBoolean("weakNetworkMode", weakNetworkMode)
         subsonicTranscodeMode = SubsonicTranscodeMode.entries.getOrElse(settings.optInt("subsonicTranscodeMode", subsonicTranscodeMode.ordinal)) { subsonicTranscodeMode }
         outputDirectoryMode = OutputDirectoryMode.entries.getOrElse(settings.optInt("outputDirectoryMode", outputDirectoryMode.ordinal)) { outputDirectoryMode }
@@ -6039,76 +6465,102 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun applyAppPalette() {
-        Palette.apply(isDarkModeActive(darkMode), themeColor)
-        window.statusBarColor = Palette.BG
+        val dark = isDarkModeActive(darkMode)
+        setTheme(if (dark) R.style.AppTheme_Dark else R.style.AppTheme_Light)
+        Palette.apply(dark, themeColor)
+        window.setBackgroundDrawable(ColorDrawable(Palette.BG))
+        window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Palette.BG
-        if (Build.VERSION.SDK_INT >= 23) {
-            window.decorView.systemUiVisibility = if (isDarkModeActive(darkMode)) 0 else View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
         }
         refreshShellColors()
     }
 
     private fun refreshShellColors() {
         rootLayout?.setBackgroundColor(contentOverlayColor())
-        headerPanel?.background = GradientDrawable(
-            GradientDrawable.Orientation.LEFT_RIGHT,
-            headerGradientColors()
-        ).apply { cornerRadius = dp(8).toFloat() }
+        headerPanel?.background = ColorDrawable(Palette.BG)
         if (::headerTitle.isInitialized) headerTitle.setTextColor(Palette.TEXT)
-        if (::statusText.isInitialized) statusText.setTextColor(Palette.MUTED)
-        if (::miniPlayerPanel.isInitialized) miniPlayerPanel.background = panelDrawable(Palette.PANEL, 8, this)
+        if (::statusText.isInitialized) {
+            statusText.setTextColor(Palette.TEXT)
+            statusText.background = rippleDrawable(this, Palette.CONTAINER, 16)
+            statusText.setCompoundDrawablesRelative(null, null, tintedDrawable(R.drawable.ic_expand_more, Palette.ACCENT, 28), null)
+        }
+        if (::miniPlayerPanel.isInitialized) miniPlayerPanel.background = ColorDrawable(Color.TRANSPARENT)
         if (::miniTitle.isInitialized) miniTitle.setTextColor(Palette.TEXT)
         if (::miniMeta.isInitialized) miniMeta.setTextColor(Palette.MUTED)
-        if (::miniThumb.isInitialized) miniThumb.background = panelDrawable(Palette.PANEL_ALT, 8, this)
-        bottomNavigationPanel?.background = roundedStrokeDrawable(Palette.PANEL, Palette.PANEL_ALT, 10)
-        refreshThemedViews(rootLayout)
-        navButtons.forEach { (navPage, button) ->
-            button.setTextColor(if (navPage == page) Palette.TEXT else Palette.MUTED)
-            tintTextViewDrawables(button, if (navPage == page) Palette.TEXT else Palette.MUTED)
+        if (::miniTime.isInitialized) miniTime.setTextColor(Palette.MUTED)
+        if (::miniThumb.isInitialized) miniThumb.background = panelDrawable(Palette.PANEL_ALT, 16, this)
+        bottomNavigationPanel?.apply {
+            backgroundTintList = android.content.res.ColorStateList.valueOf(Palette.CONTAINER)
+            itemActiveIndicatorColor = android.content.res.ColorStateList.valueOf(Palette.SELECTED)
+            itemRippleColor = android.content.res.ColorStateList.valueOf(androidx.core.graphics.ColorUtils.setAlphaComponent(Palette.TEXT, 31))
+            val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+            itemIconTintList = android.content.res.ColorStateList(states, intArrayOf(Palette.ON_SELECTED, Palette.MUTED))
+            itemTextColor = android.content.res.ColorStateList(states, intArrayOf(Palette.TEXT, Palette.MUTED))
         }
+        refreshThemedViews(rootLayout)
     }
 
     private fun refreshThemedViews(view: View?) {
-        when (view) {
-            is Button -> if (view.tag == "accentButton") {
-                view.setTextColor(buttonTextColor())
-                view.background = panelDrawable(themeColor, 8, this)
-                tintButtonDrawables(view, view.currentTextColor)
-            }
-            is ViewGroup -> {
-                for (index in 0 until view.childCount) refreshThemedViews(view.getChildAt(index))
+        if (view is MaterialButton) {
+            val role = view.tag?.toString()
+            if (role in setOf("playerPrimary", "playerControl", "miniPlayerControl")) {
+                val primary = role == "playerPrimary"
+                view.backgroundTintList = stateColors(if (primary) Palette.ACCENT else Color.TRANSPARENT)
+                view.setTextColor(stateColors(if (primary) Palette.ON_ACCENT else Palette.TEXT))
+                view.iconTint = view.textColors
+                view.rippleColor = android.content.res.ColorStateList.valueOf(androidx.core.graphics.ColorUtils.setAlphaComponent(view.currentTextColor, 31))
+            } else view.setEmphasis(role == "md3Filled")
+        }
+        if (view is SeekBar) {
+            if (view.tag == "playerProgress" || view.tag == "miniPlayerProgress") {
+                com.supermite.smp.ui.stylePlayerSeekBar(this, view, compact = view.tag == "miniPlayerProgress")
+            } else {
+                view.progressTintList = android.content.res.ColorStateList.valueOf(Palette.ACCENT)
+                view.thumbTintList = android.content.res.ColorStateList.valueOf(Palette.ACCENT)
+                view.progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Palette.SELECTED)
             }
         }
+        if (view is ViewGroup) for (index in 0 until view.childCount) refreshThemedViews(view.getChildAt(index))
     }
 
-    private fun buttonTextColor(): Int {
-        return if (isDarkModeActive(darkMode)) Palette.TEXT else contrastTextColor(themeColor)
-    }
+    private fun buttonTextColor(): Int = Palette.ON_ACCENT_CONTAINER
 
-    private fun dialogBuilder(): AlertDialog.Builder {
-        val style = if (isDarkModeActive(darkMode)) R.style.AppTheme_Dialog_Dark else R.style.AppTheme_Dialog_Light
-        return RoundedDialogBuilder(style)
-    }
+    private fun dialogBuilder(): MaterialAlertDialogBuilder = RoundedDialogBuilder()
 
-    private inner class RoundedDialogBuilder(style: Int) : AlertDialog.Builder(this@MainActivity, style) {
-        override fun show(): AlertDialog {
-            val dialog = super.show()
-            styleNativeDialog(dialog)
-            return dialog
+    private inner class RoundedDialogBuilder : MaterialAlertDialogBuilder(this@MainActivity) {
+        init { setBackground(panelDrawable(Palette.DIALOG, 28, this@MainActivity)) }
+        override fun setView(view: View?): MaterialAlertDialogBuilder {
+            if (view == null) return super.setView(view)
+            styleMaterialTree(view)
+            val scroll = if (view is ScrollView) view else ScrollView(this@MainActivity).apply {
+                isFillViewport = false
+                addView(view)
+            }
+            scroll.clipToPadding = false
+            return super.setView(scroll)
         }
-
-        override fun create(): AlertDialog {
-            val dialog = super.create()
+        override fun show(): AlertDialog = super.show().also { styleNativeDialog(it) }
+        override fun create(): AlertDialog = super.create().also { dialog ->
             dialog.setOnShowListener { styleNativeDialog(dialog) }
-            return dialog
         }
     }
 
     private fun styleNativeDialog(dialog: AlertDialog) {
-        dialog.window?.setBackgroundDrawable(panelDrawable(Palette.PANEL, 14, this))
-        dialog.window?.decorView?.setPadding(0, 0, 0, 0)
+        val decor = dialog.window?.decorView ?: return
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        if (resources.configuration.screenWidthDp >= 600) dialog.window?.setLayout(dp(608), ViewGroup.LayoutParams.WRAP_CONTENT)
+        styleMaterialTree(decor)
         listOf(AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_NEUTRAL).forEach { which ->
-            dialog.getButton(which)?.setTextColor(themeColor)
+            dialog.getButton(which)?.apply { setTextColor(Palette.ACCENT); minimumHeight = dp(48); isAllCaps = false }
+        }
+        // Cap modals to the available window; custom forms keep their own scroll container.
+        decor.post {
+            dialog.listView?.let { styleMaterialTree(it) }
+            val available = (resources.displayMetrics.heightPixels - dp(96)).coerceAtLeast(dp(160))
+            if (decor.height > available) dialog.window?.setLayout(dialog.window?.attributes?.width ?: -2, available)
         }
     }
 
@@ -6126,11 +6578,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         Thread {
             val result = runCatching { fetchLatestRelease() }
             runOnUiThread {
+                if (isDestroyed || isFinishing) return@runOnUiThread
                 result.onSuccess { release ->
-                    if (isNewerVersion(release.version, APP_VERSION)) {
+                    if (ReleasePolicy.isNewer(release, APP_VERSION, BuildConfig.VERSION_CODE, BuildConfig.RELEASE_BUILT_AT) || !silent) {
                         showUpdateDialog(release)
-                    } else if (!silent) {
-                        Toast.makeText(this, "当前已是最新版本：$APP_VERSION", Toast.LENGTH_SHORT).show()
                     }
                 }.onFailure { error ->
                     Log.w(TAG, "Update check failed", error)
@@ -6140,53 +6591,42 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }.start()
     }
 
-    private fun fetchLatestRelease(): ReleaseInfo {
-        val connection = (URL(RELEASES_API).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 10_000
-            readTimeout = 10_000
-            setRequestProperty("Accept", "application/vnd.github+json")
-            setRequestProperty("User-Agent", "SMP/$APP_VERSION")
+    private fun fetchLatestRelease(): PublishedRelease {
+        fun read(url: String): String {
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000; readTimeout = 10_000
+                setRequestProperty("Accept", "application/vnd.github+json")
+                setRequestProperty("User-Agent", "SMP/$APP_VERSION")
+            }
+            return try { connection.inputStream.bufferedReader().use { it.readText() } } finally { connection.disconnect() }
         }
-        val text = connection.inputStream.bufferedReader().use { it.readText() }
-        val releases = JSONArray(text)
-        val root = (0 until releases.length())
-            .mapNotNull { releases.optJSONObject(it) }
-            .firstOrNull { release ->
-                if (release.optBoolean("draft", false)) return@firstOrNull false
-                val prerelease = release.optBoolean("prerelease", false)
-                if (includeBetaUpdates) prerelease else !prerelease
-            } ?: error("没有找到可用的 ${if (includeBetaUpdates) "预发行" else "正式"} release")
-        val tag = root.optString("tag_name").ifBlank { root.optString("name") }
-        return ReleaseInfo(
-            version = tag.removePrefix("v").trim(),
-            url = root.optString("html_url").ifBlank { RELEASES_URL }
-        )
+        val candidates = mutableListOf<PublishedRelease>()
+        for (index in 1..10) {
+            val page = JSONArray(read("$RELEASES_API&page=$index"))
+            candidates += ReleasePolicy.parse(page)
+            if (page.length() < 100) break
+        }
+        var release = ReleasePolicy.latest(candidates, includeBetaUpdates)
+            ?: error("该${if (includeBetaUpdates) "预发行" else "正式"}频道没有已发布且附带 APK 的版本")
+        if (release.metadataUrl.isNotBlank()) {
+            runCatching { ReleasePolicy.withMetadata(release, JSONObject(read(release.metadataUrl))) }.onSuccess { release = it }
+        }
+        return release
     }
 
-    private fun showUpdateDialog(release: ReleaseInfo) {
+    private fun showUpdateDialog(release: PublishedRelease) {
         if (isFinishing || isDestroyed) return
+        val newer = ReleasePolicy.isNewer(release, APP_VERSION, BuildConfig.VERSION_CODE, BuildConfig.RELEASE_BUILT_AT)
+        val channel = if (release.prerelease) "预发行" else "正式版"
+        val same = release.version == APP_VERSION && (release.versionCode == null || release.versionCode == BuildConfig.VERSION_CODE)
         dialogBuilder()
-            .setTitle("发现新版本 ${release.version}")
-            .setMessage("当前版本：$APP_VERSION\n是否打开 GitHub Release 页面下载更新？")
-            .setPositiveButton("打开") { _, _ -> openExternalUrl(release.url) }
+            .setTitle(if (newer) "发现新版本" else if (same) "已是该频道最新版本" else "该频道最新安装包")
+            .setMessage("$channel：${release.version}\n发布日期：${release.publishedAt}\n安装包：${release.apkName}\n当前版本：$APP_VERSION\n\n" +
+                if (!newer && !same) "该频道的安装包早于当前构建。Android 不允许直接安装较低 versionCode；不同旧签名也不能覆盖安装。" else "下载后由 Android 系统验证签名和安装。")
+            .setPositiveButton("下载 APK") { _, _ -> openExternalUrl(release.apkUrl) }
+            .setNeutralButton("发行说明") { _, _ -> openExternalUrl(release.pageUrl) }
             .setNegativeButton("稍后", null)
             .show()
-    }
-
-    private fun isNewerVersion(latest: String, current: String): Boolean {
-        val latestParts = versionParts(latest)
-        val currentParts = versionParts(current)
-        val count = maxOf(latestParts.size, currentParts.size)
-        for (index in 0 until count) {
-            val left = latestParts.getOrElse(index) { 0 }
-            val right = currentParts.getOrElse(index) { 0 }
-            if (left != right) return left > right
-        }
-        return false
-    }
-
-    private fun versionParts(value: String): List<Int> {
-        return Regex("""\d+""").findAll(value).mapNotNull { it.value.toIntOrNull() }.toList()
     }
 
     private fun openExternalUrl(url: String) {
@@ -6198,27 +6638,17 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun initDebugLogger() {
+        AppLogger.initialize(this, cacheManager)
+        debugMode = AppLogger.enabled
         WebDavClient.debugLogger = { msg -> writeDebugLog("WEBDAV", msg) }
     }
 
     private fun writeDebugLog(tag: String, msg: String) {
-        if (!debugMode) return
-        try {
-            val dir = File(streamCacheDir(), "debug_logs").apply { mkdirs() }
-            val file = File(dir, "webdav_debug.log")
-            val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT).format(Date())
-            file.appendText("[$timestamp][$tag] $msg\n")
-        } catch (_: Exception) {}
+        AppLogger.debug(tag, msg)
     }
 
     private fun writeMetaDebugLog(msg: String) {
-        if (!debugMode) return
-        try {
-            val dir = File(streamCacheDir(), "debug_logs").apply { mkdirs() }
-            val file = File(dir, "metawrite_debug.log")
-            val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT).format(Date())
-            file.appendText("[$timestamp] $msg\n")
-        } catch (_: Exception) {}
+        AppLogger.debug("METADATA", msg)
     }
 
     private data class DownloadTask(
@@ -6312,11 +6742,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             tasks.forEach { task ->
                 val row = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL; setPadding(dp(10), dp(10), dp(10), dp(10))
-                    background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+                    background = panelDrawable(Palette.PANEL, 12, this@MainActivity)
                     layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(6) }
                 }
                 row.addView(TextView(this).apply { text = "${task.title} (${task.progressPercent}%)"; titleStyle(14f); maxLines = 1 })
-                row.addView(TextView(this).apply { text = "[${task.source}] ${task.status}" + if (task.totalBytes > 0) " · ${formatFileSize(task.totalBytes)}" else ""; bodyStyle(11.5f, Palette.MUTED) })
+                row.addView(TextView(this).apply { text = "[${task.source}] ${task.status}" + if (task.totalBytes > 0) " · ${formatFileSize(task.totalBytes)}" else ""; bodyStyle(14f, Palette.MUTED) })
                 if (task.progressPercent in 1..99) {
                     val pb = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; progress = task.progressPercent }
                     row.addView(pb, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(4)).apply { topMargin = dp(4) })
@@ -6333,12 +6763,15 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun loadWebDavCache(serverId: String): MutableMap<String, List<WebDavItem>> {
         try {
-            val dir = File(streamCacheDir(), "webdav_index")
-            val file = File(dir, "${serverId}.json")
-            if (!file.exists()) return mutableMapOf()
-            val ageHours = (System.currentTimeMillis() - file.lastModified()) / 3600000L
+            if(!cacheManager.isEnabled(CacheCategory.INDEX))return mutableMapOf()
+            val file=cacheManager.keyedFile(CacheCategory.INDEX,serverId,"json").takeIf {it.isFile}
+                ?: cacheManager.legacyStreamFile("webdav_index/${serverId}.json").takeIf {it.isFile} ?: return mutableMapOf()
+            val envelope=JSONObject(file.readText())
+            val savedAt=envelope.optLong("savedAt",file.lastModified())
+            val ageHours = (System.currentTimeMillis() - savedAt) / 3600000L
             if (ageHours > 24) { runCatching { file.delete() }; return mutableMapOf() }
-            val root = JSONObject(file.readText())
+            val root = envelope.optJSONObject("directories") ?: envelope
+            cacheManager.storage.touch(file)
             val cache = mutableMapOf<String, List<WebDavItem>>()
             root.keys().forEach { path ->
                 val arr = root.optJSONArray(path) ?: return@forEach
@@ -6359,7 +6792,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun saveWebDavCache(serverId: String, cache: Map<String, List<WebDavItem>>) {
         try {
-            val dir = File(streamCacheDir(), "webdav_index").apply { mkdirs() }
+            if(!cacheManager.isEnabled(CacheCategory.INDEX))return
             val root = JSONObject()
             cache.forEach { (path, items) ->
                 val arr = JSONArray()
@@ -6371,7 +6804,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 }
                 root.put(path, arr)
             }
-            File(dir, "${serverId}.json").writeText(root.toString())
+            val target=cacheManager.keyedFile(CacheCategory.INDEX,serverId,"json")
+            cacheManager.storage.write(CacheCategory.INDEX,target.name,JSONObject().put("savedAt",System.currentTimeMillis()).put("directories",root).toString().toByteArray())
         } catch (_: Exception) {}
     }
 
@@ -6383,7 +6817,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(12), dp(10), dp(12), dp(10))
-                background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+                background = panelDrawable(Palette.PANEL, 12, this@MainActivity)
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) }
                 setOnClickListener {
                     store.selectedSubsonicServerId = if (store.selectedSubsonicServerId == server.id) "" else server.id
@@ -6437,7 +6871,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val nameInput = dialogInput(Lang.get("server_note"), existing?.name.orEmpty())
         box.addView(TextView(this).apply { text = Lang.get("server_note"); bodyStyle(12f, Palette.MUTED); setPadding(0, dp(8), 0, 0) })
         box.addView(nameInput)
-        val certCheck = CheckBox(this).apply { text = Lang.get("ignore_cert"); isChecked = existing?.ignoreCert ?: false; setTextColor(Palette.TEXT); setPadding(0, dp(8), 0, 0) }
+        val certCheck = materialCheckBox(this).apply { text = Lang.get("ignore_cert"); isChecked = existing?.ignoreCert ?: false; setTextColor(Palette.TEXT); setPadding(0, dp(8), 0, 0) }
         box.addView(certCheck)
         dialogBuilder()
             .setTitle(if (existing == null) Lang.get("subsonic_add") else Lang.get("subsonic_edit"))
@@ -6498,7 +6932,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(12), dp(10), dp(12), dp(10))
-                background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+                background = panelDrawable(Palette.PANEL, 12, this@MainActivity)
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                     bottomMargin = dp(8)
                 }
@@ -6545,7 +6979,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val portInput = dialogInput("端口（选填，默认自动）", if (existing?.port ?: 0 > 0) existing!!.port.toString() else "")
         box.addView(TextView(this).apply { text = "端口（选填）"; bodyStyle(12f, Palette.MUTED); setPadding(0, dp(8), 0, 0) })
         box.addView(portInput)
-        val certCheck = CheckBox(this).apply { text = "忽略证书问题"; isChecked = existing?.ignoreCert ?: false; setTextColor(Palette.TEXT); setPadding(0, dp(8), 0, 0) }
+        val certCheck = materialCheckBox(this).apply { text = "忽略证书问题"; isChecked = existing?.ignoreCert ?: false; setTextColor(Palette.TEXT); setPadding(0, dp(8), 0, 0) }
         box.addView(certCheck)
         dialogBuilder()
             .setTitle(if (existing == null) "添加 WebDav 服务器" else "编辑 WebDav 服务器")
@@ -6568,7 +7002,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                     ignoreCert = certCheck.isChecked
                 )
                 setStatus("正在验证 WebDav 服务器...")
-                writeDebugLog("TEST", "验证服务器: ${server.url}, port=${server.port}, user=${server.username.ifBlank { "无" }}, pwd=${password.ifBlank { "无" }}, ignoreCert=${server.ignoreCert}")
+                writeDebugLog("TEST", "验证 WebDAV 服务器，port=${server.port}, ignoreCert=${server.ignoreCert}")
                 Thread {
                     val result = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert).testConnection()
                     runOnUiThread {
@@ -6713,37 +7147,40 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun webDavItemToTrack(item: WebDavItem, server: WebDavServer): Track {
-        val fullUrl = "${server.url.trimEnd('/')}/${item.path.trimStart('/')}"
+        val fullUrl = WebDavClient(server.url,server.username,server.password,server.port,server.ignoreCert).resourceUrl(item.path)
         val ext = item.name.substringAfterLast('.', "").lowercase(Locale.ROOT)
         val mimeType = when (ext) { "flac" -> "audio/flac"; "wav" -> "audio/wav"; "m4a" -> "audio/mp4"; "ogg" -> "audio/ogg"; "aac" -> "audio/aac"; "opus" -> "audio/ogg"; else -> "audio/mpeg" }
-        return Track(id = "webdav:${fullUrl.hashCode()}", uri = fullUrl, title = item.name.substringBeforeLast('.'), artist = server.displayName, album = webDavCurrentPath.substringAfterLast('/').ifBlank { server.displayName }, durationMs = 0L, mimeType = mimeType, sourcePath = fullUrl)
+        return Track(id = "webdav:${server.id}:${com.supermite.smp.cache.CacheStorage.sha256(item.path.toByteArray())}", uri = fullUrl, title = item.name.substringBeforeLast('.'), artist = server.displayName, album = webDavCurrentPath.substringAfterLast('/').ifBlank { server.displayName }, durationMs = 0L, mimeType = mimeType, sourcePath = fullUrl,sourceReference=fullUrl)
     }
 
     private fun fetchWebDavTrackMetadata(item: WebDavItem, server: WebDavServer): Track? {
+        if(!cacheManager.isEnabled(CacheCategory.TEMP))return null
         val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert)
         val headBytes = client.fetchRangeBytes(item.path, 0, 131072) ?: return null
         return runCatching {
-            val tmpFile = File(cacheDir, "webdav_meta_${System.currentTimeMillis()}")
-            tmpFile.writeBytes(headBytes)
+            val work=cacheManager.createWorkFile(item.name.substringAfterLast('.',"tmp")) ?: return null
+            work.use {
+            work.outputStream().use {it.write(headBytes)}
             val retriever = MediaMetadataRetriever()
-            retriever.setDataSource(tmpFile.absolutePath)
+            try {
+            retriever.setDataSource(work.file.absolutePath)
             val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE).orEmpty()
             val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST).orEmpty()
             val album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM).orEmpty()
             val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
-            retriever.release()
-            runCatching { tmpFile.delete() }
             if (title.isBlank() && artist.isBlank()) return null
-            val fullUrl = "${server.url.trimEnd('/')}/${item.path.trimStart('/')}"
+            val fullUrl = client.resourceUrl(item.path)
             val ext = item.name.substringAfterLast('.', "").lowercase(Locale.ROOT)
             val mimeType = when (ext) { "flac" -> "audio/flac"; "wav" -> "audio/wav"; "m4a" -> "audio/mp4"; "ogg" -> "audio/ogg"; "aac" -> "audio/aac"; else -> "audio/mpeg" }
-            Track(id = "webdav:${fullUrl.hashCode()}", uri = fullUrl, title = title.ifBlank { item.name.substringBeforeLast('.') }, artist = artist.ifBlank { server.displayName }, album = album.ifBlank { webDavCurrentPath.substringAfterLast('/').ifBlank { server.displayName } }, durationMs = duration, mimeType = mimeType, sourcePath = fullUrl)
+            Track(id = "webdav:${server.id}:${com.supermite.smp.cache.CacheStorage.sha256(item.path.toByteArray())}", uri = fullUrl, title = title.ifBlank { item.name.substringBeforeLast('.') }, artist = artist.ifBlank { server.displayName }, album = album.ifBlank { webDavCurrentPath.substringAfterLast('/').ifBlank { server.displayName } }, durationMs = duration, mimeType = mimeType, sourcePath = fullUrl,sourceReference=fullUrl)
+            } finally {retriever.release()}
+            }
         }.getOrNull()
     }
 
     private fun webDavItemCard(item: WebDavItem, isDir: Boolean, onClick: () -> Unit): View {
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(12), dp(12), dp(12)); background = panelDrawable(Palette.PANEL, 8, this@MainActivity); setOnClickListener { onClick() }; layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(6) }; tag = "dav_item" }
-        row.addView(TextView(this).apply { text = if (isDir) "\uD83D\uDCC1" else "\uD83C\uDFB5"; textSize = 22f }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { rightMargin = dp(10) })
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(12), dp(12), dp(12)); background = panelDrawable(Palette.PANEL, 12, this@MainActivity); setOnClickListener { onClick() }; layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(6) }; tag = "dav_item" }
+        row.addView(ImageView(this).apply { setImageResource(if (isDir) R.drawable.ic_folder else R.drawable.ic_song); imageTintList = android.content.res.ColorStateList.valueOf(Palette.MUTED); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(24), dp(24)).apply { rightMargin = dp(16) })
         val textBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         textBox.addView(TextView(this).apply { text = item.name; titleStyle(15f); maxLines = 2 })
         if (!isDir && item.size > 0) { textBox.addView(TextView(this).apply { text = formatFileSize(item.size); bodyStyle(12f, Palette.MUTED) }) }
@@ -6751,11 +7188,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun webDavTrackCard(track: Track, item: WebDavItem): View {
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(12), dp(12), dp(12)); background = panelDrawable(Palette.PANEL, 8, this@MainActivity); layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(6) }; setOnClickListener { playWebDavTrack(track) }; setOnLongClickListener { dialogBuilder().setTitle(track.displayTitle).setItems(arrayOf("下载")) { _, _ -> downloadWebDavTrack(track, item) }.show(); true }; tag = "dav_item" }
-        row.addView(TextView(this).apply { text = "\uD83C\uDFB5"; textSize = 22f }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { rightMargin = dp(10) })
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(12), dp(12), dp(12)); background = panelDrawable(Palette.PANEL, 12, this@MainActivity); layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(6) }; setOnClickListener { playWebDavTrack(track) }; setOnLongClickListener { dialogBuilder().setTitle(track.displayTitle).setItems(arrayOf("下载")) { _, _ -> downloadWebDavTrack(track, item) }.show(); true }; tag = "dav_item" }
+        row.addView(ImageView(this).apply { setImageResource(R.drawable.ic_song); imageTintList = android.content.res.ColorStateList.valueOf(Palette.MUTED); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(24), dp(24)).apply { rightMargin = dp(16) })
         val textBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         textBox.addView(TextView(this).apply { text = track.displayTitle; titleStyle(15f); maxLines = 2 })
-        textBox.addView(TextView(this).apply { text = listOfNotNull(if (item.size > 0) formatFileSize(item.size) else null, item.lastModified.ifBlank { null }).joinToString(" \u00B7 "); bodyStyle(11.5f, Palette.MUTED) })
+        textBox.addView(TextView(this).apply { text = listOfNotNull(if (item.size > 0) formatFileSize(item.size) else null, item.lastModified.ifBlank { null }).joinToString(" \u00B7 "); bodyStyle(14f, Palette.MUTED) })
         row.addView(textBox, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)); return row
     }
 
@@ -6765,7 +7202,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun playWebDavTrack(track: Track) {
         val server = webDavCurrentServer ?: return
-        val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert)
+        val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert,server.id)
         val streamPreload = streamPreloadCount.coerceIn(0, 5)
         val item = webDavCurrentItems.firstOrNull { webDavItemToTrack(it, server).id == track.id }
         val allMusic = webDavCurrentItems.filter { !it.isDirectory && isMusicFile(it.name) }
@@ -6776,50 +7213,83 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             val rest = allTracks.filter { it.id !in preload.map { t -> t.id } }
             preload + rest
         } else listOf(track)
-        val cacheDir = File(streamCacheDir(), "webdav_stream").apply { mkdirs() }
         if (item != null) {
-            val ext = item.name.substringAfterLast('.', "mp3")
-            val cacheFile = File(cacheDir, "${item.path.hashCode()}_${safeFileName(track.displayTitle)}.$ext")
-            if (cacheFile.exists()) {
-                val meta = rescanMetadata(Uri.fromFile(cacheFile).toString(), track)
-                val cachedTrack = meta.copy(uri = Uri.fromFile(cacheFile).toString(), sourcePath = cacheFile.absolutePath)
-                playTrack(cachedTrack, currentQueue)
-            } else {
-                setStatus("正在缓冲 ${track.displayTitle}...")
-                Thread {
-                    val bytes = runCatching { client.download(item.path) }.getOrElse {
-                        runOnUiThread { Toast.makeText(this, "缓冲失败", Toast.LENGTH_SHORT).show(); setStatus("缓冲失败") }
-                        return@Thread
-                    }
-                    cacheFile.writeBytes(bytes)
-                    enforceStreamCacheLimit()
-                    val meta = rescanMetadata(Uri.fromFile(cacheFile).toString(), track)
-                    val cachedTrack = meta.copy(uri = Uri.fromFile(cacheFile).toString(), sourcePath = cacheFile.absolutePath)
-                    runOnUiThread { playTrack(cachedTrack, currentQueue) }
-                }.start()
-            }
-            preloadWebDavTracks(client, allMusic, allTracks, item, cacheDir)
+            startWebDavPlayback(track,item,server,currentQueue,true)
+            preloadWebDavTracks(client,allMusic,allTracks,item,cacheManager.directory(CacheCategory.AUDIO))
             return
         }
         playTrack(track, currentQueue)
     }
 
+    private fun webDavCacheRelative(serverId: String, item: WebDavItem): String =
+        "webdav/${com.supermite.smp.cache.CacheStorage.sha256("$serverId|${item.path}".toByteArray())}.${item.name.substringAfterLast('.',"mp3").filter(Char::isLetterOrDigit).take(8)}"
+
+    private fun prepareWebDavRecordedTrack(track: Track, queue: List<Track>, countPlay: Boolean = true): Boolean {
+        if(!track.id.startsWith("webdav:"))return false
+        val source=track.sourceReference.takeIf {it.startsWith("http://") || it.startsWith("https://")}
+            ?: track.sourcePath.takeIf {it.startsWith("http://") || it.startsWith("https://")} ?: track.uri
+        val target=Uri.parse(source)
+        if(target.scheme !in setOf("http","https"))return false
+        fun port(uri:Uri)=if(uri.port>=0)uri.port else if(uri.scheme=="https")443 else 80
+        val candidates=store.webDavServers.mapNotNull {server ->
+            val base=Uri.parse(WebDavClient(server.url,server.username,server.password,server.port,server.ignoreCert,server.id).resourceUrl(""))
+            val prefix=base.encodedPath.orEmpty().trimEnd('/')+"/"
+            if(target.scheme==base.scheme && target.host==base.host && port(target)==port(base) && target.encodedPath.orEmpty().startsWith(prefix))Triple(server,base,prefix) else null
+        }
+        val hasServerMarker=track.id.removePrefix("webdav:").contains(':')
+        val matched=if(hasServerMarker)candidates.filter {track.id.startsWith("webdav:${it.first.id}:")} else candidates
+        val longest=matched.maxOfOrNull {it.third.length}
+        val chosen=matched.filter {it.third.length==longest}.singleOrNull()
+        if(chosen==null) {Toast.makeText(this,"此歌曲的 WebDAV 服务器已移除，请重新添加账号。",Toast.LENGTH_LONG).show();return true}
+        val path=Uri.decode(target.encodedPath.orEmpty().removePrefix(chosen.third)).trimStart('/')
+        val item=WebDavItem(target.lastPathSegment.orEmpty().ifBlank {track.title},path,false)
+        startWebDavPlayback(track,item,chosen.first,queue.ifEmpty {listOf(track)},countPlay)
+        return true
+    }
+
+    private fun startWebDavPlayback(track: Track, item: WebDavItem, server: WebDavServer, queue: List<Track>, countPlay: Boolean) {
+        val request=++playbackRequestGeneration
+        val client=WebDavClient(server.url,server.username,server.password,server.port,server.ignoreCert,server.id)
+        val relative=webDavCacheRelative(server.id,item)
+        val direct=track.copy(uri=client.resourceUrl(item.path),sourcePath=client.resourceUrl(item.path),sourceReference=client.resourceUrl(item.path))
+        cacheManager.leaseAudio(relative)?.let {playCachedTrack(it,direct,queue,countPlay);return}
+        if(!cacheManager.isEnabled(CacheCategory.AUDIO) && !cacheManager.isEnabled(CacheCategory.TEMP)) {
+            Toast.makeText(this,"音频及临时缓存均已关闭，正在尝试服务器直连。Digest 服务可能需要开启临时缓存。",Toast.LENGTH_LONG).show()
+            playTrack(direct,queue,countPlay=countPlay,resolveRemote=false)
+            return
+        }
+        setStatus("正在缓冲 ${track.displayTitle}…")
+        Thread {
+            val result=runCatching {synchronized(audioCacheLock(relative)) {
+                cacheManager.leaseAudio(relative) ?: cacheManager.storePlayback(relative,client.download(item.path))
+            }}
+            runOnUiThread {
+                val lease=result.getOrNull()
+                if(isDestroyed || request!=playbackRequestGeneration) {lease?.close();return@runOnUiThread}
+                if(result.isFailure) {AppLogger.warn("PLAYBACK","WebDAV buffering failed",result.exceptionOrNull());Toast.makeText(this,"WebDAV 缓冲失败，请检查连接。",Toast.LENGTH_LONG).show();return@runOnUiThread}
+                if(lease==null) {
+                    Toast.makeText(this,"缓存预算不足，正在尝试直连；可在缓存设置中提高音频或临时缓存上限。",Toast.LENGTH_LONG).show()
+                    playTrack(direct,queue,countPlay=countPlay,resolveRemote=false)
+                } else playCachedTrack(lease,direct,queue,countPlay)
+            }
+        }.start()
+    }
+
     private fun preloadWebDavTracks(client: WebDavClient, allItems: List<WebDavItem>, allTracks: List<Track>, current: WebDavItem, cacheDir: File) {
+        if(!cacheManager.isEnabled(CacheCategory.AUDIO))return
         val preloadCount = streamPreloadCount.coerceIn(0, 5)
         if (preloadCount <= 0) return
         val startIdx = allItems.indexOf(current)
         if (startIdx < 0) return
         allItems.drop(startIdx + 1).take(preloadCount).forEach { item ->
-            val ext = item.name.substringAfterLast('.', "mp3")
-            val cacheFile = File(cacheDir, "${item.path.hashCode()}_${safeFileName(item.name.substringBeforeLast('.'))}.$ext")
-            if (!cacheFile.exists()) {
+            val relative=webDavCacheRelative(client.cacheIdentity,item)
+            if(cacheManager.storage.find(CacheCategory.AUDIO,relative)==null && audioCacheFlights.add(relative)) {
                 Thread {
-                    runCatching {
-                        val bytes = client.download(item.path)
-                        cacheFile.parentFile?.mkdirs()
-                        cacheFile.writeBytes(bytes)
-                        enforceStreamCacheLimit()
-                    }
+                    try {synchronized(audioCacheLock(relative)) {
+                        if(cacheManager.storage.find(CacheCategory.AUDIO,relative)==null && cacheManager.isEnabled(CacheCategory.AUDIO))
+                            cacheManager.storage.write(CacheCategory.AUDIO,relative,client.download(item.path))
+                    }} catch(failure:Exception) {AppLogger.warn("CACHE","WebDAV preload failed",failure)}
+                    finally {audioCacheFlights.remove(relative)}
                 }.start()
             }
         }
@@ -6863,6 +7333,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     private fun rescanMetadata(uri: String, fallback: Track): Track {
         return runCatching {
             val retriever = MediaMetadataRetriever()
+            try {
             retriever.setDataSource(this, Uri.parse(uri))
             val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)?.trim()?.ifBlank { null }
             val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)?.trim()?.ifBlank { null }
@@ -6870,12 +7341,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
             val coverBytes = retriever.embeddedPicture
             val artworkPath = if (coverBytes != null) {
-                val artDir = File(filesDir, "artwork").apply { mkdirs() }
-                val artFile = File(artDir, "${uri.hashCode()}.jpg")
-                artFile.writeBytes(coverBytes)
-                artFile.absolutePath
+                cacheManager.artwork.put("embedded:${fallback.id}",coverBytes).ifBlank {fallback.artworkPath}
             } else fallback.artworkPath
-            retriever.release()
             fallback.copy(
                 title = title ?: fallback.title,
                 artist = artist ?: fallback.artist,
@@ -6883,6 +7350,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 durationMs = duration ?: fallback.durationMs,
                 artworkPath = artworkPath
             )
+            } finally {retriever.release()}
         }.getOrElse { fallback }
     }
 
@@ -6925,12 +7393,16 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun downloadWebDavTrackInternal(track: Track, item: WebDavItem, server: WebDavServer, folderName: String, skipExtra: Boolean = false, onProgress: (progress: Long, total: Long) -> Unit) {
-        val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert)
+        val client = WebDavClient(server.url, server.username, server.password, server.port, server.ignoreCert,server.id)
         val totalBytes = item.size.coerceAtLeast(1)
         runCatching {
             val ext = item.name.substringAfterLast('.', "mp3")
-            val cacheFile = File(streamCacheDir(), "webdav_stream/${item.path.hashCode()}_${safeFileName(track.displayTitle)}.$ext")
-            val bytes = if (cacheFile.exists()) { onProgress(totalBytes, totalBytes); cacheFile.readBytes() } else { val b = client.download(item.path); cacheFile.parentFile?.mkdirs(); cacheFile.writeBytes(b); b }
+            val relative=webDavCacheRelative(server.id,item)
+            val bytes=synchronized(audioCacheLock(relative)) {
+                cacheManager.leaseAudio(relative)?.use {it.file.readBytes()} ?: client.download(item.path).also {
+                    cacheManager.storage.write(CacheCategory.AUDIO,relative,it)
+                }
+            }
             onProgress(totalBytes / 2, totalBytes)
             val fileName = safeFileName("${track.displayTitle}.$ext")
             val lyricsBytes = tryDownloadWebDavLyrics(client, item)
@@ -7600,12 +8072,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
         val wrapper = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            fitsSystemWindows = true
-            setPadding(dp(12), dp(12), dp(12), dp(12))
+            setPadding(dp(16), dp(12), dp(16), dp(12))
             setBackgroundColor(Palette.BG)
         }
         wrapper.addView(TextView(this).apply {
-            text = title; titleStyle(18f); maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END
+            text = title; titleStyle(22f); maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END
             setPadding(0, 0, 0, dp(8))
         })
         val toolbar = LinearLayout(this)
@@ -7614,6 +8085,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         wrapper.addView(toolbar)
         wrapper.addView(webView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         wrapper.addView(actionButton("完成并刷新") { dialog.dismiss() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)))
+        styleMaterialTree(wrapper)
         dialog.setContentView(wrapper)
         dialog.setOnKeyListener { _, keyCode, event ->
             if (keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP && webView.canGoBack()) { webView.goBack(); true } else false
@@ -7661,6 +8133,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun loadDizzylabAlbum(album: StreamAlbum, fromAccount: Boolean = false) {
+        rememberDizzylabListPosition()
         dizzyMusicLoading = false
         val request = ++dizzyMusicRequest
         val revision = dizzySessionRevision
@@ -7674,6 +8147,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 hideLoading()
                 if (request != dizzyMusicRequest || revision != dizzySessionRevision) return@runOnUiThread
                 result.onSuccess { details ->
+                    store.rememberTracks(details.tracks)
                     onlineMusicSource = OnlineMusicSource.DIZZYLAB
                     openedDizzylabAlbum = details.copy(description = plainDizzylabText(details.description))
                     dizzyAlbumReturnToAccount = fromAccount
@@ -7802,28 +8276,30 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         details: StreamAlbumDetails,
         coverPath: String
     ): ByteArray {
-        val dir = File(cacheDir, "stream_metadata").apply { mkdirs() }
-        val file = File(dir, safeFileName("${System.currentTimeMillis()}-$fileName"))
-        return runCatching {
-            file.writeBytes(bytes)
-            val coverBytes = coverPath.takeIf { it.isNotBlank() }?.let { File(it) }?.takeIf { it.isFile }?.readBytes()
-            AudioMetadataWriter().write(
-                file,
-                AudioMetadataUpdate(
+        return tagCachedDownloadBytes(fileName,bytes,AudioMetadataUpdate(
                     title = track.displayTitle,
                     artist = track.artist.ifBlank { details.circle },
                     composer = track.composer,
                     year = track.date.take(4).ifBlank { details.releaseDate.take(4) },
                     album = details.album.title,
-                    coverBytes = coverBytes
-                )
-            )
-            file.readBytes()
-        }.getOrElse { error ->
-            Log.w(TAG, "Stream metadata write failed: $fileName", error)
-            bytes
-        }.also {
-            runCatching { file.delete() }
+                    coverBytes = coverBytesAtPath(coverPath)
+                ))
+    }
+
+    private fun coverBytesAtPath(path: String):ByteArray? = runCatching {
+        if(path.isBlank())null else if(path.startsWith("content://"))contentResolver.openInputStream(Uri.parse(path))?.use {it.readBytes()}
+        else cacheManager.resolveLegacyPath(path.removePrefix("file://")).takeIf {it.isFile}?.readBytes()
+    }.getOrNull()
+
+    private fun tagCachedDownloadBytes(fileName:String,bytes:ByteArray,update:AudioMetadataUpdate):ByteArray {
+        val work=cacheManager.createWorkFile(fileName.substringAfterLast('.',"tmp")) ?: return bytes
+        return work.use {
+            runCatching {
+                work.outputStream().use {it.write(bytes)}
+                val result=AudioMetadataWriter().write(work.file,update)
+                work.validate()
+                if(result.success)work.file.readBytes() else bytes
+            }.onFailure {AppLogger.warn("METADATA","Download tagging skipped; temporary cache policy or writer rejected the operation",it)}.getOrDefault(bytes)
         }
     }
 
@@ -7831,17 +8307,13 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val url = details.album.coverUrl.ifBlank { details.tracks.firstOrNull()?.artworkPath.orEmpty() }
         if (url.isBlank()) return ""
         return runCatching {
-            val bytes = if (url.contains("dizzylab.net", ignoreCase = true) && dizzylabCookie.isNotBlank()) {
-                DizzylabClient(dizzylabCookie).imageBytes(url, details.album.url)
-            } else {
-                URL(url).openStream().use { it.readBytes() }
-            }
+            var fetched:ByteArray?=null
+            fun fetch():ByteArray = if(url.contains("dizzylab.net",true) && dizzylabCookie.isNotBlank())DizzylabClient(dizzylabCookie).imageBytes(url,details.album.url) else remoteImageBytes(url)
+            val cached=if(cacheManager.isEnabled(CacheCategory.ARTWORK))cacheManager.artwork.getOrFetch(url) {fetch().also {fetched=it}} else ""
+            val bytes=cached.takeIf {it.isNotBlank()}?.let {runCatching {File(it).readBytes()}.getOrNull()} ?: fetched ?: fetch()
             val coverName = safeFileName("${details.album.title}.jpg")
-            writeStreamDownloadBytes("dizzylab", details.album.title, coverName, "image/jpeg", bytes)
-            val localDir = File(filesDir, "stream_artwork").apply { mkdirs() }
-            val localFile = File(localDir, "${details.album.url.hashCode()}.jpg")
-            localFile.writeBytes(bytes)
-            localFile.absolutePath
+            // This explicit user download is a durable music artifact, outside disposable cache.
+            writeStreamDownloadBytes("dizzylab", details.album.title, coverName, "image/jpeg", bytes).ifBlank {cached}
         }.onFailure {
             Log.w(TAG, "DizzyLab cover download failed: $url", it)
         }.getOrDefault("")
@@ -8080,6 +8552,11 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun convertNcmFiles(uris: List<Uri>) {
         if (uris.isEmpty()) return
+        if (Build.VERSION.SDK_INT <= 28 && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            pendingNcmConversionUris = uris
+            requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), REQUEST_NCM_STORAGE)
+            return
+        }
         setStatus("正在转换 ${uris.size} 个音乐文件...")
         Thread {
             val converter = NcmConverter(this)
@@ -8087,15 +8564,24 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             var success = 0
             uris.forEach { uri ->
                 runCatching {
-                    val outputDir = ncmOutputDirectory(uri)
-                    val result = converter.convert(uri, outputDir)
-                    if (outputDirectoryMode == OutputDirectoryMode.DOWNLOAD) {
+                    val source = if (outputDirectoryMode == OutputDirectoryMode.SOURCE) localFileFromUri(uri)?.parentFile?.takeIf {
+                        it.canWrite() && !it.path.contains("/Android/data/") && !it.path.startsWith(filesDir.path) && !it.path.startsWith(cacheManager.root.path)
+                    } else null
+                    val converted = if (source == null) converter.convertTemporary(uri) else converter.convert(uri, source)
+                    converted.use { result ->
                         val mimeType = if (result.format == "flac") "audio/flac" else "audio/mpeg"
-                        val outputUri = writeDownloadOutputBytes("ConvertedMusic", result.outputFile.name, mimeType, result.outputFile.readBytes())
-                        result.outputFile.delete()
-                        outputUri
-                    } else {
-                        result.outputFile.absolutePath
+                        val destination = when {
+                            source != null -> Uri.fromFile(result.outputFile)
+                            outputDirectoryMode == OutputDirectoryMode.DOWNLOAD -> Uri.parse(writeDownloadOutputData("ConvertedMusic", result.fileName, mimeType) { out -> result.outputFile.inputStream().use { it.copyTo(out) } })
+                            else -> ConvertedMediaPublisher.publish(this, result.outputFile, result.title)
+                        }
+                        val scan = ConvertedMediaPublisher.requestScan(this, destination, mimeType)
+                        val saved = scanner.scanDocumentFiles(listOf(destination))
+                        if (saved.isNotEmpty()) runOnUiThread {
+                            allTracks = (allTracks.filterNot { old -> saved.any { it.uri == old.uri } } + saved).sortedWith(MusicScanner.trackComparator)
+                            store.saveTracks(allTracks); renderIfLibraryVisible()
+                        }
+                        "$destination\n${scan.message}"
                     }
                 }
                     .onSuccess { result ->
@@ -8107,7 +8593,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                     }
             }
             runOnUiThread {
-                val message = "转换完成：$success / ${uris.size}\n输出位置：${outputDirectoryMode.label}"
+                val message = "转换完成：$success / ${uris.size}\n输出位置：${if (outputDirectoryMode == OutputDirectoryMode.INTERNAL) "系统音乐目录 Music/SMP/ConvertedMusic" else outputDirectoryMode.label}\n各文件的系统媒体更新状态见下方。"
                 dialogBuilder()
                     .setTitle("音乐格式转换")
                     .setMessage(message + if (results.isNotEmpty()) "\n\n" + results.take(6).joinToString("\n") else "")
@@ -8198,7 +8684,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun setStatus(text: String) {
-        statusText.text = if (page == Page.ONLINE) onlineSourceLabel() + "  ▾" else text
+        AppLogger.info("STATUS", text)
+        statusText.text = if (page == Page.ONLINE) onlineSourceLabel() else text
         statusText.contentDescription = if (page == Page.ONLINE) "切换音乐来源，${onlineSourceLabel()}" else text
         statusText.isClickable = page == Page.ONLINE
     }
@@ -8219,7 +8706,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private fun contentOverlayColor(): Int {
         if (backgroundImageUri.isBlank()) return Palette.BG
-        val overlayAlpha = (226 - (backgroundAlpha.coerceIn(0f, 1f) * 156)).toInt().coerceIn(70, 226)
+        // A stable surface scrim keeps text readable even over a bright/high-contrast user image.
+        val overlayAlpha = (244 - (backgroundAlpha.coerceIn(0f, 1f) * if (isDarkModeActive(darkMode)) 24 else 16)).toInt()
         return Color.argb(overlayAlpha, Color.red(Palette.BG), Color.green(Palette.BG), Color.blue(Palette.BG))
     }
 
@@ -8243,24 +8731,17 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun streamCacheDir(): File {
-        return File(getExternalFilesDir(null) ?: filesDir, "StreamCache").apply { mkdirs() }
+        return cacheManager.root
     }
 
     private fun enforceStreamCacheLimit() {
-        val limitBytes = (streamCacheLimitGb.coerceAtLeast(0.1f) * 1024f * 1024f * 1024f).toLong()
-        val files = streamCacheDir().walkTopDown().filter { it.isFile }.sortedBy { it.lastModified() }.toMutableList()
-        var total = files.sumOf { it.length() }
-        while (total > limitBytes && files.isNotEmpty()) {
-            val file = files.removeAt(0)
-            total -= file.length()
-            file.delete()
-        }
+        cacheManager.enforce()
     }
 
     private fun sectionTitle(text: String): TextView {
         return TextView(this).apply {
             this.text = text
-            titleStyle(20f)
+            titleStyle(24f)
             setPadding(0, 0, 0, dp(10))
         }
     }
@@ -8273,7 +8754,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
         row.addView(TextView(this).apply {
             text = title
-            titleStyle(20f)
+            titleStyle(24f)
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         row.addView(TextView(this).apply {
             text = actionText
@@ -8289,7 +8770,9 @@ class MainActivity : Activity(), MusicPlayer.Listener {
             this.text = text
             gravity = Gravity.CENTER
             textSize = 14f
-            setTextColor(if (selected) Palette.TEXT else Palette.MUTED)
+            isSelected = selected
+            background = rippleDrawable(this@MainActivity, if (selected) Palette.SELECTED else Color.TRANSPARENT, 24)
+            setTextColor(if (selected) Palette.ON_SELECTED else Palette.MUTED)
             typeface = if (selected) android.graphics.Typeface.DEFAULT_BOLD else android.graphics.Typeface.DEFAULT
             setOnClickListener { onClick() }
             applyCardPressEffect(this)
@@ -8398,6 +8881,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                 MotionEvent.ACTION_DOWN -> {
                     startX = event.x
                     startY = event.y
+                    view.parent?.requestDisallowInterceptTouchEvent(true)
                     true
                 }
                 MotionEvent.ACTION_UP -> {
@@ -8410,9 +8894,10 @@ class MainActivity : Activity(), MusicPlayer.Listener {
                     } else if (kotlin.math.abs(dy) >= dp(72) && kotlin.math.abs(dy) > kotlin.math.abs(dx) * 1.4f) {
                         if (dy < 0) showCurrentQueueDialog() else showTrackDetailsDialog(track)
                     }
+                    view.parent?.requestDisallowInterceptTouchEvent(false)
                     true
                 }
-                MotionEvent.ACTION_CANCEL -> true
+                MotionEvent.ACTION_CANCEL -> { view.parent?.requestDisallowInterceptTouchEvent(false); true }
                 else -> true
             }
         }
@@ -8472,7 +8957,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(14), dp(14), dp(14))
-            background = panelDrawable(Palette.PANEL, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL, 12, this@MainActivity)
             setOnClickListener { onClick() }
             applyCardPressEffect(this)
         }
@@ -8482,7 +8967,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         })
         row.addView(TextView(this).apply {
             text = subtitle
-            bodyStyle(13f)
+            bodyStyle(14f)
         })
         row.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             bottomMargin = dp(8)
@@ -8491,14 +8976,14 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun editText(hintText: String, value: String = "", onChanged: (String) -> Unit): EditText {
-        return EditText(this).apply {
+        return com.supermite.smp.ui.Md3TextInput(this).apply {
             hint = hintText
             setHintTextColor(Palette.MUTED)
             setTextColor(Palette.TEXT)
             textSize = 14f
             setSingleLine(true)
             setPadding(dp(12), 0, dp(12), 0)
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL_ALT, 12, this@MainActivity)
             setText(value)
             addTextChangedListener(object : TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
@@ -8509,31 +8994,21 @@ class MainActivity : Activity(), MusicPlayer.Listener {
     }
 
     private fun dialogInput(hintText: String, value: String): EditText {
-        return EditText(this).apply {
+        return com.supermite.smp.ui.Md3TextInput(this).apply {
             hint = hintText
             setText(value)
             setSingleLine(true)
             setTextColor(Palette.TEXT)
             setHintTextColor(Palette.MUTED)
             textSize = 15f
-            background = panelDrawable(Palette.PANEL_ALT, 8, this@MainActivity)
+            background = panelDrawable(Palette.PANEL_ALT, 12, this@MainActivity)
             setPadding(dp(12), 0, dp(12), 0)
         }
     }
 
     private fun actionButton(text: String, onClick: () -> Unit): Button {
-        return Button(this).apply {
-            tag = "accentButton"
-            this.text = text
-            isAllCaps = false
-            setTextColor(buttonTextColor())
-            textSize = 13f
-            minHeight = 0
-            minimumHeight = 0
-            setPadding(dp(6), 0, dp(6), 0)
-            background = panelDrawable(themeColor, 8, this@MainActivity)
+        return materialButton(this, text).apply {
             setOnClickListener { onClick() }
-            applyCardPressEffect(this)
         }
     }
 
@@ -8559,23 +9034,58 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         }
     }
 
-    private fun setButtonIcon(button: Button, iconRes: Int) {
-        val icon = tintedDrawable(iconRes, button.currentTextColor, 18) ?: return
-        if (button.text.isNullOrBlank()) {
-            button.gravity = Gravity.CENTER
-            button.setPadding(0, dp(10), 0, 0)
-            button.setCompoundDrawables(null, icon, null, null)
-        } else {
-            button.gravity = Gravity.CENTER
-            button.setCompoundDrawables(icon, null, null, null)
+    private fun playerControlButton(iconRes: Int, primary: Boolean = false, compact: Boolean = false, onClick: () -> Unit): Button {
+        return actionButton("", onClick).apply {
+            tag = if (primary) "playerPrimary" else if (compact) "miniPlayerControl" else "playerControl"
+            setButtonIcon(this, iconRes)
         }
+    }
+
+    private fun setButtonIcon(button: Button, iconRes: Int) {
+        if (button is MaterialButton) {
+            val playerRole = button.tag?.toString()?.takeIf { it in setOf("playerPrimary", "playerControl", "miniPlayerControl") }
+            button.icon = tintedDrawable(iconRes, button.currentTextColor, if (playerRole == "playerPrimary") 36 else if (playerRole == "playerControl") 28 else 24)
+            button.iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+            button.iconPadding = if (button.text.isNullOrBlank()) 0 else dp(8)
+            if (!button.text.isNullOrBlank()) {
+                button.setPadding(dp(8), dp(8), dp(8), dp(8))
+                if (resources.configuration.fontScale > 1.3f) button.iconGravity = MaterialButton.ICON_GRAVITY_TEXT_TOP
+            }
+            if (button.text.isNullOrBlank()) button.setPadding(dp(12), dp(12), dp(12), dp(12))
+            if (playerRole == null) button.setEmphasis(iconRes == R.drawable.ic_play_block || iconRes == R.drawable.ic_pause_circle)
+            else {
+                val isPrimary = playerRole == "playerPrimary"
+                button.backgroundTintList = stateColors(if (isPrimary) Palette.ACCENT else Color.TRANSPARENT)
+                button.setTextColor(stateColors(if (isPrimary) Palette.ON_ACCENT else Palette.TEXT))
+                button.iconTint = button.textColors
+                button.iconSize = dp(if (isPrimary) 36 else if (playerRole == "playerControl") 28 else 26)
+                button.cornerRadius = dp(if (isPrimary) 36 else 28)
+                button.strokeWidth = 0
+                button.minimumHeight = dp(if (isPrimary) 72 else if (playerRole == "playerControl") 56 else 48)
+                button.minHeight = button.minimumHeight
+                button.elevation = 0f
+                button.rippleColor = android.content.res.ColorStateList.valueOf(androidx.core.graphics.ColorUtils.setAlphaComponent(if (isPrimary) Palette.ON_ACCENT else Palette.TEXT, 31))
+                button.tag = playerRole
+            }
+            button.contentDescription = button.text.takeIf { !it.isNullOrBlank() } ?: when (iconRes) {
+                R.drawable.ic_play_block -> "播放"
+                R.drawable.ic_pause_circle -> "暂停"
+                R.drawable.ic_previous_track -> "上一首"
+                R.drawable.ic_next_track -> "下一首"
+                R.drawable.ic_loop -> "顺序播放"
+                R.drawable.ic_singlecycle -> "单曲循环"
+                R.drawable.ic_random -> "随机播放"
+                R.drawable.ic_menu -> "播放选项"
+                else -> "更多操作"
+            }
+        } else button.setCompoundDrawables(tintedDrawable(iconRes, button.currentTextColor, 24), null, null, null)
     }
 
     private fun tintedDrawable(iconRes: Int, color: Int, sizeDp: Int): Drawable? {
         return getDrawable(iconRes)?.mutate()?.apply {
             val size = dp(sizeDp)
             setBounds(0, 0, size, size)
-            setTint(color)
+            if (iconRes !in setOf(R.drawable.ic_dizzylab, R.drawable.ic_navidrome, R.drawable.ic_dav, R.drawable.ic_lastfm, R.drawable.ic_music_disc)) setTint(color)
         }
     }
 
@@ -8620,7 +9130,6 @@ class MainActivity : Activity(), MusicPlayer.Listener {
 
     private data class LyricLine(val timeMs: Long, val text: String)
 
-    private data class ReleaseInfo(val version: String, val url: String)
 
     private enum class Page {
         SCAN,
@@ -8685,6 +9194,8 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val REQUEST_METADATA_COVER = 1012
         private const val REQUEST_EXTRA_SCAN_DIR = 1013
         private const val REQUEST_SKIP_SCAN_DIR = 1014
+        private const val REQUEST_LOG_EXPORT = 1015
+        private const val REQUEST_NCM_STORAGE = 1016
         private const val NOTIFICATION_CHANNEL_ID = "playback"
         private const val DOWNLOAD_CHANNEL_ID = "downloads"
         private const val NOTIFICATION_ID = 11
@@ -8693,12 +9204,12 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val FLOATING_LYRICS_NOTIFICATION_ID = 41
         private const val TAG = "SMP"
         private const val SUBSONIC_PAGE_SIZE = 40
-        private const val APP_VERSION = "2.1.0-beta.1"
+        private const val APP_VERSION = BuildConfig.VERSION_NAME
         private const val REPO_URL = "https://github.com/SuperMite233/Simple-Music-Player"
         private const val ISSUES_URL = "$REPO_URL/issues"
         private const val AUTHOR_URL = "https://space.bilibili.com/287415007"
         private const val RELEASES_URL = "$REPO_URL/releases"
-        private const val RELEASES_API = "https://api.github.com/repos/SuperMite233/Simple-Music-Player/releases?per_page=20"
+        private const val RELEASES_API = "https://api.github.com/repos/SuperMite233/Simple-Music-Player/releases?per_page=100"
         private const val DIZZYLAB_LOGIN_URL = "https://www.dizzylab.net/albums/login/"
         private const val LASTFM_BASE = "https://ws.audioscrobbler.com/2.0/"
         private const val LASTFM_API_KEY = "67097e703d9a775d6501109447efd85d"
@@ -8711,7 +9222,7 @@ class MainActivity : Activity(), MusicPlayer.Listener {
         private const val ACTION_FORWARD = "com.supermite.smp.FORWARD"
     }
 }
-private class StrokeTextView(context: android.content.Context) : TextView(context) {
+private class StrokeTextView(context: android.content.Context) : androidx.appcompat.widget.AppCompatTextView(context) {
     var strokeEnabled: Boolean = true
 
     init {
@@ -8724,13 +9235,27 @@ private class StrokeTextView(context: android.content.Context) : TextView(contex
             super.onDraw(canvas)
             return
         }
-        val originalColor = currentTextColor
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 5f
-        setTextColor(Color.BLACK)
-        super.onDraw(canvas)
-        paint.style = Paint.Style.FILL
-        setTextColor(originalColor)
+        val textLayout = layout
+        if (textLayout != null) {
+            val originalColor = paint.color
+            val originalStyle = paint.style
+            val available = height - compoundPaddingTop - compoundPaddingBottom - textLayout.height
+            val verticalOffset = when (gravity and Gravity.VERTICAL_GRAVITY_MASK) {
+                Gravity.CENTER_VERTICAL -> available / 2f
+                Gravity.BOTTOM -> available.toFloat()
+                else -> 0f
+            }
+            val save = canvas.save()
+            canvas.translate(compoundPaddingLeft.toFloat(), compoundPaddingTop + verticalOffset)
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 5f
+            paint.color = Color.BLACK
+            textLayout.draw(canvas)
+            paint.style = originalStyle
+            paint.color = originalColor
+            canvas.restoreToCount(save)
+        }
+        // Drawing must not call setTextColor(): it invalidates the view on every frame.
         super.onDraw(canvas)
     }
 }
